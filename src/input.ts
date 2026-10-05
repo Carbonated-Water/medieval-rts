@@ -1,4 +1,8 @@
-import type { Camera } from './camera';
+/** What input needs from the camera. Screen coordinates are CSS pixels. */
+export interface PanZoom {
+  panBy(dx: number, dy: number): void;
+  zoomAt(factor: number, sx: number, sy: number): void;
+}
 
 const TAP_SLOP = 10; // px of finger travel before a touch becomes a pan
 
@@ -6,7 +10,7 @@ const TAP_SLOP = 10; // px of finger travel before a touch becomes a pan
  * One finger drag = pan, two finger pinch = zoom, wheel = zoom.
  * A touch that never moves past TAP_SLOP is reported as a tap.
  */
-export function attachInput(el: HTMLElement, cam: Camera, onTap: (sx: number, sy: number) => void): void {
+export function attachInput(el: HTMLElement, cam: PanZoom, onTap: (sx: number, sy: number) => void): void {
   const pts = new Map<number, { x: number; y: number }>();
   let start: { x: number; y: number } | null = null;
   let panning = false;

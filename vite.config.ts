@@ -8,6 +8,8 @@ export default defineConfig(({ mode }) => ({
   build: {
     target: 'es2022',
     sourcemap: false,
+    // Three.js alone is ~170 KB gzipped; one chunk is fine for this game.
+    chunkSizeWarningLimit: 900,
   },
   server: {
     host: true,

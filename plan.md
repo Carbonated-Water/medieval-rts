@@ -9,14 +9,26 @@ Decided with the user 2026-09-25:
 - **Theme:** medieval. Peasants, Town Hall, wood + gold.
 - **Platform:** mobile-first web (360×740 is the test viewport),
   deployed to GitHub Pages at `/medieval-rts/` by GitHub Actions.
-- **Stack:** Vite + TypeScript + Pixi 8, nothing else.
+- **Stack:** Vite + TypeScript + Three.js, nothing else at runtime.
 
-## Look (decided 2026-09-25)
+## Look (decided 2026-10-04)
 
-**Isometric / 2.5D**, art from a **free CC0 pack** (Kenney preferred).
-The sim stays on a square grid; only rendering is isometric. Objects are
-drawn in code as stand-ins until the Kenney art is brought in (it
-couldn't be downloaded from the cloud session where this started).
+**3D low-poly diorama seen from a fixed isometric-style camera**, rendered
+with Three.js. Art is **KayKit** (CC0, Kay Lousberg), picked by the user
+from a side-by-side against Quaternius: Medieval Hexagon pack for
+buildings / trees / props (blue = player team colour, red / green / yellow
+exist for future opponents) and the Adventurers pack for peasants (three
+looks, weapons stripped, Barbarian keeps his axe). The Knight is reserved
+for future soldiers.
+
+Polish layer: soft shadows, ambient occlusion (GTAO), ACES filmic tone
+mapping, light bloom, wood-chip / dust particles, buildings pop in when
+finished. AO + bloom are off by default on touch devices for performance
+(`?fx=1` / `?fx=0` to override).
+
+The simulation stays a flat square grid; the 3D view only reads it.
+Models are built from the raw packs by `scripts/build-models.mjs`
+(`npm run models`), which keeps only used meshes and animations.
 
 ## Milestone 1 — economy only (current)
 
@@ -47,4 +59,4 @@ The bottom panel always says what the next tap does.
 
 Combat, enemy AI, military units / barracks, fog of war, more resources
 (food, stone), unit collision, multi-select by drag, win condition,
-save/load, sound, sprite art (all shapes are drawn in code for now).
+save/load, sound, camera rotation, smoother (non-tile) shorelines.

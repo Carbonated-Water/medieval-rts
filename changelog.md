@@ -4,6 +4,30 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-04  Three.js renderer + KayKit art (replaces Pixi)
+  WHAT: New src/view/ (assets, terrain, forest, structures, units, fx,
+        view) renders the unchanged simulation in 3D through an angled
+        orthographic camera. Instanced trees, KayKit buildings with
+        construction stages and a pop-in, animated peasants (walk / chop /
+        build / idle) carrying logs or gold, wood-chip and dust particles,
+        GTAO + bloom + ACES tone mapping (off on touch devices by default),
+        HTML progress bars. Taps pick by raycast (buildings, mines, trees)
+        and screen distance (peasants). Pixi, render.ts, iso.ts and
+        camera.ts are deleted. Models come from scripts/build-models.mjs,
+        which strips unused meshes/animations: 11.4 MB raw -> 2.45 MB.
+  WHY:  User wanted better graphics now that we're on their PC (where the
+        asset sites are reachable). Chose Three.js + full polish layer and
+        KayKit after a side-by-side comparison with Quaternius.
+
+2026-10-04  Tooling upgrade
+  WHAT: Vite 8, TypeScript 7, Vitest suite (pathfinding, gathering,
+        building, training) run in CI; CI actions bumped to current majors
+        on Node 24.
+  WHY:  Safety net before the renderer rewrite, and the old actions were
+        deprecated.
+
+---
+
 2026-10-04  Split out into its own repo
   WHAT: Moved from rts/ in armandoxh/Territorygame to this standalone
         repo. Builds to dist/ (gitignored) and deploys to GitHub Pages

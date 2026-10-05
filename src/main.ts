@@ -1,82 +1,62 @@
-import { Application } from 'pixi.js';
-import { Camera } from './camera';
 import { BUILDINGS } from './config';
 import { Game, type Unit } from './game';
 import { Hud, type HudAction, type Mode } from './hud';
 import { attachInput } from './input';
-import { ISO_H, ISO_W, isoOfTile, tileOfIso } from './iso';
-import { Renderer } from './render';
+import { View } from './view/view';
 
-const seed = Number(new URLSearchParams(location.search).get('seed')) || Math.floor(Math.random() * 1e9);
+const params = new URLSearchParams(location.search);
+const seed = Number(params.get('seed')) || Math.floor(Math.random() * 1e9);
 const game = new Game(seed);
 
-// Wrapped in a function: top-level await in the entry chunk deadlocks
-// against Pixi's lazily-loaded renderer chunks in the production build.
+// Ambient occlusion + bloom are on for mouse devices, off for touch (phones),
+// unless ?fx=1 / ?fx=0 says otherwise.
+const effects = params.has('fx') ? params.get('fx') !== '0' : !matchMedia('(pointer: coarse)').matches;
+
 async function boot(): Promise<void> {
-  const app = new Application();
-  await app.init({
-    resizeTo: window,
-    preference: 'webgl',
-    background: 0x2b4a6e,
-    antialias: true,
-    resolution: Math.min(window.devicePixelRatio || 1, 2),
-    autoDensity: true,
-  });
-  document.getElementById('app')!.appendChild(app.canvas);
-
-  const renderer = new Renderer(game);
-  app.stage.addChild(renderer.world);
-
-  const { w: mw, h: mh } = game.map;
-  const cam = new Camera({ minX: -mh * (ISO_W / 2), maxX: mw * (ISO_W / 2), minY: 0, maxY: (mw + mh) * (ISO_H / 2) });
-  // ~7 tile-widths across on a 360px phone; more on wider screens.
-  cam.zoom = Math.max(0.6, Math.min(1.3, window.innerWidth / (7 * ISO_W)));
-  const hall = game.buildings.get(game.hallId)!;
-  const hallIso = isoOfTile(hall.tx + hall.size / 2, hall.ty + hall.size / 2);
-  cam.centerOn(hallIso.x, hallIso.y, window.innerWidth, window.innerHeight);
+  const view = new View(document.getElementById('app')!, game, { effects });
+  const loading = document.getElementById('loading')!;
+  await view.load((done, total) => { loading.textContent = `Loading ${Math.round((done / total) * 100)}%`; });
+  loading.remove();
 
   let mode: Mode = { type: 'none' };
-  let marker: { x: number; y: number; t: number } | null = null;
 
   const selectedUnits = (): Unit[] =>
     mode.type === 'units' ? game.units.filter((u) => (mode as { ids: Set<number> }).ids.has(u.id)) : [];
 
-  /** Ground tile under a screen point. */
-  const tileAt = (sx: number, sy: number) => {
-    const iso = cam.toWorld(sx, sy);
-    const t = tileOfIso(iso.x, iso.y);
-    return { tx: Math.floor(t.x), ty: Math.floor(t.y), iso };
-  };
-
   function onTap(sx: number, sy: number): void {
-    const { tx: gx, ty: gy, iso } = tileAt(sx, sy);
+    const ground = view.tileAt(sx, sy);
 
     if (mode.type === 'place') {
       const half = Math.floor(BUILDINGS[mode.kind].size / 2);
-      mode = { ...mode, tx: gx - half, ty: gy - half };
+      mode = { ...mode, tx: ground.tx - half, ty: ground.ty - half };
       return;
     }
 
-    const unit = renderer.pickUnit(iso.x, iso.y, Math.max(12, 18 / cam.zoom));
+    const unit = view.pickUnit(sx, sy, 28);
     if (unit) {
       mode = { type: 'units', ids: new Set([unit.id]) };
       return;
     }
 
-    // Tall things (buildings, mines, tree canopies) cover tiles behind them,
-    // so resolve what was visibly tapped before falling back to the ground tile.
-    const structure = renderer.pickStructure(iso.x, iso.y);
-    const tree = structure ? null : renderer.pickTree(iso.x, iso.y);
-    const tx = structure ? structure.tx : tree ? tree.x : gx;
-    const ty = structure ? structure.ty : tree ? tree.y : gy;
+    // Tall things (buildings, mines, trees) cover the ground behind them, so
+    // resolve what was visibly tapped before falling back to the ground tile.
+    const hit = view.pickObject(sx, sy);
+    const structure = hit && 'structure' in hit ? hit.structure : null;
+    const tree = hit && 'tree' in hit ? hit.tree : null;
+    const tx = structure ? structure.tx : tree ? tree.x : ground.tx;
+    const ty = structure ? structure.ty : tree ? tree.y : ground.ty;
     if (!game.map.inBounds(tx, ty)) return;
 
     if (mode.type === 'units') {
       const units = selectedUnits();
       if (units.length > 0) {
         game.orderAt(units, tx, ty);
-        const m = structure || tree ? isoOfTile(tx + 0.5, ty + 0.5) : iso;
-        marker = { x: m.x, y: m.y, t: game.time };
+        if (structure) view.showMarker(structure.tx + structure.size / 2, structure.ty + structure.size / 2);
+        else if (tree) view.showMarker(tree.x + 0.5, tree.y + 0.5);
+        else {
+          const p = view.groundAt(sx, sy);
+          if (p) view.showMarker(p.x, p.z);
+        }
         return;
       }
     }
@@ -105,37 +85,42 @@ async function boot(): Promise<void> {
         return;
       }
       // Ghost starts at screen centre; user taps to move it.
-      const c = tileAt(window.innerWidth / 2, window.innerHeight / 2);
+      const c = view.tileAt(innerWidth / 2, innerHeight / 2);
       const half = Math.floor(BUILDINGS[kind].size / 2);
       mode = { type: 'place', kind, tx: c.tx - half, ty: c.ty - half, builders: mode.ids };
     }
   }
 
-  attachInput(app.canvas, cam, onTap);
+  attachInput(view.canvas, view, onTap);
   const hud = new Hud(onAction);
 
-  app.ticker.add((t) => {
-    game.tick(Math.min(t.deltaMS / 1000, 0.1));
+  let last = performance.now();
+  const frame = (now: number) => {
+    const dt = Math.min((now - last) / 1000, 0.1);
+    last = now;
+    game.tick(dt);
 
     // Drop selections that no longer exist.
     if (mode.type === 'building' && !game.buildings.has(mode.id)) mode = { type: 'none' };
 
-    cam.clamp(window.innerWidth, window.innerHeight);
-    renderer.world.scale.set(cam.zoom);
-    renderer.world.position.set(cam.x, cam.y);
-    renderer.draw({
+    view.update(dt, {
       selectedUnits: mode.type === 'units' ? mode.ids : new Set(),
       selectedBuilding: mode.type === 'building' ? mode.id : null,
       ghost: mode.type === 'place'
         ? { kind: mode.kind, tx: mode.tx, ty: mode.ty, ok: game.canPlace(mode.kind, mode.tx, mode.ty) }
         : null,
-      marker,
     });
     hud.update(game, mode);
-  });
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
 
-  // Debug handle for poking at state from the console.
-  Object.assign(window, { game, cam });
+  // Debug handles for poking at state from the console.
+  Object.assign(window, { game, view });
 }
 
-void boot();
+boot().catch((e) => {
+  const loading = document.getElementById('loading');
+  if (loading) loading.textContent = `Failed to start: ${e?.message ?? e}`;
+  console.error(e);
+});
