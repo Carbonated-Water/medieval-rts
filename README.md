@@ -3,7 +3,7 @@
 A mobile-first isometric medieval base-builder RTS. Gather wood and gold,
 build houses and lumber mills, and train peasants.
 
-Play: https://armandoxh.github.io/medieval-rts/
+Play: https://carbonated-water.github.io/medieval-rts/
 
 ## Run locally
 

@@ -25,7 +25,7 @@ changing anything.**
 - `npm install`, then `npm run dev`: dev server on http://localhost:5175
 - `npm run typecheck`, `npm run build`: production build into `dist/`
   (gitignored)
-- Pushing to `main` deploys to https://armandoxh.github.io/medieval-rts/
+- Pushing to `main` deploys to https://carbonated-water.github.io/medieval-rts/
   via GitHub Actions. Never commit build output.
 
 ## Gotchas
