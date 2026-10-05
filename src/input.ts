@@ -12,18 +12,36 @@ export interface InputHandlers {
 }
 
 const TAP_SLOP = 10; // px of finger travel before a touch becomes a pan
+const KEY_PAN_SPEED = 900; // screen px / sec for WASD / arrow keys
+
+/** Keyboard pan directions (screen space: +x right, +y down). */
+const KEYS: Record<string, [number, number]> = {
+  KeyW: [0, -1], ArrowUp: [0, -1], KeyS: [0, 1], ArrowDown: [0, 1],
+  KeyA: [-1, 0], ArrowLeft: [-1, 0], KeyD: [1, 0], ArrowRight: [1, 0],
+};
 
 /**
- * One finger drag = pan (or box-select in box mode), two finger pinch =
- * zoom, wheel = zoom. A touch that never moves past TAP_SLOP is a tap.
+ * One finger / left-button drag = pan (or box-select in box mode), right or
+ * middle-button drag = always pan, two finger pinch = zoom, wheel = zoom,
+ * WASD / arrows = pan. A touch that never moves past TAP_SLOP is a tap.
+ * Returns a per-frame update for the keyboard pan.
  */
-export function attachInput(el: HTMLElement, cam: PanZoom, h: InputHandlers): void {
+export function attachInput(el: HTMLElement, cam: PanZoom, h: InputHandlers): (dt: number) => void {
   const pts = new Map<number, { x: number; y: number }>();
   let start: { x: number; y: number } | null = null;
   let panning = false;
   let boxing = false;
+  let forcePan = false; // right / middle button
   let last = { x: 0, y: 0 };
   let pinchDist = 0;
+  const held = new Set<string>();
+
+  addEventListener('keydown', (e) => {
+    if (KEYS[e.code] && !(e.target instanceof HTMLInputElement)) { held.add(e.code); e.preventDefault(); }
+  });
+  addEventListener('keyup', (e) => held.delete(e.code));
+  addEventListener('blur', () => held.clear());
+  el.addEventListener('contextmenu', (e) => e.preventDefault());
 
   const rect = document.createElement('div');
   rect.id = 'selbox';
@@ -42,6 +60,7 @@ export function attachInput(el: HTMLElement, cam: PanZoom, h: InputHandlers): vo
     if (pts.size === 1) {
       start = { x: e.clientX, y: e.clientY };
       panning = boxing = false;
+      forcePan = e.pointerType === 'mouse' && e.button !== 0;
     } else {
       // A second finger cancels any tap or box and starts a pinch.
       start = null;
@@ -57,7 +76,7 @@ export function attachInput(el: HTMLElement, cam: PanZoom, h: InputHandlers): vo
     const cur = { x: e.clientX, y: e.clientY };
     if (pts.size === 1) {
       if (!panning && !boxing && start && Math.hypot(cur.x - start.x, cur.y - start.y) > TAP_SLOP) {
-        if (h.boxMode()) boxing = true; else panning = true;
+        if (h.boxMode() && !forcePan) boxing = true; else panning = true;
       }
       if (panning) cam.panBy(cur.x - prev.x, cur.y - prev.y);
       if (boxing && start) drawRect(start, cur);
@@ -79,7 +98,7 @@ export function attachInput(el: HTMLElement, cam: PanZoom, h: InputHandlers): vo
     pts.delete(e.pointerId);
     if (pts.size === 0 && start && e.type === 'pointerup') {
       if (boxing) h.onBox(start.x, start.y, last.x, last.y);
-      else if (!panning) h.onTap(e.clientX, e.clientY);
+      else if (!panning && !forcePan) h.onTap(e.clientX, e.clientY);
     }
     if (pts.size === 1) pinchDist = 0;
     if (pts.size === 0) {
@@ -95,6 +114,13 @@ export function attachInput(el: HTMLElement, cam: PanZoom, h: InputHandlers): vo
     e.preventDefault();
     cam.zoomAt(Math.pow(1.0015, -e.deltaY), e.clientX, e.clientY);
   }, { passive: false });
+
+  return (dt: number) => {
+    let dx = 0, dy = 0;
+    for (const code of held) { dx += KEYS[code]![0]; dy += KEYS[code]![1]; }
+    // Moving the view right means dragging the map left.
+    if (dx || dy) cam.panBy(-dx * KEY_PAN_SPEED * dt, -dy * KEY_PAN_SPEED * dt);
+  };
 
   function midpoint() {
     const [a, b] = [...pts.values()];

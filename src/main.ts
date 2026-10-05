@@ -123,13 +123,14 @@ async function boot(): Promise<void> {
     }
   }
 
-  attachInput(view.canvas, view, { onTap, onBox, boxMode: () => boxOn });
+  const keyPan = attachInput(view.canvas, view, { onTap, onBox, boxMode: () => boxOn });
   const hud = new Hud(onAction);
 
   let last = performance.now();
   const frame = (now: number) => {
     const dt = Math.min((now - last) / 1000, 0.1);
     last = now;
+    keyPan(dt);
     game.tick(dt);
     ai.tick(dt);
 
