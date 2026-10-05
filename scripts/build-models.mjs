@@ -24,6 +24,13 @@ const STATIC = {
   house_a: 'buildings/blue/building_home_A_blue',
   house_b: 'buildings/blue/building_home_B_blue',
   mill: 'buildings/blue/building_lumbermill_blue',
+  barracks: 'buildings/blue/building_barracks_blue',
+  hall_red: 'buildings/red/building_castle_red',
+  house_a_red: 'buildings/red/building_home_A_red',
+  house_b_red: 'buildings/red/building_home_B_red',
+  mill_red: 'buildings/red/building_lumbermill_red',
+  barracks_red: 'buildings/red/building_barracks_red',
+  rubble: 'buildings/neutral/building_destroyed',
   mine: 'buildings/blue/building_mine_blue',
   site_a: 'buildings/neutral/building_stage_A',
   site_b: 'buildings/neutral/building_stage_B',
@@ -39,10 +46,15 @@ const CHARACTERS = {
   peasant_hooded: ['Rogue_Hooded', /^Rogue_(Cape|Arm|Body|Head|Leg)/],
   peasant_red: ['Rogue', /^Rogue_(Arm|Body|Head|Leg)/],
   peasant_axe: ['Barbarian', /^(1H_Axe$|Barbarian_(Cape|Arm|Body|Head|Leg))/],
+  swordsman: ['Knight', /^(1H_Sword$|Round_Shield$|Knight_(Helmet|Cape|Arm|Body|Head|Leg))/],
+  archer: ['Rogue', /^(1H_Crossbow$|Rogue_(Cape|Arm|Body|Head|Leg))/],
 };
 
 /** Animation clips the game plays (see src/view/units.ts). */
-const ANIMATIONS = new Set(['Idle', 'Walking_A', '1H_Melee_Attack_Chop', 'PickUp', 'Interact', 'Cheer']);
+const ANIMATIONS = new Set([
+  'Idle', 'Walking_A', '1H_Melee_Attack_Chop', 'Interact',
+  '1H_Melee_Attack_Slice_Diagonal', '1H_Ranged_Shoot', 'Death_A',
+]);
 
 const io = new NodeIO();
 

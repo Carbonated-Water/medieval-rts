@@ -4,10 +4,11 @@ import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 
 // Models are built from the KayKit packs by scripts/build-models.mjs.
 export const MODELS = [
-  'hall', 'house_a', 'house_b', 'mill', 'mine',
-  'site_a', 'site_b', 'site_c',
+  'hall', 'house_a', 'house_b', 'mill', 'barracks',
+  'hall_red', 'house_a_red', 'house_b_red', 'mill_red', 'barracks_red',
+  'mine', 'rubble', 'site_a', 'site_b', 'site_c',
   'tree_a', 'tree_b', 'lumber', 'sack',
-  'peasant_hooded', 'peasant_red', 'peasant_axe',
+  'peasant_hooded', 'peasant_red', 'peasant_axe', 'swordsman', 'archer',
 ] as const;
 export type ModelName = (typeof MODELS)[number];
 

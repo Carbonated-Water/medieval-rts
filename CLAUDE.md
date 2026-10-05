@@ -16,7 +16,8 @@ changing anything.**
   doesn't cover.
 - Tunables live in `src/config.ts`.
 - The simulation (`game.ts`, `map.ts`, `path.ts`) is a flat square tile
-  grid with no rendering imports. `src/view/` only reads it; one tile =
+  grid with no rendering imports. The enemy AI (`ai.ts`) only uses
+  Game's public order methods, never internals: same rules as the player. `src/view/` only reads it; one tile =
   one Three.js world unit, tile (tx, ty) spans x ∈ [tx, tx+1], z ∈ [ty, ty+1].
 - Append a short WHAT + WHY entry to `changelog.md` after each
   meaningful change.

@@ -71,6 +71,46 @@ export class Particles {
   }
 }
 
+/**
+ * Arrows in flight, mirrored from the simulation's projectiles. They follow
+ * the sim's straight-line position and add a parabolic height so shots arc.
+ */
+export class Arrows {
+  readonly group = new THREE.Group();
+  private pool: THREE.Mesh[] = [];
+  private geo = new THREE.CylinderGeometry(0.012, 0.012, 0.32, 5).rotateX(Math.PI / 2);
+  private mat = new THREE.MeshStandardMaterial({ color: 0x5b3b1e, roughness: 0.8 });
+  private tip = new THREE.ConeGeometry(0.025, 0.07, 6).rotateX(Math.PI / 2).translate(0, 0, 0.19);
+  private tipMat = new THREE.MeshStandardMaterial({ color: 0xb8bcc4, metalness: 0.6, roughness: 0.4 });
+
+  /** `shots`: launch point, current point and target point, in tiles. */
+  update(shots: { sx: number; sz: number; x: number; z: number; tx: number; tz: number }[]): void {
+    shots.forEach((s, i) => {
+      const m = this.pool[i] ?? this.make();
+      m.visible = true;
+      const flown = Math.hypot(s.x - s.sx, s.z - s.sz);
+      const left = Math.hypot(s.tx - s.x, s.tz - s.z);
+      const total = Math.max(0.01, flown + left);
+      const k = flown / total;
+      const arc = (t: number) => 0.55 + Math.sin(t * Math.PI) * total * 0.12;
+      m.position.set(s.x, arc(k), s.z);
+      // Aim along the arc: a point slightly further along the flight.
+      const k2 = Math.min(1, k + 0.05);
+      m.lookAt(s.sx + (s.tx - s.sx) * k2, arc(k2), s.sz + (s.tz - s.sz) * k2);
+    });
+    for (let i = shots.length; i < this.pool.length; i++) this.pool[i]!.visible = false;
+  }
+
+  private make(): THREE.Mesh {
+    const m = new THREE.Mesh(this.geo, this.mat);
+    m.add(new THREE.Mesh(this.tip, this.tipMat));
+    m.castShadow = true;
+    this.group.add(m);
+    this.pool.push(m);
+    return m;
+  }
+}
+
 /** Flat ring lying on the ground; `square` makes it axis-aligned with 4 sides. */
 export function groundRing(inner: number, outer: number, color: THREE.ColorRepresentation, square = false): THREE.Mesh {
   const geo = square ? new THREE.RingGeometry(inner, outer, 4, 1, Math.PI / 4) : new THREE.RingGeometry(inner, outer, 40);

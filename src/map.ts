@@ -77,36 +77,40 @@ function blob(map: GameMap, rng: () => number, cx: number, cy: number, steps: nu
 }
 
 /**
- * Lakes + forests. Guarantees a forest a short walk from `start` so the
- * opening build always has wood nearby. Caller clears the start area after.
+ * Lakes + forests. Keeps lakes and random forests away from every start,
+ * and guarantees each start a forest a short walk away so the opening
+ * build always has wood nearby. Caller clears the start areas after.
  */
-export function generateTerrain(map: GameMap, rng: () => number, startX: number, startY: number): void {
-  const farFromStart = (x: number, y: number, d: number) => Math.hypot(x - startX, y - startY) > d;
+export function generateTerrain(map: GameMap, rng: () => number, starts: { x: number; y: number }[]): void {
+  const farFromStarts = (x: number, y: number, d: number) => starts.every((s) => Math.hypot(x - s.x, y - s.y) > d);
   const randomSpot = (minDist: number) => {
     for (let tries = 0; tries < 100; tries++) {
       const x = 2 + Math.floor(rng() * (map.w - 4));
       const y = 2 + Math.floor(rng() * (map.h - 4));
-      if (farFromStart(x, y, minDist)) return { x, y };
+      if (farFromStarts(x, y, minDist)) return { x, y };
     }
     return { x: 2, y: 2 };
   };
 
-  for (let i = 0; i < 4; i++) {
+  const area = (map.w * map.h) / (48 * 48); // scale feature counts with map size
+  for (let i = 0; i < Math.round(4 * area); i++) {
     const p = randomSpot(12);
     blob(map, rng, p.x, p.y, 18 + Math.floor(rng() * 20), (idx) => { map.terrain[idx] = WATER; });
   }
   const plantTree = (idx: number) => {
     if (map.terrain[idx] === GRASS) map.tree[idx] = TREE_WOOD;
   };
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < Math.round(14 * area); i++) {
     const p = randomSpot(9);
     blob(map, rng, p.x, p.y, 25 + Math.floor(rng() * 35), plantTree);
   }
-  // Starter forest: 7-9 tiles away in a random direction.
-  const a = rng() * Math.PI * 2;
-  const fx = Math.round(startX + Math.cos(a) * 8);
-  const fy = Math.round(startY + Math.sin(a) * 8);
-  blob(map, rng, fx, fy, 30, plantTree);
+  // Starter forest per start: ~8 tiles away in a random direction.
+  for (const s of starts) {
+    const a = rng() * Math.PI * 2;
+    const fx = Math.round(s.x + Math.cos(a) * 8);
+    const fy = Math.round(s.y + Math.sin(a) * 8);
+    blob(map, rng, fx, fy, 30, plantTree);
+  }
   // Map edge is always forest: soft visual border, blocks walking off-map.
   for (let x = 0; x < map.w; x++) {
     plantTree(map.idx(x, 0));

@@ -4,6 +4,29 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-04  Milestone 2: combat, enemy AI, barracks, win/lose
+  WHAT: Everything has an owner (player / AI). Units have kinds
+        (peasant / swordsman / archer), hp, cooldowns and an 'attack'
+        job that chases and strikes; archers fire homing arrows. Buildings
+        have hp (sites build up theirs), barracks trains soldiers, and
+        destroyed buildings free their tiles. Losing a Town Hall ends the
+        game. src/ai.ts runs a same-rules AI: economy, houses, mill,
+        barracks, army, guard duty; once provoked (player deals damage) it
+        counter-attacks, defends and sends growing waves. Map is 64×64
+        with two towns. View: red/blue KayKit buildings, Knight swordsmen
+        and crossbow archers with team capes + discs, attack / death
+        animations, flying arrows, rubble, health bars, War/Peace badge,
+        victory/defeat screen. Input: Army button, tap enemy = attack,
+        Box toggle for drag-select. Tapping an own finished building now
+        selects it even with units selected (found by the play-test:
+        the barracks was unreachable without ✕ first).
+  WHY:  User asked for combat + enemy AI next; chose same-rules AI,
+        swordsman + archer, passive until provoked, full war after,
+        64×64 map, Town-Hall win condition, and drag-box select.
+  Tests: 24 (combat, provocation, archers, win, AI economy / peace / war).
+
+---
+
 2026-10-04  Three.js renderer + KayKit art (replaces Pixi)
   WHAT: New src/view/ (assets, terrain, forest, structures, units, fx,
         view) renders the unchanged simulation in 3D through an angled

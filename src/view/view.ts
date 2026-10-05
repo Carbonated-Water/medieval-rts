@@ -4,12 +4,12 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { PEASANT_TRAIN_SECONDS, type BuildingKind } from '../config';
-import type { Building, Game, Mine, Unit } from '../game';
+import { TILE, UNITS, type BuildingKind, type Owner } from '../config';
+import { isUnit, type Building, type Game, type Mine, type Unit } from '../game';
 import type { PanZoom } from '../input';
 import { Assets } from './assets';
 import { Forest } from './forest';
-import { Particles, TapMarker } from './fx';
+import { Arrows, Particles, TapMarker } from './fx';
 import { Structures } from './structures';
 import { buildTerrain } from './terrain';
 import { Units } from './units';
@@ -40,6 +40,8 @@ export class View implements PanZoom {
   private assets = new Assets();
   private particles = new Particles();
   private marker = new TapMarker();
+  private arrows = new Arrows();
+  private eventSeq = 0;
   private forest!: Forest;
   private structures!: Structures;
   private units!: Units;
@@ -96,7 +98,7 @@ export class View implements PanZoom {
     this.forest = new Forest(this.game.map, this.assets);
     this.structures = new Structures(this.game, this.assets, this.particles);
     this.units = new Units(this.game, this.assets, this.particles);
-    this.scene.add(this.forest.group, this.structures.group, this.units.group, this.particles.mesh, this.marker.mesh);
+    this.scene.add(this.forest.group, this.structures.group, this.units.group, this.particles.mesh, this.marker.mesh, this.arrows.group);
 
     const hall = this.game.buildings.get(this.game.hallId)!;
     this.target.set(hall.tx + hall.size / 2, 0, hall.ty + hall.size / 2);
@@ -109,10 +111,23 @@ export class View implements PanZoom {
   // ---------- per frame ----------
 
   update(dt: number, o: Overlay): void {
+    // Deaths and destructions first, so the dying are animated, not just removed.
+    for (const e of this.game.events) {
+      if (e.seq <= this.eventSeq) continue;
+      this.eventSeq = e.seq;
+      if (e.type === 'death') this.units.died(e.unit);
+      else this.structures.destroyed(e.building);
+    }
     this.forest.sync();
     this.structures.update(dt, o.selectedBuilding);
     this.structures.setGhost(o.ghost);
     this.units.update(dt, o.selectedUnits);
+    this.arrows.update(this.game.projectiles.map((p) => {
+      const t = this.game.entity(p.targetId);
+      const tx = t ? (isUnit(t) ? t.x / TILE : t.tx + t.size / 2) : p.x / TILE;
+      const tz = t ? (isUnit(t) ? t.y / TILE : t.ty + t.size / 2) : p.y / TILE;
+      return { sx: p.sx / TILE, sz: p.sy / TILE, x: p.x / TILE, z: p.y / TILE, tx, tz };
+    }));
     this.particles.update(dt);
     this.marker.update(dt);
     this.applyCamera();
@@ -157,7 +172,19 @@ export class View implements PanZoom {
     return { tx: Math.floor(p.x), ty: Math.floor(p.z) };
   }
 
-  /** Nearest peasant to a screen point, within `radius` pixels. */
+  /** Units of `owner` whose chest is inside a screen rectangle. */
+  unitsInBox(x0: number, y0: number, x1: number, y1: number, owner: Owner): Unit[] {
+    const [l, r] = x0 < x1 ? [x0, x1] : [x1, x0];
+    const [t, b] = y0 < y1 ? [y0, y1] : [y1, y0];
+    const p = new THREE.Vector3();
+    return this.game.units.filter((u) => {
+      if (u.owner !== owner) return false;
+      const s = this.toScreen(this.units.chestOf(u, p));
+      return s.x >= l && s.x <= r && s.y >= t && s.y <= b;
+    });
+  }
+
+  /** Nearest unit (either side) to a screen point, within `radius` pixels. */
   pickUnit(sx: number, sy: number, radius: number): Unit | null {
     let best: Unit | null = null;
     let bestD = radius;
@@ -231,10 +258,15 @@ export class View implements PanZoom {
     this.applyCamera();
   }
 
-  /** HTML progress bars over construction sites and training halls. */
+  /**
+   * HTML bars: construction / training progress over buildings, and health
+   * over anything damaged (team-coloured). Positioned by projecting each
+   * entity to the screen every frame.
+   */
   private updateBars(): void {
     let n = 0;
-    const show = (b: Building, frac: number, kind: 'build' | 'train', height: number) => {
+    const p = new THREE.Vector3();
+    const show = (at: THREE.Vector3, frac: number, kind: string, small = false) => {
       let el = this.barPool[n];
       if (!el) {
         el = document.createElement('div');
@@ -243,16 +275,23 @@ export class View implements PanZoom {
         this.bars.appendChild(el);
         this.barPool.push(el);
       }
-      const s = this.toScreen(new THREE.Vector3(b.tx + b.size / 2, height, b.ty + b.size / 2));
+      const s = this.toScreen(at);
       el.style.display = 'block';
       el.style.transform = `translate(${s.x}px, ${s.y}px)`;
       el.dataset.kind = kind;
-      (el.firstChild as HTMLElement).style.width = `${Math.round(frac * 100)}%`;
+      el.classList.toggle('small', small);
+      (el.firstChild as HTMLElement).style.width = `${Math.round(Math.max(0, Math.min(1, frac)) * 100)}%`;
       n++;
     };
     for (const b of this.game.buildings.values()) {
-      if (b.progress < 1) show(b, b.progress, 'build', 1.4);
-      else if (b.queue > 0) show(b, b.trainTimer / PEASANT_TRAIN_SECONDS, 'train', b.size * 1.15);
+      const top = (h: number) => p.set(b.tx + b.size / 2, h, b.ty + b.size / 2);
+      if (b.progress < 1) show(top(1.4), b.progress, 'build');
+      else if (b.queue.length > 0) show(top(b.size * 1.15), b.trainTimer / UNITS[b.queue[0]!].trainSeconds, 'train');
+      if (b.progress >= 1 && b.hp < b.maxHp) show(top(b.size * 1.15 + 0.35), b.hp / b.maxHp, `hp${b.owner}`);
+    }
+    for (const u of this.game.units) {
+      if (u.hp >= u.maxHp) continue;
+      show(p.set(u.x / TILE, this.units.headHeight(u), u.y / TILE), u.hp / u.maxHp, `hp${u.owner}`, true);
     }
     for (let i = n; i < this.barPool.length; i++) this.barPool[i]!.style.display = 'none';
   }

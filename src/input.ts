@@ -4,26 +4,49 @@ export interface PanZoom {
   zoomAt(factor: number, sx: number, sy: number): void;
 }
 
+export interface InputHandlers {
+  onTap(sx: number, sy: number): void;
+  /** While true, a one-finger drag draws a selection box instead of panning. */
+  boxMode(): boolean;
+  onBox(x0: number, y0: number, x1: number, y1: number): void;
+}
+
 const TAP_SLOP = 10; // px of finger travel before a touch becomes a pan
 
 /**
- * One finger drag = pan, two finger pinch = zoom, wheel = zoom.
- * A touch that never moves past TAP_SLOP is reported as a tap.
+ * One finger drag = pan (or box-select in box mode), two finger pinch =
+ * zoom, wheel = zoom. A touch that never moves past TAP_SLOP is a tap.
  */
-export function attachInput(el: HTMLElement, cam: PanZoom, onTap: (sx: number, sy: number) => void): void {
+export function attachInput(el: HTMLElement, cam: PanZoom, h: InputHandlers): void {
   const pts = new Map<number, { x: number; y: number }>();
   let start: { x: number; y: number } | null = null;
   let panning = false;
+  let boxing = false;
+  let last = { x: 0, y: 0 };
   let pinchDist = 0;
+
+  const rect = document.createElement('div');
+  rect.id = 'selbox';
+  document.body.appendChild(rect);
+  const drawRect = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+    rect.style.display = 'block';
+    rect.style.left = `${Math.min(a.x, b.x)}px`;
+    rect.style.top = `${Math.min(a.y, b.y)}px`;
+    rect.style.width = `${Math.abs(a.x - b.x)}px`;
+    rect.style.height = `${Math.abs(a.y - b.y)}px`;
+  };
 
   el.addEventListener('pointerdown', (e) => {
     el.setPointerCapture(e.pointerId);
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pts.size === 1) {
       start = { x: e.clientX, y: e.clientY };
-      panning = false;
+      panning = boxing = false;
     } else {
-      start = null; // a second finger cancels any tap
+      // A second finger cancels any tap or box and starts a pinch.
+      start = null;
+      boxing = false;
+      rect.style.display = 'none';
       pinchDist = pinchSpan();
     }
   });
@@ -33,8 +56,12 @@ export function attachInput(el: HTMLElement, cam: PanZoom, onTap: (sx: number, s
     if (!prev) return;
     const cur = { x: e.clientX, y: e.clientY };
     if (pts.size === 1) {
-      if (!panning && start && Math.hypot(cur.x - start.x, cur.y - start.y) > TAP_SLOP) panning = true;
+      if (!panning && !boxing && start && Math.hypot(cur.x - start.x, cur.y - start.y) > TAP_SLOP) {
+        if (h.boxMode()) boxing = true; else panning = true;
+      }
       if (panning) cam.panBy(cur.x - prev.x, cur.y - prev.y);
+      if (boxing && start) drawRect(start, cur);
+      last = cur;
       pts.set(e.pointerId, cur);
     } else if (pts.size === 2) {
       const before = midpoint();
@@ -50,9 +77,16 @@ export function attachInput(el: HTMLElement, cam: PanZoom, onTap: (sx: number, s
   const end = (e: PointerEvent) => {
     if (!pts.has(e.pointerId)) return;
     pts.delete(e.pointerId);
-    if (pts.size === 0 && start && !panning && e.type === 'pointerup') onTap(e.clientX, e.clientY);
+    if (pts.size === 0 && start && e.type === 'pointerup') {
+      if (boxing) h.onBox(start.x, start.y, last.x, last.y);
+      else if (!panning) h.onTap(e.clientX, e.clientY);
+    }
     if (pts.size === 1) pinchDist = 0;
-    if (pts.size === 0) start = null;
+    if (pts.size === 0) {
+      start = null;
+      boxing = false;
+      rect.style.display = 'none';
+    }
   };
   el.addEventListener('pointerup', end);
   el.addEventListener('pointercancel', end);

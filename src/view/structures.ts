@@ -1,15 +1,15 @@
 import * as THREE from 'three';
-import { BUILDINGS, type BuildingKind } from '../config';
+import { BUILDINGS, PLAYER, type BuildingKind, type Owner } from '../config';
 import type { Building, Game, Mine } from '../game';
 import type { Assets, ModelName } from './assets';
 import { groundRing, type Particles } from './fx';
 
-/** Finished-building model per kind (houses alternate between two looks). */
-const FINAL: Record<BuildingKind, ModelName[]> = {
-  hall: ['hall'],
-  house: ['house_a', 'house_b'],
-  mill: ['mill'],
+/** Finished-building models per owner and kind (houses alternate between two looks). */
+const FINAL: Record<Owner, Record<BuildingKind, ModelName[]>> = {
+  0: { hall: ['hall'], house: ['house_a', 'house_b'], mill: ['mill'], barracks: ['barracks'] },
+  1: { hall: ['hall_red'], house: ['house_a_red', 'house_b_red'], mill: ['mill_red'], barracks: ['barracks_red'] },
 };
+const RUBBLE_SECONDS = 25;
 /** Construction stages shown as progress climbs. */
 const STAGES: ModelName[] = ['site_a', 'site_b', 'site_c'];
 /** Models are scaled to this fraction of the footprint so neighbours don't touch. */
@@ -28,7 +28,7 @@ interface Entry {
 }
 
 const finalModel = (b: Building): ModelName => {
-  const options = FINAL[b.kind];
+  const options = FINAL[b.owner][b.kind];
   return options[b.id % options.length]!;
 };
 const stageModel = (b: Building): ModelName => STAGES[Math.min(STAGES.length - 1, Math.floor(b.progress * STAGES.length))]!;
@@ -37,6 +37,7 @@ const stageModel = (b: Building): ModelName => STAGES[Math.min(STAGES.length - 1
 export class Structures {
   readonly group = new THREE.Group();
   private entries = new Map<number, Entry>();
+  private rubble: { root: THREE.Group; age: number }[] = [];
   private ghost: { root: THREE.Group; kind: BuildingKind; ok: boolean | null; footprint: THREE.Mesh } | null = null;
   private ghostMats = {
     ok: new THREE.MeshStandardMaterial({ color: 0x8cff8c, transparent: true, opacity: 0.55, depthWrite: false }),
@@ -75,11 +76,34 @@ export class Structures {
       if (!e.model) this.swapModel(e, 'mine', m.size);
       e.ring.visible = false;
     }
+    for (let i = this.rubble.length - 1; i >= 0; i--) {
+      const r = this.rubble[i]!;
+      r.age += dt;
+      // Sink into the ground over the last few seconds.
+      if (r.age > RUBBLE_SECONDS - 3) r.root.position.y = -((r.age - (RUBBLE_SECONDS - 3)) / 3) * 0.6;
+      if (r.age >= RUBBLE_SECONDS) { this.group.remove(r.root); this.rubble.splice(i, 1); }
+    }
     for (const [id, e] of this.entries) {
       if (live.has(id)) continue;
       this.group.remove(e.root);
       this.entries.delete(id);
     }
+  }
+
+  /** A building was destroyed: leave smoking rubble in its place for a while. */
+  destroyed(b: Building): void {
+    const e = this.entries.get(b.id);
+    if (e) { this.group.remove(e.root); this.entries.delete(b.id); }
+    const c = this.center(b);
+    const root = new THREE.Group();
+    const model = this.assets.instance('rubble', { fit: b.size * FILL });
+    model.rotation.y = FACING;
+    root.add(model);
+    root.position.set(c.x, 0, c.z);
+    this.group.add(root);
+    this.rubble.push({ root, age: 0 });
+    this.particles.burst(new THREE.Vector3(c.x, 0.4, c.z), 0x8a7f72, 40, { speed: 3, up: 2.4, size: 0.11, life: 1.2 });
+    this.particles.burst(new THREE.Vector3(c.x, 0.6, c.z), 0xd9a441, 12, { speed: 2, up: 3, size: 0.06, life: 0.8 });
   }
 
   /** Translucent preview of a building at a tile, green if it can be placed. */
@@ -93,7 +117,7 @@ export class Structures {
     if (!this.ghost || this.ghost.kind !== g.kind) {
       if (this.ghost) this.group.remove(this.ghost.root);
       const root = new THREE.Group();
-      const model = this.assets.instance(FINAL[g.kind][0]!, { fit: size * FILL });
+      const model = this.assets.instance(FINAL[PLAYER][g.kind][0]!, { fit: size * FILL });
       model.rotation.y = FACING;
       model.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).castShadow = false; });
       const footprint = new THREE.Mesh(

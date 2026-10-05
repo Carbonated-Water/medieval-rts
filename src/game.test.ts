@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { BUILDINGS, PEASANT_COST, PEASANT_TRAIN_SECONDS, START_PEASANTS, START_STOCK, TILE } from './config';
+import { BUILDINGS, ENEMY, PLAYER, START_PEASANTS, START_STOCK, TILE, UNITS, type Owner } from './config';
 import { Game, type Building } from './game';
 
 const run = (game: Game, seconds: number) => {
   for (let t = 0; t < seconds; t += 0.1) game.tick(0.1);
 };
 
-const hallOf = (game: Game) => game.buildings.get(game.hallId)!;
+const hallOf = (game: Game, owner: Owner = PLAYER) => game.buildings.get(game.hallIds[owner])!;
+const unitsOf = (game: Game, owner: Owner = PLAYER) => game.units.filter((u) => u.owner === owner);
 
-/** Nearest tile (to the hall) satisfying `ok`. */
+/** Nearest tile (to the player's hall) satisfying `ok`. */
 function nearest(game: Game, ok: (x: number, y: number) => boolean) {
   const h = hallOf(game);
   let best: { x: number; y: number } | null = null;
@@ -22,19 +23,30 @@ function nearest(game: Game, ok: (x: number, y: number) => boolean) {
   return best!;
 }
 
+const spotFor = (game: Game, kind: Building['kind']) => nearest(game, (x, y) => game.canPlace(kind, x, y));
+
 const nearestMine = (game: Game) => {
   const h = hallOf(game);
   return [...game.mines.values()].sort((a, b) => Math.hypot(a.tx - h.tx, a.ty - h.ty) - Math.hypot(b.tx - h.tx, b.ty - h.ty))[0]!;
 };
 
 describe('Game setup', () => {
-  it('starts with a finished hall, peasants and the starting stock', () => {
+  it('gives both sides a finished hall, peasants and the starting stock', () => {
     const game = new Game(42);
-    expect(hallOf(game).progress).toBe(1);
-    expect(game.units).toHaveLength(START_PEASANTS);
-    expect(game.stock).toEqual(START_STOCK);
-    expect(game.popCap).toBe(BUILDINGS.hall.pop);
-    expect(game.mines.size).toBeGreaterThan(0);
+    for (const owner of [PLAYER, ENEMY]) {
+      expect(hallOf(game, owner).progress).toBe(1);
+      expect(unitsOf(game, owner)).toHaveLength(START_PEASANTS);
+      expect(game.stocks[owner]).toEqual(START_STOCK);
+      expect(game.popCapOf(owner)).toBe(BUILDINGS.hall.pop);
+    }
+    expect(game.mines.size).toBeGreaterThanOrEqual(4);
+    expect(game.provoked).toBe(false);
+  });
+
+  it('places the towns far apart', () => {
+    const game = new Game(42);
+    const a = hallOf(game, PLAYER), b = hallOf(game, ENEMY);
+    expect(Math.hypot(a.tx - b.tx, a.ty - b.ty)).toBeGreaterThan(30);
   });
 
   it('is deterministic for a seed', () => {
@@ -49,17 +61,19 @@ describe('gathering', () => {
   it('peasants chop wood, carry it home and keep going', () => {
     const game = new Game(42);
     const tree = nearest(game, (x, y) => game.map.hasTree(x, y));
-    game.orderAt(game.units.slice(0, 2), tree.x, tree.y);
+    const workers = unitsOf(game).slice(0, 2);
+    game.orderAt(workers, tree.x, tree.y);
     run(game, 90);
     expect(game.stock.wood).toBeGreaterThan(START_STOCK.wood + 50);
-    expect(game.units.slice(0, 2).every((u) => u.job?.type === 'gather')).toBe(true);
+    expect(workers.every((u) => u.job?.type === 'gather')).toBe(true);
+    expect(game.stocks[ENEMY]).toEqual(START_STOCK); // nothing leaked to the other side
   });
 
   it('mines gold and depletes the mine', () => {
     const game = new Game(42);
     const mine = nearestMine(game);
     const before = mine.gold;
-    game.orderAt([game.units[2]!], mine.tx, mine.ty);
+    game.orderAt([unitsOf(game)[2]!], mine.tx, mine.ty);
     run(game, 60);
     expect(game.stock.gold).toBeGreaterThan(START_STOCK.gold);
     expect(mine.gold).toBeLessThan(before);
@@ -69,17 +83,15 @@ describe('gathering', () => {
     const game = new Game(42);
     const tree = nearest(game, (x, y) => game.map.hasTree(x, y));
     const version = game.map.treeVersion;
-    game.orderAt(game.units, tree.x, tree.y);
+    game.orderAt(unitsOf(game), tree.x, tree.y);
     run(game, 120);
     expect(game.map.hasTree(tree.x, tree.y)).toBe(false);
     expect(game.map.treeVersion).toBeGreaterThan(version);
-    expect(game.units.some((u) => u.job?.type === 'gather')).toBe(true);
+    expect(unitsOf(game).some((u) => u.job?.type === 'gather')).toBe(true);
   });
 });
 
 describe('building', () => {
-  const spotFor = (game: Game, kind: Building['kind']) => nearest(game, (x, y) => game.canPlace(kind, x, y));
-
   it('cannot place on the hall or on trees', () => {
     const game = new Game(42);
     const h = hallOf(game);
@@ -92,12 +104,14 @@ describe('building', () => {
     const game = new Game(42);
     game.stock.wood = 500;
     const spot = spotFor(game, 'house');
-    expect(game.placeBuilding('house', spot.x, spot.y, [game.units[0]!])).toBe(true);
+    expect(game.placeBuilding('house', spot.x, spot.y, [unitsOf(game)[0]!])).toBe(true);
     expect(game.stock.wood).toBe(500 - BUILDINGS.house.cost.wood!);
     const site = [...game.buildings.values()].find((b) => b.kind === 'house')!;
     expect(site.progress).toBe(0);
+    expect(site.hp).toBeLessThan(site.maxHp);
     run(game, BUILDINGS.house.buildSeconds + 10);
     expect(site.progress).toBe(1);
+    expect(site.hp).toBeCloseTo(site.maxHp);
     expect(game.popCap).toBe(BUILDINGS.hall.pop + BUILDINGS.house.pop);
   });
 
@@ -114,13 +128,12 @@ describe('training', () => {
   it('trains a peasant at the hall', () => {
     const game = new Game(42);
     expect(game.train(hallOf(game))).toBe(true);
-    expect(game.stock.gold).toBe(START_STOCK.gold - PEASANT_COST.gold!);
-    run(game, PEASANT_TRAIN_SECONDS + 1);
-    expect(game.units).toHaveLength(START_PEASANTS + 1);
-    const hall = hallOf(game);
-    const fresh = game.units.at(-1)!;
+    expect(game.stock.gold).toBe(START_STOCK.gold - UNITS.peasant.cost.gold!);
+    run(game, UNITS.peasant.trainSeconds + 1);
+    expect(unitsOf(game)).toHaveLength(START_PEASANTS + 1);
+    const fresh = unitsOf(game).at(-1)!;
     // Spawns next to the hall, not inside it.
-    expect(game.map.occupantAt(Math.floor(fresh.x / TILE), Math.floor(fresh.y / TILE))).not.toBe(hall.id);
+    expect(game.map.occupantAt(Math.floor(fresh.x / TILE), Math.floor(fresh.y / TILE))).not.toBe(hallOf(game).id);
   });
 
   it('stops at the population cap', () => {
@@ -130,5 +143,86 @@ describe('training', () => {
     while (game.popUsed < game.popCap) expect(game.train(hall)).toBe(true);
     expect(game.train(hall)).toBe(false);
     expect(game.notice?.text).toBe('need more houses');
+  });
+
+  it('a barracks trains swordsmen and archers, not peasants', () => {
+    const game = new Game(42);
+    game.stock.wood = 1000;
+    game.stock.gold = 1000;
+    const spot = spotFor(game, 'barracks');
+    game.placeBuilding('barracks', spot.x, spot.y, unitsOf(game));
+    run(game, BUILDINGS.barracks.buildSeconds);
+    const barracks = [...game.buildings.values()].find((b) => b.kind === 'barracks')!;
+    expect(barracks.progress).toBe(1);
+    expect(game.train(barracks, 'peasant')).toBe(false);
+    expect(game.train(barracks, 'swordsman')).toBe(true);
+    expect(game.train(barracks, 'archer')).toBe(true);
+    run(game, UNITS.swordsman.trainSeconds + UNITS.archer.trainSeconds + 1);
+    expect(unitsOf(game).filter((u) => u.kind !== 'peasant').map((u) => u.kind).sort()).toEqual(['archer', 'swordsman']);
+  });
+});
+
+describe('combat', () => {
+  /** A unit of `owner` standing next to the player's hall. */
+  const spawn = (game: Game, owner: Owner, kind: 'peasant' | 'swordsman' | 'archer') => {
+    const u = game.spawnUnitNear(hallOf(game, PLAYER), kind)!;
+    u.owner = owner;
+    return u;
+  };
+
+  it('a swordsman kills a peasant, which fights back', () => {
+    const game = new Game(42);
+    const sword = spawn(game, PLAYER, 'swordsman');
+    const victim = spawn(game, ENEMY, 'peasant');
+    game.orderAttack([sword], victim.id);
+    run(game, 0.5);
+    expect(victim.job?.type).toBe('attack'); // retaliating
+    run(game, 15);
+    expect(game.unit(victim.id)).toBeUndefined();
+    expect(sword.hp).toBeLessThan(sword.maxHp);
+    expect(game.events.some((e) => e.type === 'death' && e.unit.id === victim.id)).toBe(true);
+  });
+
+  it('damaging the AI provokes it; until then nobody picks fights', () => {
+    const game = new Game(42);
+    const mine = spawn(game, PLAYER, 'swordsman');
+    const theirs = spawn(game, ENEMY, 'swordsman');
+    run(game, 3);
+    expect(mine.hp).toBe(mine.maxHp); // standing side by side, at peace
+    expect(theirs.hp).toBe(theirs.maxHp);
+    game.orderAttack([mine], theirs.id);
+    run(game, 2);
+    expect(game.provoked).toBe(true);
+    expect(theirs.job?.type).toBe('attack');
+  });
+
+  it('archers shoot from range with arrows that fly', () => {
+    const game = new Game(42);
+    const archer = spawn(game, PLAYER, 'archer');
+    const target = spawn(game, ENEMY, 'peasant');
+    target.x = archer.x + 4 * TILE; // 4 tiles away: inside archer range, out of reach
+    target.y = archer.y;
+    target.job = { type: 'move' }; // stand still and don't retaliate in this test
+    game.orderAttack([archer], target.id);
+    game.tick(0.05);
+    expect(game.projectiles).toHaveLength(1);
+    const startX = archer.x;
+    run(game, 0.6);
+    expect(archer.x).toBe(startX); // didn't need to walk
+    expect(target.hp).toBe(UNITS.peasant.hp - UNITS.archer.damage);
+  });
+
+  it('destroying the enemy town hall wins the game', () => {
+    const game = new Game(42);
+    const enemyHall = hallOf(game, ENEMY);
+    enemyHall.hp = 5;
+    const sword = game.spawnUnitNear(enemyHall, 'swordsman')!;
+    sword.owner = PLAYER;
+    game.orderAttack([sword], enemyHall.id);
+    run(game, 3);
+    expect(game.buildings.has(enemyHall.id)).toBe(false);
+    expect(game.winner).toBe(PLAYER);
+    // Its footprint is walkable again.
+    expect(game.map.occupantAt(enemyHall.tx, enemyHall.ty)).toBe(0);
   });
 });

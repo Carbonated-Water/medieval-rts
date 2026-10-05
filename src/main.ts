@@ -1,4 +1,5 @@
-import { BUILDINGS } from './config';
+import { EnemyAI } from './ai';
+import { BUILDINGS, PLAYER, TILE, type UnitKind } from './config';
 import { Game, type Unit } from './game';
 import { Hud, type HudAction, type Mode } from './hud';
 import { attachInput } from './input';
@@ -7,6 +8,7 @@ import { View } from './view/view';
 const params = new URLSearchParams(location.search);
 const seed = Number(params.get('seed')) || Math.floor(Math.random() * 1e9);
 const game = new Game(seed);
+const ai = new EnemyAI(game);
 
 // Ambient occlusion + bloom are on for mouse devices, off for touch (phones),
 // unless ?fx=1 / ?fx=0 says otherwise.
@@ -19,9 +21,13 @@ async function boot(): Promise<void> {
   loading.remove();
 
   let mode: Mode = { type: 'none' };
+  let boxOn = false;
 
   const selectedUnits = (): Unit[] =>
-    mode.type === 'units' ? game.units.filter((u) => (mode as { ids: Set<number> }).ids.has(u.id)) : [];
+    mode.type === 'units' ? game.units.filter((u) => u.owner === PLAYER && (mode as { ids: Set<number> }).ids.has(u.id)) : [];
+  const select = (units: Unit[]) => {
+    if (units.length) mode = { type: 'units', ids: new Set(units.map((u) => u.id)) };
+  };
 
   function onTap(sx: number, sy: number): void {
     const ground = view.tileAt(sx, sy);
@@ -32,9 +38,14 @@ async function boot(): Promise<void> {
       return;
     }
 
+    const sel = selectedUnits();
     const unit = view.pickUnit(sx, sy, 28);
     if (unit) {
-      mode = { type: 'units', ids: new Set([unit.id]) };
+      if (unit.owner === PLAYER) select([unit]);
+      else if (sel.length) {
+        game.orderAttack(sel, unit.id);
+        view.showMarker(unit.x / TILE, unit.y / TILE);
+      } else mode = { type: 'inspect', id: unit.id };
       return;
     }
 
@@ -47,33 +58,54 @@ async function boot(): Promise<void> {
     const ty = structure ? structure.ty : tree ? tree.y : ground.ty;
     if (!game.map.inBounds(tx, ty)) return;
 
-    if (mode.type === 'units') {
-      const units = selectedUnits();
-      if (units.length > 0) {
-        game.orderAt(units, tx, ty);
-        if (structure) view.showMarker(structure.tx + structure.size / 2, structure.ty + structure.size / 2);
-        else if (tree) view.showMarker(tree.x + 0.5, tree.y + 0.5);
-        else {
-          const p = view.groundAt(sx, sy);
-          if (p) view.showMarker(p.x, p.z);
-        }
+    // Own finished building: select it, unless someone selected is carrying
+    // something it accepts (then the tap means "drop it off here").
+    const own = structure && game.buildings.get(structure.id);
+    if (own && own.owner === PLAYER && own.progress >= 1) {
+      const dropOff = BUILDINGS[own.kind].dropOff;
+      if (!sel.some((u) => u.carry && dropOff.includes(u.carry.kind))) {
+        mode = { type: 'building', id: own.id };
         return;
       }
+    }
+
+    if (sel.length) {
+      game.orderAt(sel, tx, ty);
+      if (structure) view.showMarker(structure.tx + structure.size / 2, structure.ty + structure.size / 2);
+      else if (tree) view.showMarker(tree.x + 0.5, tree.y + 0.5);
+      else {
+        const p = view.groundAt(sx, sy);
+        if (p) view.showMarker(p.x, p.z);
+      }
+      return;
     }
 
     const b = structure && game.buildings.get(structure.id);
     mode = b ? { type: 'building', id: b.id } : { type: 'none' };
   }
 
+  function onBox(x0: number, y0: number, x1: number, y1: number): void {
+    const units = view.unitsInBox(x0, y0, x1, y1, PLAYER);
+    if (units.length) select(units);
+  }
+
   function onAction(a: HudAction): void {
     if (a === 'clear') {
       mode = mode.type === 'place' ? { type: 'units', ids: mode.builders } : { type: 'none' };
-    } else if (a === 'idle' || a === 'all') {
-      const list = a === 'idle' ? game.idleUnits() : game.units;
-      if (list.length) mode = { type: 'units', ids: new Set(list.map((u) => u.id)) };
-    } else if (a === 'train' && mode.type === 'building') {
+    } else if (a === 'idle') {
+      select(game.idleUnits(PLAYER, 'peasant'));
+    } else if (a === 'all') {
+      select(game.units.filter((u) => u.owner === PLAYER && u.kind === 'peasant'));
+    } else if (a === 'army') {
+      select(game.units.filter((u) => u.owner === PLAYER && u.kind !== 'peasant'));
+    } else if (a === 'box') {
+      boxOn = !boxOn;
+    } else if (a === 'restart') {
+      params.delete('seed');
+      location.search = params.toString();
+    } else if (a.startsWith('train:') && mode.type === 'building') {
       const b = game.buildings.get(mode.id);
-      if (b) game.train(b);
+      if (b && b.owner === PLAYER) game.train(b, a.slice(6) as UnitKind);
     } else if (a === 'confirm' && mode.type === 'place') {
       const builders = game.units.filter((u) => (mode as { builders: Set<number> }).builders.has(u.id));
       if (game.placeBuilding(mode.kind, mode.tx, mode.ty, builders)) mode = { type: 'units', ids: mode.builders };
@@ -91,7 +123,7 @@ async function boot(): Promise<void> {
     }
   }
 
-  attachInput(view.canvas, view, onTap);
+  attachInput(view.canvas, view, { onTap, onBox, boxMode: () => boxOn });
   const hud = new Hud(onAction);
 
   let last = performance.now();
@@ -99,9 +131,12 @@ async function boot(): Promise<void> {
     const dt = Math.min((now - last) / 1000, 0.1);
     last = now;
     game.tick(dt);
+    ai.tick(dt);
 
     // Drop selections that no longer exist.
     if (mode.type === 'building' && !game.buildings.has(mode.id)) mode = { type: 'none' };
+    if (mode.type === 'inspect' && !game.unit(mode.id)) mode = { type: 'none' };
+    if (mode.type === 'units' && selectedUnits().length === 0) mode = { type: 'none' };
 
     view.update(dt, {
       selectedUnits: mode.type === 'units' ? mode.ids : new Set(),
@@ -110,13 +145,13 @@ async function boot(): Promise<void> {
         ? { kind: mode.kind, tx: mode.tx, ty: mode.ty, ok: game.canPlace(mode.kind, mode.tx, mode.ty) }
         : null,
     });
-    hud.update(game, mode);
+    hud.update(game, mode, boxOn);
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
 
   // Debug handles for poking at state from the console.
-  Object.assign(window, { game, view });
+  Object.assign(window, { game, view, ai });
 }
 
 boot().catch((e) => {
