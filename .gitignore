@@ -6,3 +6,6 @@ dist/
 Thumbs.db
 .vscode/
 .idea/
+
+# Downloaded art packs (staging); only used models get copied into public/models
+.art/

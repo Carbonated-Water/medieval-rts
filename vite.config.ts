@@ -12,5 +12,8 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: true,
     port: 5175,
+    // .art/ holds downloaded asset packs; watching them crashes on Windows
+    // (EBUSY while zips are written) and is pointless anyway.
+    watch: { ignored: ['**/.art/**'] },
   },
 }));
