@@ -1,81 +1,64 @@
-# medieval-rts — plan of record
+# plan of record — hex conquest
 
-A **classic medieval base-builder RTS** (Age of Empires / Warcraft feel),
-mobile-first. This is the only game in this repo.
+A **real-time hex conquest game**, a blend of **territorial.io** (fast,
+real-time, many bots, painted borders, territory = strength) and **Hex
+Empire** (hex map, cities, armies with a number marching between hexes,
+capitals). Mobile-first web, 3D low-poly KayKit art.
 
-Decided with the user 2026-09-25:
+The previous game (medieval base-builder RTS) is tagged **`rts-v1`** and
+is not coming back in this branch.
 
-- **Genre:** classic base-builder — gather, build, train, (later) fight.
-- **Theme:** medieval. Peasants, Town Hall, wood + gold.
-- **Platform:** mobile-first web (360×740 is the test viewport),
-  deployed to GitHub Pages at `/medieval-rts/` by GitHub Actions.
-- **Stack:** Vite + TypeScript + Three.js, nothing else at runtime.
+Decided with the user 2026-10-07:
 
-## Look (decided 2026-10-04)
+- **Real-time.** No turns.
+- **Armies on the map** (Hex Empire), not a troop pool.
+- **Cities spawn armies** on a timer.
+- **Numbers subtract** in battle.
+- **Many bots (8+).**
+- **Win = last one standing.**
+- **Look = 3D KayKit hexes** (Medieval Hexagon pack).
+- Same repo and URL; the old game is tagged and deleted.
 
-**3D low-poly diorama seen from a fixed isometric-style camera**, rendered
-with Three.js. Art is **KayKit** (CC0, Kay Lousberg), picked by the user
-from a side-by-side against Quaternius: Medieval Hexagon pack for
-buildings / trees / props (blue = player team colour, red / green / yellow
-exist for future opponents) and the Adventurers pack for peasants (three
-looks, weapons stripped, Barbarian keeps his axe). The Knight is reserved
-for future soldiers.
+## Rules (milestone 1)
 
-Polish layer: soft shadows, ambient occlusion (GTAO), ACES filmic tone
-mapping, light bloom, wood-chip / dust particles, buildings pop in when
-finished. AO + bloom are off by default on touch devices for performance
-(`?fx=1` / `?fx=0` to override).
+Numbers are starting defaults in `src/config.ts`.
 
-The simulation stays a flat square grid; the 3D view only reads it.
-Models are built from the raw packs by `scripts/build-models.mjs`
-(`npm run models`), which keeps only used meshes and animations.
+- **Map:** ~40×30 pointy-top hexes. Grass (passable), forest (passable,
+  slower), mountain (impassable), water (impassable). Generated from a
+  seed; `?seed=N` pins it.
+- **Nations:** the player + 8 bots. Each starts with a **capital** and the
+  hexes around it. ~18 **neutral towns** with garrisons sit between them.
+- **Spawning:** every few seconds each city adds troops to the army on
+  its hex (creating one if empty): capitals more, towns fewer, plus a
+  bonus that grows with the nation's territory. Armies cap at 99.
+- **Movement:** an army walks a hex path to its destination and claims
+  every hex it enters for its nation. The whole army moves, or half of
+  it (the player picks).
+- **Battle:** an army entering a hex with an enemy army fights at once:
+  bigger number wins and keeps the difference. An army defending a city
+  hex counts 1.5×. Own armies on the same hex merge.
+- **Capture:** winning on a city hex takes the city. Taking a
+  **capital eliminates** that nation: its cities and land go to the
+  captor and its armies disband.
+- **End:** you win when you're the last nation; you lose when your
+  capital falls.
 
-## Milestone 1 — economy (done)
+## Look
 
-Gather wood + gold, build houses / lumber mills, train peasants, on a
-phone. Still the base of everything below.
+KayKit hex tiles (grass, water, coast, hills, mountains, forests) drawn
+instanced. Ownership = territory tint on the hex + a flag in the nation
+colour on each city + coloured army banners. KayKit only has 4 team
+colours, so all cities use one stone palette and nations are told apart
+by colour accents. Armies are small soldier figures with a number banner.
 
-## Milestone 2 — combat + enemy AI (current, decided 2026-10-04)
+## Input
 
-- **64×64 map, two towns:** player (blue) bottom-left, AI (red) top-right
-  as seen by the camera. Each starts with a Town Hall, 3 peasants, a
-  nearby forest and gold mine; 3 contested mines in the middle.
-- **The AI plays by the player's rules** (`src/ai.ts`): same costs, build
-  times and orders. It gathers (~55% wood), builds houses as pop runs
-  short, a lumber mill, then a barracks, trains peasants to 14 and a
-  2:1 swordsman:archer army.
-- **Passive until provoked:** nobody picks fights until the player damages
-  anything of the AI's (`game.provoked`). Before that the AI's army
-  (cap 8) stands guard in front of its hall.
-- **Then full war:** immediate counter-attack, defend anything within 12
-  tiles of its hall, and attack waves at the player's hall that grow
-  (5, 7, 9 … 14 soldiers). Army cap rises to 30; it adds up to 3
-  barracks when rich.
-- **Barracks** (120 wood, 25 s, 350 hp) trains **Swordsman** (80 hp, 10
-  dmg melee, 60 gold + 20 wood) and **Archer** (35 hp, 7 dmg at 5 tiles,
-  30 gold + 40 wood). Arrows are real projectiles. Peasants: 25 hp, only
-  hit back at someone right next to them. All numbers in `config.ts`.
-- **Win / lose:** destroy the enemy Town Hall / lose yours.
-
-### Input model (one visible expectation at a time)
-
-The bottom panel always says what the next tap does.
-
-- Drag = pan, pinch / wheel = zoom. **Box** toggle: drag draws a
-  selection box instead (pinch still zooms).
-- HUD buttons with nothing selected: Idle peasants, Peasants, Army, Box.
-- Tap own unit → select it. Tap own finished building → select it (train
-  there), unless a selected peasant carries something it accepts (then
-  drop off).
-- With units selected: tap enemy unit / building = attack; tree / mine =
-  gather (peasants); construction site = help build; ground = move.
-- Tap an enemy with nothing selected → info panel.
-- Build: pick a building in the panel → a ghost appears at screen centre
-  → tap the map to move it (green = ok, red = blocked) → ✓ Build here.
+- Drag / WASD = pan, pinch / wheel = zoom.
+- Tap own army (or an own city with a garrison) → select it; tap a hex →
+  march there. Panel toggles **all / half**.
+- Leaderboard shows every nation's colour, name and share of the map.
 
 ## Not yet (ask before adding)
 
-Fog of war, more resources (food, stone), unit collision / formations,
-upgrades / tech, towers & walls, multiple AI opponents or difficulty
-levels, save/load, sound, camera rotation, minimap, smoother (non-tile)
-shorelines.
+Online multiplayer, boats / sea movement, roads / rivers as gameplay,
+upgrades, diplomacy, difficulty levels, sound, save/load.

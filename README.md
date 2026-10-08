@@ -1,7 +1,9 @@
-# medieval-rts
+# Hex Conquest
 
-A mobile-first medieval base-builder RTS. Gather wood and gold,
-build houses and lumber mills, and train peasants.
+A mobile-first real-time hex conquest game: territorial.io meets Hex
+Empire. Your cities raise armies; march them across the map to paint it
+in your colour, take towns and capitals, and be the last nation standing
+against eight bots.
 
 Play: https://carbonated-water.github.io/medieval-rts/
 
@@ -14,8 +16,9 @@ npm install
 npm run dev
 ```
 
-Then open http://localhost:5175. Drag to pan, scroll or pinch to zoom,
-tap to select and command.
+Then open http://localhost:5175. Tap one of your armies, then tap a hex
+to march (choose *Send half* to split). Drag / WASD to pan, scroll or
+pinch to zoom.
 
 ## Credits
 

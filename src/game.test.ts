@@ -1,228 +1,161 @@
 import { describe, expect, it } from 'vitest';
-import { BUILDINGS, ENEMY, PLAYER, START_PEASANTS, START_STOCK, TILE, UNITS, type Owner } from './config';
-import { Game, type Building } from './game';
+import {
+  ARMY_MAX, CAPITAL_SPAWN, CITY_DEFENSE, NATIONS, NEUTRAL, NEUTRAL_TOWNS, PLAYER, SPAWN_EVERY, START_ARMY,
+} from './config';
+import { Game, type Army } from './game';
+import { hexDistance } from './hex';
 
-const run = (game: Game, seconds: number) => {
-  for (let t = 0; t < seconds; t += 0.1) game.tick(0.1);
+const run = (g: Game, seconds: number) => { for (let t = 0; t < seconds; t += 0.05) g.tick(0.05); };
+const capitalOf = (g: Game, n: number) => g.cities.find((c) => c.id === g.nations[n]!.capitalId)!;
+const armyOn = (g: Game, n: number, col: number, row: number) => g.armiesAt(col, row).find((a) => a.owner === n);
+/** Put an army somewhere for a test (bypasses the rules). */
+const place = (g: Game, owner: number, col: number, row: number, count: number): Army => {
+  const a: Army = { id: 10_000 + g.armies.length, owner, count, col, row, path: [], step: 0 };
+  g.armies.push(a);
+  return a;
 };
 
-const hallOf = (game: Game, owner: Owner = PLAYER) => game.buildings.get(game.hallIds[owner])!;
-const unitsOf = (game: Game, owner: Owner = PLAYER) => game.units.filter((u) => u.owner === owner);
-
-/** Nearest tile (to the player's hall) satisfying `ok`. */
-function nearest(game: Game, ok: (x: number, y: number) => boolean) {
-  const h = hallOf(game);
-  let best: { x: number; y: number } | null = null;
-  let bestD = Infinity;
-  for (let y = 0; y < game.map.h; y++)
-    for (let x = 0; x < game.map.w; x++) {
-      if (!ok(x, y)) continue;
-      const d = Math.hypot(x - h.tx, y - h.ty);
-      if (d < bestD) { bestD = d; best = { x, y }; }
+describe('world setup', () => {
+  it('gives every nation a capital, starting land and an army; towns are neutral', () => {
+    const g = new Game(42);
+    expect(g.nations).toHaveLength(NATIONS.length);
+    for (const n of g.nations) {
+      const cap = capitalOf(g, n.id);
+      expect(cap.capital).toBe(true);
+      expect(cap.owner).toBe(n.id);
+      expect(n.territory).toBeGreaterThanOrEqual(4);
+      expect(armyOn(g, n.id, cap.col, cap.row)?.count).toBe(START_ARMY);
     }
-  return best!;
-}
-
-const spotFor = (game: Game, kind: Building['kind']) => nearest(game, (x, y) => game.canPlace(kind, x, y));
-
-const nearestMine = (game: Game) => {
-  const h = hallOf(game);
-  return [...game.mines.values()].sort((a, b) => Math.hypot(a.tx - h.tx, a.ty - h.ty) - Math.hypot(b.tx - h.tx, b.ty - h.ty))[0]!;
-};
-
-describe('Game setup', () => {
-  it('gives both sides a finished hall, peasants and the starting stock', () => {
-    const game = new Game(42);
-    for (const owner of [PLAYER, ENEMY]) {
-      expect(hallOf(game, owner).progress).toBe(1);
-      expect(unitsOf(game, owner)).toHaveLength(START_PEASANTS);
-      expect(game.stocks[owner]).toEqual(START_STOCK);
-      expect(game.popCapOf(owner)).toBe(BUILDINGS.hall.pop);
-    }
-    expect(game.mines.size).toBeGreaterThanOrEqual(4);
-    expect(game.provoked).toBe(false);
+    const towns = g.cities.filter((c) => !c.capital);
+    expect(towns.length).toBeGreaterThanOrEqual(NEUTRAL_TOWNS - 4);
+    expect(towns.every((t) => t.owner === NEUTRAL && armyOn(g, NEUTRAL, t.col, t.row))).toBe(true);
   });
 
-  it('places the towns far apart', () => {
-    const game = new Game(42);
-    const a = hallOf(game, PLAYER), b = hallOf(game, ENEMY);
-    expect(Math.hypot(a.tx - b.tx, a.ty - b.ty)).toBeGreaterThan(30);
+  it('spreads capitals apart and keeps every city reachable', () => {
+    const g = new Game(7);
+    const caps = g.cities.filter((c) => c.capital);
+    for (const a of caps) for (const b of caps) if (a !== b) expect(hexDistance(a, b)).toBeGreaterThanOrEqual(3);
+    const player = capitalOf(g, PLAYER);
+    for (const c of g.cities) {
+      const army = place(g, PLAYER, player.col, player.row, 1);
+      expect(g.move(army.id, c.col, c.row)).not.toBeNull();
+    }
   });
 
   it('is deterministic for a seed', () => {
-    const a = new Game(7);
-    const b = new Game(7);
-    expect(Array.from(a.map.tree)).toEqual(Array.from(b.map.tree));
-    expect(hallOf(a).tx).toBe(hallOf(b).tx);
+    const a = new Game(99), b = new Game(99);
+    expect(Array.from(a.world.terrain)).toEqual(Array.from(b.world.terrain));
+    expect(a.cities.map((c) => [c.col, c.row])).toEqual(b.cities.map((c) => [c.col, c.row]));
   });
 });
 
-describe('gathering', () => {
-  it('peasants chop wood, carry it home and keep going', () => {
-    const game = new Game(42);
-    const tree = nearest(game, (x, y) => game.map.hasTree(x, y));
-    const workers = unitsOf(game).slice(0, 2);
-    game.orderAt(workers, tree.x, tree.y);
-    run(game, 90);
-    expect(game.stock.wood).toBeGreaterThan(START_STOCK.wood + 50);
-    expect(workers.every((u) => u.job?.type === 'gather')).toBe(true);
-    expect(game.stocks[ENEMY]).toEqual(START_STOCK); // nothing leaked to the other side
+describe('spawning', () => {
+  it('capitals add troops to the army standing on them', () => {
+    const g = new Game(42);
+    const cap = capitalOf(g, PLAYER);
+    cap.spawnTimer = 0;
+    run(g, SPAWN_EVERY + 0.01);
+    expect(armyOn(g, PLAYER, cap.col, cap.row)!.count).toBe(START_ARMY + g.spawnSize(cap));
+    expect(g.spawnSize(cap)).toBeGreaterThanOrEqual(CAPITAL_SPAWN);
   });
 
-  it('mines gold and depletes the mine', () => {
-    const game = new Game(42);
-    const mine = nearestMine(game);
-    const before = mine.gold;
-    game.orderAt([unitsOf(game)[2]!], mine.tx, mine.ty);
-    run(game, 60);
-    expect(game.stock.gold).toBeGreaterThan(START_STOCK.gold);
-    expect(mine.gold).toBeLessThan(before);
-  });
-
-  it('moves on to another tree when one runs out', () => {
-    const game = new Game(42);
-    const tree = nearest(game, (x, y) => game.map.hasTree(x, y));
-    const version = game.map.treeVersion;
-    game.orderAt(unitsOf(game), tree.x, tree.y);
-    run(game, 120);
-    expect(game.map.hasTree(tree.x, tree.y)).toBe(false);
-    expect(game.map.treeVersion).toBeGreaterThan(version);
-    expect(unitsOf(game).some((u) => u.job?.type === 'gather')).toBe(true);
+  it('caps armies at ARMY_MAX and neutral towns do not grow', () => {
+    const g = new Game(42);
+    const cap = capitalOf(g, PLAYER);
+    armyOn(g, PLAYER, cap.col, cap.row)!.count = ARMY_MAX - 1;
+    const town = g.cities.find((c) => c.owner === NEUTRAL)!;
+    const before = armyOn(g, NEUTRAL, town.col, town.row)!.count;
+    run(g, SPAWN_EVERY * 2);
+    expect(armyOn(g, PLAYER, cap.col, cap.row)!.count).toBe(ARMY_MAX);
+    expect(armyOn(g, NEUTRAL, town.col, town.row)!.count).toBe(before);
   });
 });
 
-describe('building', () => {
-  it('cannot place on the hall or on trees', () => {
-    const game = new Game(42);
-    const h = hallOf(game);
-    expect(game.canPlace('house', h.tx, h.ty)).toBe(false);
-    const tree = nearest(game, (x, y) => game.map.hasTree(x, y));
-    expect(game.canPlace('house', tree.x, tree.y)).toBe(false);
-  });
-
-  it('charges the cost, builds over time and raises the pop cap', () => {
-    const game = new Game(42);
-    game.stock.wood = 500;
-    const spot = spotFor(game, 'house');
-    expect(game.placeBuilding('house', spot.x, spot.y, [unitsOf(game)[0]!])).toBe(true);
-    expect(game.stock.wood).toBe(500 - BUILDINGS.house.cost.wood!);
-    const site = [...game.buildings.values()].find((b) => b.kind === 'house')!;
-    expect(site.progress).toBe(0);
-    expect(site.hp).toBeLessThan(site.maxHp);
-    run(game, BUILDINGS.house.buildSeconds + 10);
-    expect(site.progress).toBe(1);
-    expect(site.hp).toBeCloseTo(site.maxHp);
-    expect(game.popCap).toBe(BUILDINGS.hall.pop + BUILDINGS.house.pop);
-  });
-
-  it('refuses when it cannot afford it, with a notice', () => {
-    const game = new Game(42);
-    game.stock.wood = 10;
-    const spot = spotFor(game, 'mill');
-    expect(game.placeBuilding('mill', spot.x, spot.y, [])).toBe(false);
-    expect(game.notice?.text).toMatch(/need \d+ more wood/);
+describe('marching', () => {
+  it('walks hex by hex and paints the land it crosses', () => {
+    const g = new Game(42);
+    const cap = capitalOf(g, PLAYER);
+    const home = armyOn(g, PLAYER, cap.col, cap.row)!;
+    const dest = g.cities.filter((c) => c.owner === NEUTRAL).sort((a, b) => hexDistance(a, cap) - hexDistance(b, cap))[0]!;
+    // Pick an empty passable hex 3 steps short of that town.
+    const army = g.move(home.id, dest.col, dest.row, 4)!;
+    expect(army).not.toBe(home); // split off
+    expect(home.count).toBe(START_ARMY - 4);
+    const route = [...army.path];
+    run(g, 2);
+    expect(g.world.ownerAt(route[0]!.col, route[0]!.row)).toBe(PLAYER);
   });
 });
 
-describe('training', () => {
-  it('trains a peasant at the hall', () => {
-    const game = new Game(42);
-    expect(game.train(hallOf(game))).toBe(true);
-    expect(game.stock.gold).toBe(START_STOCK.gold - UNITS.peasant.cost.gold!);
-    run(game, UNITS.peasant.trainSeconds + 1);
-    expect(unitsOf(game)).toHaveLength(START_PEASANTS + 1);
-    const fresh = unitsOf(game).at(-1)!;
-    // Spawns next to the hall, not inside it.
-    expect(game.map.occupantAt(Math.floor(fresh.x / TILE), Math.floor(fresh.y / TILE))).not.toBe(hallOf(game).id);
+describe('battle and capture', () => {
+  it('numbers subtract; the winner keeps the difference', () => {
+    const g = new Game(42);
+    const cap = capitalOf(g, PLAYER);
+    const empty = findEmptyNear(g, cap.col, cap.row);
+    const enemy = place(g, 1, empty.col, empty.row, 7);
+    const mine = g.move(armyOn(g, PLAYER, cap.col, cap.row)!.id, empty.col, empty.row)!;
+    run(g, 20);
+    expect(g.army(enemy.id)).toBeUndefined();
+    expect(mine.count).toBe(START_ARMY - 7);
+    expect(g.events.some((e) => e.type === 'battle' && e.winner === PLAYER)).toBe(true);
   });
 
-  it('stops at the population cap', () => {
-    const game = new Game(42);
-    game.stock.gold = 10_000;
-    const hall = hallOf(game);
-    while (game.popUsed < game.popCap) expect(game.train(hall)).toBe(true);
-    expect(game.train(hall)).toBe(false);
-    expect(game.notice?.text).toBe('need more houses');
+  it('city garrisons defend at 1.5× and a stronger attacker takes the town', () => {
+    const g = new Game(42);
+    const town = g.cities.find((c) => c.owner === NEUTRAL)!;
+    const garrison = armyOn(g, NEUTRAL, town.col, town.row)!;
+    garrison.count = 10; // defends like 15
+    const near = findEmptyNear(g, town.col, town.row);
+    const weak = place(g, PLAYER, near.col, near.row, 14);
+    g.move(weak.id, town.col, town.row);
+    run(g, 5);
+    expect(g.army(weak.id)).toBeUndefined();
+    expect(town.owner).toBe(NEUTRAL);
+    expect(garrison.count).toBe(Math.round((10 * CITY_DEFENSE - 14) / CITY_DEFENSE));
+
+    const strong = place(g, PLAYER, near.col, near.row, 30);
+    g.move(strong.id, town.col, town.row);
+    run(g, 5);
+    expect(town.owner).toBe(PLAYER);
+    expect(g.events.some((e) => e.type === 'capture' && e.cityId === town.id)).toBe(true);
   });
 
-  it('a barracks trains swordsmen and archers, not peasants', () => {
-    const game = new Game(42);
-    game.stock.wood = 1000;
-    game.stock.gold = 1000;
-    const spot = spotFor(game, 'barracks');
-    game.placeBuilding('barracks', spot.x, spot.y, unitsOf(game));
-    run(game, BUILDINGS.barracks.buildSeconds);
-    const barracks = [...game.buildings.values()].find((b) => b.kind === 'barracks')!;
-    expect(barracks.progress).toBe(1);
-    expect(game.train(barracks, 'peasant')).toBe(false);
-    expect(game.train(barracks, 'swordsman')).toBe(true);
-    expect(game.train(barracks, 'archer')).toBe(true);
-    run(game, UNITS.swordsman.trainSeconds + UNITS.archer.trainSeconds + 1);
-    expect(unitsOf(game).filter((u) => u.kind !== 'peasant').map((u) => u.kind).sort()).toEqual(['archer', 'swordsman']);
-  });
-});
-
-describe('combat', () => {
-  /** A unit of `owner` standing next to the player's hall. */
-  const spawn = (game: Game, owner: Owner, kind: 'peasant' | 'swordsman' | 'archer') => {
-    const u = game.spawnUnitNear(hallOf(game, PLAYER), kind)!;
-    u.owner = owner;
-    return u;
-  };
-
-  it('a swordsman kills a peasant, which fights back', () => {
-    const game = new Game(42);
-    const sword = spawn(game, PLAYER, 'swordsman');
-    const victim = spawn(game, ENEMY, 'peasant');
-    game.orderAttack([sword], victim.id);
-    run(game, 0.5);
-    expect(victim.job?.type).toBe('attack'); // retaliating
-    run(game, 15);
-    expect(game.unit(victim.id)).toBeUndefined();
-    expect(sword.hp).toBeLessThan(sword.maxHp);
-    expect(game.events.some((e) => e.type === 'death' && e.unit.id === victim.id)).toBe(true);
+  it('taking a capital eliminates the nation: cities to the conqueror, land goes blank', () => {
+    const g = new Game(42);
+    const target = capitalOf(g, 1);
+    for (const a of g.armiesAt(target.col, target.row)) a.count = 1;
+    const near = findEmptyNear(g, target.col, target.row);
+    const army = place(g, PLAYER, near.col, near.row, 50);
+    g.move(army.id, target.col, target.row);
+    run(g, 5);
+    expect(g.nations[1]!.alive).toBe(false);
+    expect(target.owner).toBe(PLAYER);
+    expect(g.world.ownerAt(target.col, target.row)).toBe(PLAYER);
+    expect(g.nations[1]!.territory).toBe(0);
+    expect(Array.from(g.world.owner).includes(1)).toBe(false);
+    expect(g.armies.some((a) => a.owner === 1)).toBe(false);
+    // Territory counts stay consistent with the map.
+    for (const n of g.nations) expect(n.territory).toBe(Array.from(g.world.owner).filter((o) => o === n.id).length);
   });
 
-  it('damaging the AI provokes it; until then nobody picks fights', () => {
-    const game = new Game(42);
-    const mine = spawn(game, PLAYER, 'swordsman');
-    const theirs = spawn(game, ENEMY, 'swordsman');
-    run(game, 3);
-    expect(mine.hp).toBe(mine.maxHp); // standing side by side, at peace
-    expect(theirs.hp).toBe(theirs.maxHp);
-    game.orderAttack([mine], theirs.id);
-    run(game, 2);
-    expect(game.provoked).toBe(true);
-    expect(theirs.job?.type).toBe('attack');
-  });
-
-  it('archers shoot from range with arrows that fly', () => {
-    const game = new Game(42);
-    const archer = spawn(game, PLAYER, 'archer');
-    const target = spawn(game, ENEMY, 'peasant');
-    target.x = archer.x + 4 * TILE; // 4 tiles away: inside archer range, out of reach
-    target.y = archer.y;
-    target.job = { type: 'move' }; // stand still and don't retaliate in this test
-    game.orderAttack([archer], target.id);
-    game.tick(0.05);
-    expect(game.projectiles).toHaveLength(1);
-    const startX = archer.x;
-    run(game, 0.6);
-    expect(archer.x).toBe(startX); // didn't need to walk
-    expect(target.hp).toBe(UNITS.peasant.hp - UNITS.archer.damage);
-  });
-
-  it('destroying the enemy town hall wins the game', () => {
-    const game = new Game(42);
-    const enemyHall = hallOf(game, ENEMY);
-    enemyHall.hp = 5;
-    const sword = game.spawnUnitNear(enemyHall, 'swordsman')!;
-    sword.owner = PLAYER;
-    game.orderAttack([sword], enemyHall.id);
-    run(game, 3);
-    expect(game.buildings.has(enemyHall.id)).toBe(false);
-    expect(game.winner).toBe(PLAYER);
-    // Its footprint is walkable again.
-    expect(game.map.occupantAt(enemyHall.tx, enemyHall.ty)).toBe(0);
+  it('the last nation standing wins', () => {
+    const g = new Game(42, 1); // player + one bot
+    const target = capitalOf(g, 1);
+    for (const a of g.armiesAt(target.col, target.row)) a.count = 1;
+    const near = findEmptyNear(g, target.col, target.row);
+    g.move(place(g, PLAYER, near.col, near.row, 50).id, target.col, target.row);
+    run(g, 5);
+    expect(g.winner).toBe(PLAYER);
   });
 });
+
+function findEmptyNear(g: Game, col: number, row: number) {
+  for (let r = 1; r < 6; r++)
+    for (let dr = -r; dr <= r; dr++)
+      for (let dc = -r; dc <= r; dc++) {
+        const c = col + dc, w = row + dr;
+        if (hexDistance({ col, row }, { col: c, row: w }) !== r) continue;
+        if (g.world.passable(c, w) && !g.cityAt(c, w) && g.armiesAt(c, w).length === 0) return { col: c, row: w };
+      }
+  throw new Error('no empty hex nearby');
+}

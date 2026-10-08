@@ -4,22 +4,16 @@ import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 
 // Models are built from the KayKit packs by scripts/build-models.mjs.
 export const MODELS = [
-  'hall', 'house_a', 'house_b', 'mill', 'barracks',
-  'hall_red', 'house_a_red', 'house_b_red', 'mill_red', 'barracks_red',
-  'mine', 'rubble', 'site_a', 'site_b', 'site_c',
-  'tree_a', 'tree_b', 'lumber', 'sack',
-  'peasant_hooded', 'peasant_red', 'peasant_axe', 'swordsman', 'archer',
+  'hex_grass', 'hex_water', 'forest_a', 'forest_b', 'forest_c',
+  'mountain_a', 'mountain_b', 'mountain_c', 'capital', 'town', 'soldier',
 ] as const;
 export type ModelName = (typeof MODELS)[number];
 
-interface Entry {
-  gltf: GLTF;
-  /** Bounding box of the untouched model, used to normalise placement. */
-  box: THREE.Box3;
-}
+/** KayKit hex tiles are 2 units across; the game's hexes are 1. */
+export const KAYKIT_SCALE = 0.5;
 
 export class Assets {
-  private entries = new Map<ModelName, Entry>();
+  private gltfs = new Map<ModelName, GLTF>();
 
   async load(onProgress?: (done: number, total: number) => void): Promise<void> {
     const loader = new GLTFLoader();
@@ -32,36 +26,43 @@ export class Assets {
           o.receiveShadow = true;
         }
       });
-      this.entries.set(name, { gltf, box: new THREE.Box3().setFromObject(gltf.scene) });
+      this.gltfs.set(name, gltf);
       onProgress?.(++done, MODELS.length);
     }));
   }
 
   animations(name: ModelName): THREE.AnimationClip[] {
-    return this.get(name).gltf.animations;
+    return this.get(name).animations;
   }
 
-  /**
-   * A fresh copy of a model standing on y=0, centred on the origin, scaled
-   * so its footprint is `fit` tiles wide, or so it is `height` tiles tall.
-   */
-  instance(name: ModelName, size: { fit?: number; height?: number }): THREE.Group {
-    const { gltf, box } = this.get(name);
+  /** A fresh copy of a model at KayKit scale (or `height` world units tall). */
+  instance(name: ModelName, height?: number): THREE.Group {
+    const gltf = this.get(name);
     const obj = cloneSkinned(gltf.scene);
-    const dim = box.getSize(new THREE.Vector3());
-    const s = size.height ? size.height / dim.y : (size.fit ?? 1) / Math.max(dim.x, dim.z);
-    obj.position.set(-(box.min.x + box.max.x) / 2, -box.min.y, -(box.min.z + box.max.z) / 2);
-    const inner = new THREE.Group();
-    inner.add(obj);
-    inner.scale.setScalar(s);
+    let s = KAYKIT_SCALE;
+    if (height) s = height / new THREE.Box3().setFromObject(gltf.scene).getSize(new THREE.Vector3()).y;
+    obj.scale.setScalar(s);
     const wrap = new THREE.Group();
-    wrap.add(inner);
+    wrap.add(obj);
     return wrap;
   }
 
-  private get(name: ModelName): Entry {
-    const e = this.entries.get(name);
-    if (!e) throw new Error(`model not loaded: ${name}`);
-    return e;
+  /** Every mesh in a model with its transform at KayKit scale, for instancing. */
+  meshes(name: ModelName): { geometry: THREE.BufferGeometry; material: THREE.Material | THREE.Material[]; matrix: THREE.Matrix4 }[] {
+    const root = this.get(name).scene.clone();
+    root.scale.setScalar(KAYKIT_SCALE);
+    root.updateMatrixWorld(true);
+    const out: { geometry: THREE.BufferGeometry; material: THREE.Material | THREE.Material[]; matrix: THREE.Matrix4 }[] = [];
+    root.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.isMesh) out.push({ geometry: m.geometry, material: m.material, matrix: m.matrixWorld.clone() });
+    });
+    return out;
+  }
+
+  private get(name: ModelName): GLTF {
+    const g = this.gltfs.get(name);
+    if (!g) throw new Error(`model not loaded: ${name}`);
+    return g;
   }
 }

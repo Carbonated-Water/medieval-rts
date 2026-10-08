@@ -4,6 +4,37 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-08  Rebuilt as Hex Conquest (territorial.io × Hex Empire)
+  WHAT: The medieval base-builder (tagged rts-v1) is replaced. New sim:
+        hex.ts (odd-r hex maths + A*), world.ts (seeded island map:
+        grass / forest / mountain / water, largest region only, fair
+        inland capitals, neutral towns), game.ts (9 nations, cities that
+        spawn troops into the army on their hex, armies that march and
+        paint land, numbers-subtract battles with a 1.5× city defence,
+        capture, capital = elimination, last one standing). ai.ts: bots
+        with personalities (aggressive / cautious / expansionist) that
+        defend, grab towns, prey on weaker targets, paint land and gang
+        up on cities no single army can take. View: instanced KayKit hex
+        tiles / forests / mountains, territory tint + painted borders,
+        stone cities with nation flags, knight armies with number
+        banners, path dots, battle particles. HUD: troops / land / nations
+        pills, leaderboard, army panel with Send all / Send half, toasts,
+        victory / defeat. Input simplified (box-select removed).
+  WHY:  User: "scrap this whole game and make a blend of territorial.io
+        and hex empire". Chose real-time, armies on the map, cities spawn
+        armies, numbers subtract, 8+ bots, last one standing, 3D KayKit.
+  Balance: a bot-only check (player idle) first snowballed to a winner in
+        ~3 min. Fixes: land bonus only for capitals and capped (+6),
+        conquered land goes blank (cities still transfer), capital
+        garrisons grow over time (8 → 40), bots gang up on strong cities.
+        Now first elimination ≈ 7–20 min, idle player overrun ≈ 10–24
+        min, 8/10 seeds end within 25 min.
+  Art: KayKit's grass is lime (#b9be32) and clashed with yellow / orange
+        territory; build-models shifts it greener. Thornwick is white
+        (green vanished on grass).
+
+---
+
 2026-10-04  Milestone 2: combat, enemy AI, barracks, win/lose
   WHAT: Everything has an owner (player / AI). Units have kinds
         (peasant / swordsman / archer), hp, cooldowns and an 'attack'

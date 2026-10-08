@@ -4,31 +4,26 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { TILE, UNITS, type BuildingKind, type Owner } from '../config';
-import { isUnit, type Building, type Game, type Mine, type Unit } from '../game';
+import { NEUTRAL, NEUTRAL_COLOR, PLAYER } from '../config';
+import type { Army, Game } from '../game';
+import { HEX_ROW, hexAt, hexCenter, type Hex } from '../hex';
 import type { PanZoom } from '../input';
+import { Armies } from './armies';
 import { Assets } from './assets';
-import { Forest } from './forest';
-import { Arrows, Particles, TapMarker } from './fx';
-import { Structures } from './structures';
-import { buildTerrain } from './terrain';
-import { Units } from './units';
+import { Cities } from './cities';
+import { Particles, TapMarker } from './fx';
+import { HexMap } from './hexmap';
 
 /** Direction from the camera's look-at point to the camera (≈ isometric, a touch steeper). */
-const CAMERA_DIR = new THREE.Vector3(1, 1.15, 1).normalize();
-const MIN_VIEW = 5; // tiles visible vertically, fully zoomed in
-const MAX_VIEW = 30;
-
-export interface Overlay {
-  selectedUnits: Set<number>;
-  selectedBuilding: number | null;
-  ghost: { kind: BuildingKind; tx: number; ty: number; ok: boolean } | null;
-}
+const CAMERA_DIR = new THREE.Vector3(0.7, 1.35, 1).normalize();
+const MIN_VIEW = 5; // world units visible vertically, fully zoomed in
+const MAX_VIEW = 34;
+const MAX_PATH_DOTS = 80;
 
 /**
- * Everything on screen except the DOM HUD. Owns the Three.js renderer,
- * the camera rig (pan / zoom / picking) and the per-frame sync from game
- * state to scene objects. Game logic never depends on this.
+ * Everything on screen except the DOM HUD: the Three.js renderer, the
+ * camera rig (pan / zoom / picking) and the per-frame sync from game state
+ * to scene objects. Game logic never depends on this.
  */
 export class View implements PanZoom {
   readonly canvas: HTMLCanvasElement;
@@ -36,56 +31,60 @@ export class View implements PanZoom {
   private scene = new THREE.Scene();
   private camera: THREE.OrthographicCamera;
   private composer: EffectComposer | null = null;
-  private sun = new THREE.DirectionalLight(0xfff0d8, 2.7);
+  private sun = new THREE.DirectionalLight(0xfff0d8, 2.4);
   private assets = new Assets();
   private particles = new Particles();
   private marker = new TapMarker();
-  private arrows = new Arrows();
-  private eventSeq = 0;
-  private forest!: Forest;
-  private structures!: Structures;
-  private units!: Units;
+  private map!: HexMap;
+  private cities!: Cities;
+  private armies!: Armies;
+  private pathDots: THREE.InstancedMesh;
   private raycaster = new THREE.Raycaster();
   private ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private target = new THREE.Vector3();
-  private viewH = 10;
-  private bars: HTMLElement;
-  private barPool: HTMLElement[] = [];
+  private viewH = 12;
+  private eventSeq = 0;
 
-  constructor(parent: HTMLElement, private game: Game, opts: { effects: boolean }) {
+  constructor(private parent: HTMLElement, private game: Game, opts: { effects: boolean }) {
     const mobile = matchMedia('(pointer: coarse)').matches;
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 1.5 : 2));
     this.renderer.setSize(innerWidth, innerHeight);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    // Neutral keeps greens green; ACES pushed the KayKit grass toward yellow.
+    this.renderer.toneMapping = THREE.NeutralToneMapping;
+    this.renderer.toneMappingExposure = 1.0;
     this.canvas = this.renderer.domElement;
     parent.appendChild(this.canvas);
 
-    this.bars = document.createElement('div');
-    this.bars.id = 'bars';
-    parent.appendChild(this.bars);
-
-    this.scene.background = new THREE.Color(0x8fbcdf);
+    this.scene.background = new THREE.Color(0x8fc4e8);
     this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 400);
 
-    this.scene.add(new THREE.HemisphereLight(0xe2efff, 0x55663a, 1.25));
+    this.scene.add(new THREE.HemisphereLight(0xe2efff, 0x55663a, 1.2));
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.03;
     this.scene.add(this.sun, this.sun.target);
 
+    this.pathDots = new THREE.InstancedMesh(
+      new THREE.CircleGeometry(0.07, 12).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false }),
+      MAX_PATH_DOTS,
+    );
+    this.pathDots.count = 0;
+    this.pathDots.renderOrder = 4;
+    this.pathDots.frustumCulled = false;
+
     if (opts.effects) {
       this.composer = new EffectComposer(this.renderer);
       this.composer.addPass(new RenderPass(this.scene, this.camera));
       const ao = new GTAOPass(this.scene, this.camera, innerWidth, innerHeight);
-      ao.updateGtaoMaterial({ radius: 0.5, distanceExponent: 1.4, thickness: 1, scale: 1.1 });
-      ao.blendIntensity = 0.85;
+      ao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1.4, thickness: 1, scale: 1.1 });
+      ao.blendIntensity = 0.8;
       this.composer.addPass(ao);
-      this.composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.16, 0.5, 0.92));
+      this.composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.14, 0.5, 0.92));
       this.composer.addPass(new OutputPass());
     }
 
@@ -94,50 +93,51 @@ export class View implements PanZoom {
 
   async load(onProgress?: (done: number, total: number) => void): Promise<void> {
     await this.assets.load(onProgress);
-    this.scene.add(buildTerrain(this.game));
-    this.forest = new Forest(this.game.map, this.assets);
-    this.structures = new Structures(this.game, this.assets, this.particles);
-    this.units = new Units(this.game, this.assets, this.particles);
-    this.scene.add(this.forest.group, this.structures.group, this.units.group, this.particles.mesh, this.marker.mesh, this.arrows.group);
+    this.map = new HexMap(this.game, this.assets);
+    this.cities = new Cities(this.game, this.assets, this.particles);
+    this.armies = new Armies(this.game, this.assets, this.parent);
+    this.scene.add(this.map.group, this.cities.group, this.armies.group, this.particles.mesh, this.marker.mesh, this.pathDots);
 
-    const hall = this.game.buildings.get(this.game.hallId)!;
-    this.target.set(hall.tx + hall.size / 2, 0, hall.ty + hall.size / 2);
-    // Show ~11 tiles across the narrow side: portrait phones zoom out, desktops stay close.
+    const cap = this.game.cities.find((c) => c.id === this.game.player.capitalId)!;
+    this.focus(cap);
+    // ~13 hexes across the narrow side: portrait phones zoom out, desktops stay closer.
     const aspect = innerWidth / innerHeight;
-    this.viewH = THREE.MathUtils.clamp(aspect < 1 ? 11 / aspect : 13, 9, 24);
+    this.viewH = THREE.MathUtils.clamp(aspect < 1 ? 13 / aspect : 14, 10, 30);
     this.resize();
   }
 
   // ---------- per frame ----------
 
-  update(dt: number, o: Overlay): void {
-    // Deaths and destructions first, so the dying are animated, not just removed.
+  update(dt: number, selected: number | null): void {
     for (const e of this.game.events) {
       if (e.seq <= this.eventSeq) continue;
       this.eventSeq = e.seq;
-      if (e.type === 'death') this.units.died(e.unit);
-      else this.structures.destroyed(e.building);
+      if (e.type === 'battle') {
+        const { x, z } = hexCenter(e.col, e.row);
+        const color = e.winner === NEUTRAL ? NEUTRAL_COLOR : this.game.nations[e.winner]!.color;
+        this.particles.burst(new THREE.Vector3(x, 0.3, z), 0xd8d0c0, 10, { speed: 1.4, up: 1.6, size: 0.05, life: 0.6 });
+        this.particles.burst(new THREE.Vector3(x, 0.35, z), color, 6, { speed: 1.2, up: 2, size: 0.04, life: 0.6 });
+      }
     }
-    this.forest.sync();
-    this.structures.update(dt, o.selectedBuilding);
-    this.structures.setGhost(o.ghost);
-    this.units.update(dt, o.selectedUnits);
-    this.arrows.update(this.game.projectiles.map((p) => {
-      const t = this.game.entity(p.targetId);
-      const tx = t ? (isUnit(t) ? t.x / TILE : t.tx + t.size / 2) : p.x / TILE;
-      const tz = t ? (isUnit(t) ? t.y / TILE : t.ty + t.size / 2) : p.y / TILE;
-      return { sx: p.sx / TILE, sz: p.sy / TILE, x: p.x / TILE, z: p.y / TILE, tx, tz };
-    }));
+    this.map.update(dt);
+    this.cities.update(dt);
+    this.armies.update(dt, selected, (p) => this.toScreen(p));
+    this.updatePath(selected);
     this.particles.update(dt);
     this.marker.update(dt);
     this.applyCamera();
     if (this.composer) this.composer.render(dt);
     else this.renderer.render(this.scene, this.camera);
-    this.updateBars();
   }
 
-  showMarker(x: number, z: number): void {
+  showMarker(h: Hex): void {
+    const { x, z } = hexCenter(h.col, h.row);
     this.marker.show(x, z);
+  }
+
+  focus(h: Hex): void {
+    const { x, z } = hexCenter(h.col, h.row);
+    this.target.set(x, 0, z);
   }
 
   // ---------- camera (PanZoom) ----------
@@ -160,68 +160,54 @@ export class View implements PanZoom {
 
   // ---------- picking ----------
 
-  /** Ground point (world units) under a screen point. */
   groundAt(sx: number, sy: number): THREE.Vector3 | null {
-    this.ray(sx, sy);
+    const ndc = new THREE.Vector2((sx / innerWidth) * 2 - 1, -(sy / innerHeight) * 2 + 1);
+    this.camera.updateMatrixWorld();
+    this.raycaster.setFromCamera(ndc, this.camera);
     return this.raycaster.ray.intersectPlane(this.ground, new THREE.Vector3());
   }
 
-  /** Ground tile under a screen point. */
-  tileAt(sx: number, sy: number): { tx: number; ty: number } {
-    const p = this.groundAt(sx, sy) ?? new THREE.Vector3(-1, 0, -1);
-    return { tx: Math.floor(p.x), ty: Math.floor(p.z) };
+  /** Hex under a screen point (may be off the map; callers bounds-check). */
+  hexAtScreen(sx: number, sy: number): Hex | null {
+    const p = this.groundAt(sx, sy);
+    return p ? hexAt(p.x, p.z) : null;
   }
 
-  /** Units of `owner` whose chest is inside a screen rectangle. */
-  unitsInBox(x0: number, y0: number, x1: number, y1: number, owner: Owner): Unit[] {
-    const [l, r] = x0 < x1 ? [x0, x1] : [x1, x0];
-    const [t, b] = y0 < y1 ? [y0, y1] : [y1, y0];
-    const p = new THREE.Vector3();
-    return this.game.units.filter((u) => {
-      if (u.owner !== owner) return false;
-      const s = this.toScreen(this.units.chestOf(u, p));
-      return s.x >= l && s.x <= r && s.y >= t && s.y <= b;
-    });
-  }
-
-  /** Nearest unit (either side) to a screen point, within `radius` pixels. */
-  pickUnit(sx: number, sy: number, radius: number): Unit | null {
-    let best: Unit | null = null;
+  /** Nearest army to a screen point within `radius` px; own armies win ties. */
+  pickArmy(sx: number, sy: number, radius: number): Army | null {
+    let best: Army | null = null;
     let bestD = radius;
     const p = new THREE.Vector3();
-    for (const u of this.game.units) {
-      const s = this.toScreen(this.units.chestOf(u, p));
-      const d = Math.hypot(s.x - sx, s.y - sy);
-      if (d < bestD) { bestD = d; best = u; }
+    for (const a of this.game.armies) {
+      this.armies.positionOf(a, p);
+      p.y = 0.25;
+      const s = this.toScreen(p);
+      const d = Math.hypot(s.x - sx, s.y - sy) - (a.owner === PLAYER ? 6 : 0);
+      if (d < bestD) { bestD = d; best = a; }
     }
     return best;
   }
 
-  /** Building, mine or tree visibly under a screen point (front-most wins). */
-  pickObject(sx: number, sy: number): { structure: Building | Mine } | { tree: { x: number; y: number } } | null {
-    this.ray(sx, sy);
-    const hits = this.raycaster.intersectObjects([...this.structures.pickables, ...this.forest.pickables], true);
-    for (const h of hits) {
-      if (!h.object.visible) continue;
-      const tree = this.forest.tileOf(h);
-      if (tree) return { tree };
-      const s = this.structures.ownerOf(h.object);
-      if (s) return { structure: s };
-    }
-    return null;
+  toScreen(p: THREE.Vector3): { x: number; y: number } {
+    const v = p.clone().project(this.camera);
+    return { x: (v.x + 1) * innerWidth / 2, y: (1 - v.y) * innerHeight / 2 };
   }
 
   // ---------- internals ----------
 
-  private ray(sx: number, sy: number): void {
-    const ndc = new THREE.Vector2((sx / innerWidth) * 2 - 1, -(sy / innerHeight) * 2 + 1);
-    this.camera.updateMatrixWorld();
-    this.raycaster.setFromCamera(ndc, this.camera);
-  }
-
-  private toScreen(p: THREE.Vector3): { x: number; y: number } {
-    const v = p.clone().project(this.camera);
-    return { x: (v.x + 1) * innerWidth / 2, y: (1 - v.y) * innerHeight / 2 };
+  /** Dots along the selected army's remaining route. */
+  private updatePath(selected: number | null): void {
+    const a = selected !== null ? this.game.army(selected) : undefined;
+    const path = a?.path ?? [];
+    const m = new THREE.Matrix4();
+    let n = 0;
+    for (const h of path) {
+      if (n >= MAX_PATH_DOTS) break;
+      const { x, z } = hexCenter(h.col, h.row);
+      this.pathDots.setMatrixAt(n++, m.makeTranslation(x, 0.06, z));
+    }
+    this.pathDots.count = n;
+    this.pathDots.instanceMatrix.needsUpdate = true;
   }
 
   private applyCamera(): void {
@@ -247,8 +233,8 @@ export class View implements PanZoom {
   }
 
   private clampTarget(): void {
-    this.target.x = THREE.MathUtils.clamp(this.target.x, 0, this.game.map.w);
-    this.target.z = THREE.MathUtils.clamp(this.target.z, 0, this.game.map.h);
+    this.target.x = THREE.MathUtils.clamp(this.target.x, 0, this.game.world.cols);
+    this.target.z = THREE.MathUtils.clamp(this.target.z, 0, this.game.world.rows * HEX_ROW);
     this.target.y = 0;
   }
 
@@ -256,43 +242,5 @@ export class View implements PanZoom {
     this.renderer.setSize(innerWidth, innerHeight);
     this.composer?.setSize(innerWidth, innerHeight);
     this.applyCamera();
-  }
-
-  /**
-   * HTML bars: construction / training progress over buildings, and health
-   * over anything damaged (team-coloured). Positioned by projecting each
-   * entity to the screen every frame.
-   */
-  private updateBars(): void {
-    let n = 0;
-    const p = new THREE.Vector3();
-    const show = (at: THREE.Vector3, frac: number, kind: string, small = false) => {
-      let el = this.barPool[n];
-      if (!el) {
-        el = document.createElement('div');
-        el.className = 'bar';
-        el.innerHTML = '<i></i>';
-        this.bars.appendChild(el);
-        this.barPool.push(el);
-      }
-      const s = this.toScreen(at);
-      el.style.display = 'block';
-      el.style.transform = `translate(${s.x}px, ${s.y}px)`;
-      el.dataset.kind = kind;
-      el.classList.toggle('small', small);
-      (el.firstChild as HTMLElement).style.width = `${Math.round(Math.max(0, Math.min(1, frac)) * 100)}%`;
-      n++;
-    };
-    for (const b of this.game.buildings.values()) {
-      const top = (h: number) => p.set(b.tx + b.size / 2, h, b.ty + b.size / 2);
-      if (b.progress < 1) show(top(1.4), b.progress, 'build');
-      else if (b.queue.length > 0) show(top(b.size * 1.15), b.trainTimer / UNITS[b.queue[0]!].trainSeconds, 'train');
-      if (b.progress >= 1 && b.hp < b.maxHp) show(top(b.size * 1.15 + 0.35), b.hp / b.maxHp, `hp${b.owner}`);
-    }
-    for (const u of this.game.units) {
-      if (u.hp >= u.maxHp) continue;
-      show(p.set(u.x / TILE, this.units.headHeight(u), u.y / TILE), u.hp / u.maxHp, `hp${u.owner}`, true);
-    }
-    for (let i = n; i < this.barPool.length; i++) this.barPool[i]!.style.display = 'none';
   }
 }
