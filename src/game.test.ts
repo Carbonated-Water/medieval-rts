@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_REPEAT, BOOTS, CAPTAIN_WAGE, COMPANY_PRICE, CREW_BASE, GROUNDS, HANDS_MAX, handCost, PIER_SPOTS, PIER_SECTIONS, SELLER_BAG, SHELLFISH,
   COMPANY_UNLOCK_EARNED, LETTERS, TRACK_GROWTH, TRACK_MAX, TRACK_ORDER, CLOTHES, DEV_MULTIPLIER, FISH, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_MAX, VARIANTS,
-  MAX_GROUND_WORMS, START_WORMS, STRENGTH_PER_LEVEL, WORM_SPAWN_SECONDS, skillCost,
+  MAX_GROUND_WORMS, START_WORMS, STRENGTH_PER_LEVEL, WORM_SPAWN_SECONDS, skillCost, TREE_FISH, pearlsFor,
 } from './data';
 import { Game, fishById, type Line } from './game';
 
@@ -831,3 +831,67 @@ describe('pier staff', () => {
     expect(g.harbor.seller).toBe(true);
   });
 });
+
+describe('prestige: Pearls and the Fish Tree', () => {
+  const ev = (g: Game) => g.odds(25, 'gold').filter((o) => !o.tooStrong).reduce((s, o) => s + o.p * o.fish.price, 0);
+
+  it('retiring gives sqrt(earned / 1M) Pearls and keeps only Pearls, the tree, the journal and achievements', () => {
+    const g = new Game({ money: 5e6, earned: 4e8, company: true, rod: 4, skill: 20, pearls: 3, fishTree: ['sunfish'], journal: { minnow: { count: 9, bestKg: 0.1 } }, claimed: ['catch1'] }, rng(3));
+    expect(pearlsFor(4e8)).toBe(20);
+    const next = new Game(g.retire()!, rng(4));
+    expect(next.pearls).toBe(23);
+    expect(next.fishTree).toEqual(['sunfish']);
+    expect(next.retirements).toBe(1);
+    expect(next.journal.minnow!.count).toBe(9);
+    expect(next.claimed).toEqual(['catch1']);
+    expect(next.money).toBeLessThan(1000);
+    expect(next.company).toBe(false);
+    expect(next.rod).toBe(0);
+    expect(new Game({ earned: 5e5 }).retire()).toBeNull();
+  });
+
+  it('the tree opens tier by tier: any one fish of a tier opens the next; branches need their parent', () => {
+    const g = new Game({ pearls: 100 }, rng(5));
+    const t2root = TREE_FISH.find((f) => f.tier === 2 && f.slot === 0)!;
+    expect(g.canUnlock(t2root.id)).toBe(false);
+    const branch = TREE_FISH.find((f) => f.tier === 1 && f.side === 'sea' && f.slot === 1)!;
+    expect(g.canUnlock(branch.id)).toBe(false); // its root first
+    expect(g.unlockFish('sardine')).toBe(true); // sea root, tier 1
+    expect(g.canUnlock(branch.id)).toBe(true);
+    expect(g.canUnlock(t2root.id)).toBe(true); // any tier-1 fish opens tier 2
+    expect(g.pearls).toBe(100 - TREE_FISH.find((f) => f.id === 'sardine')!.cost);
+    expect(new Game({ pearls: 0 }).canUnlock('sunfish')).toBe(false); // can't afford
+  });
+
+  it('river fish join your bites and your fishermen, and raise what a bite is worth', () => {
+    const base = new Game({ rod: 4, skill: 25 }, rng(6));
+    const all = new Game({ rod: 4, skill: 25, fishTree: TREE_FISH.filter((f) => f.side === 'river').map((f) => f.id) }, rng(6));
+    expect(all.riverFish().length).toBe(45);
+    expect(ev(all)).toBeGreaterThan(ev(base) * 1.5);
+  });
+
+  it('sea fish join their boat at their ground and deeper, and raise its rate', () => {
+    const tree = TREE_FISH.filter((f) => f.side === 'sea').map((f) => f.id);
+    const g = new Game({ fishTree: tree }, rng(7));
+    expect(g.seaPool('net', 'coast').map((f) => f.id)).toContain('sardine');
+    expect(g.seaPool('net', 'coast').map((f) => f.id)).not.toContain('anglerfish');
+    expect(g.seaPool('net', 'deep').map((f) => f.id)).toContain('anglerfish');
+    expect(g.seaPool('lobster', 'deep').map((f) => f.id)).not.toContain('sardine');
+    const boat = { type: 'sword' as const, tracks: { hull: 5, engine: 5, gear: 5, sonar: 5, ice: 5, captain: 1 }, crew: 6, ground: 'deep' as const, trip: null, haul: null, event: null, invested: 0, earned: 0, trips: 0 };
+    const plain = new Game({ company: true, boats: [boat] }, rng(8)), rich = new Game({ company: true, boats: [boat], fishTree: tree }, rng(8));
+    expect(rich.boatRate(rich.boats[0]!)).toBeGreaterThan(plain.boatRate(plain.boats[0]!) * 1.5);
+  });
+
+  it('Pearls do not change prices (they only unlock fish)', () => {
+    const a = new Game({}, rng(9)), b = new Game({ pearls: 50 }, rng(9));
+    const c = { id: 1, fish: 'carp', kg: 3, value: 100 };
+    expect(b.priceOf(c)).toBe(a.priceOf(c));
+  });
+
+  it('round-trips prestige through save data', () => {
+    const g = new Game({ pearls: 7, fishTree: ['sunfish', 'sardine'], retirements: 2 });
+    const again = new Game(JSON.parse(JSON.stringify(g.save())));
+    expect([again.pearls, again.fishTree, again.retirements]).toEqual([7, ['sunfish', 'sardine'], 2]);
+  });
+});
+

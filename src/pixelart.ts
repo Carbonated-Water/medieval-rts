@@ -104,13 +104,19 @@ const SHELL_MAPS: Record<string, string[]> = {
 };
 SHELL_MAPS.kingcrab = SHELL_MAPS.crab!;
 SHELL_MAPS.spiny = SHELL_MAPS.lobster!;
+/** Squid and octopus: mantle, eye, trailing arms. */
+SHELL_MAPS.squid = ['...bbbb.........', '..bbbbbbb.......', '.bbbbbbbbbbd.d.d', 'bbbbbbwbbbbdddd.', 'bbbbbbbbbbbddddd', '.llllllllllddd.d', '..llllll...d.d..'];
 /** Fish with a long bill on the nose (and a sail, for the sailfish). */
 const BILLED = new Set(['sailfish', 'swordfish', 'marlin']);
+/** Which shell map draws a fish, if any (by its look, or its own id). */
+const shellOf = (f: FishDef) => SHELL_MAPS[f.look ?? f.id];
+/** The big ones in each shape are drawn twice the size. */
+const BIG = new Set(['kingcrab', 'spidercrab', 'crystalcrab', 'giantsquid', 'kraken']);
 
 function shellCanvas(f: FishDef, variant: Variant | undefined, silhouette: boolean): HTMLCanvasElement {
-  const map = SHELL_MAPS[f.id]!;
+  const map = shellOf(f)!;
   const [body, belly, fin] = fishColors(f, variant, silhouette);
-  const k = f.id === 'kingcrab' ? 2 : 1; // the king crab is twice the size
+  const k = BIG.has(f.id) ? 2 : 1;
   return outline(makeCanvas(map[0]!.length * k + 2, map.length * k + 2, (ctx) => {
     map.forEach((row, y) => [...row].forEach((ch, x) => {
       if (ch === '.') return;
@@ -122,8 +128,8 @@ function shellCanvas(f: FishDef, variant: Variant | undefined, silhouette: boole
 
 /** A side-on pixel fish facing right: tail, body with belly, fin, pattern, eye, outline. */
 export function fishCanvas(f: FishDef, variant?: Variant, silhouette = false): HTMLCanvasElement {
-  if (SHELL_MAPS[f.id]) return shellCanvas(f, variant, silhouette);
-  const bill = BILLED.has(f.id) ? 7 : 0;
+  if (shellOf(f)) return shellCanvas(f, variant, silhouette);
+  const bill = BILLED.has(f.id) || f.look === 'billed' ? 7 : 0;
   const W = 11 + f.tier * 3 + (f.shape > 5 ? 6 : 0);
   const H = Math.max(4, Math.round((W / f.shape) * 1.25));
   const [body, belly, fin] = fishColors(f, variant, silhouette);
@@ -466,6 +472,7 @@ const ICON_COLORS: Record<string, string> = {
   r: PAL.red, p: '#fc8bb0', v: '#7a4a8a', u: PAL.waterDeep, U: PAL.waterLight, s: PAL.skin, g: PAL.green, G: PAL.greenLight,
 };
 const ICON_ROWS = {
+  pearl: ['..oooo..', '.owwwwo.', 'owwUwwUo', 'owwwwwUo', 'owwwwwUo', 'oUwwwUUo', '.oUUUUo.', '..oooo..'],
   coin: ['..oooo..', '.oYYYyo.', 'oYYyyyyo', 'oYyYyyyo', 'oYyYyyyo', 'oyyyyyyo', '.oyyyyo.', '..oooo..'],
   trophy: ['oo.oooo.oo', 'oyoYyyyoyo', 'oyoYyyyoyo', '.ooYyyyoo.', '..oyyyyo..', '...oyyo...', '....oo....', '...oyyo...', '..oooooo..', '..oyyyyo..', '..oooooo..'],
   book: ['.oooo.oooo.', 'owwwwowwwwo', 'owkkwowkkwo', 'owwwwowwwwo', 'owkkwowkkwo', 'owwwwowwwwo', 'orrrrorrrro', '.oooo.oooo.'],

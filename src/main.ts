@@ -1,4 +1,4 @@
-import { ACHIEVEMENTS, BOATS, DEV_MULTIPLIER, HAND_NAMES, HARBOR_UPGRADES, LETTERS, TRACKS, type GroundId, type HarborUpgradeId, type TrackId, RODS, SKILLS, VARIANTS, baitById, type BaitId, type BoatType, type GearKind, type SkillId } from './data';
+import { ACHIEVEMENTS, BOATS, DEV_MULTIPLIER, HAND_NAMES, HARBOR_UPGRADES, LETTERS, TRACKS, type GroundId, type HarborUpgradeId, type TrackId, RODS, SKILLS, VARIANTS, baitById, type BaitId, type BoatType, type GearKind, type SkillId, type Tier } from './data';
 import { Game, fishById, type Line, type SaveData } from './game';
 import { Scene, WORM_SPOT_X } from './scene';
 import './ui.css';
@@ -104,7 +104,7 @@ function onAction(a: Action): void {
     if (!game.cast() && !game.activeBait) { const at = scene.fisherScreen(); note.float('NO BAIT', at.x, at.y, 'bad'); }
   }
   else if (a === 'reel') game.reel();
-  else if (a === 'market' || a === 'tackle' || a === 'baitshop' || a === 'pouch' || a === 'harbor' || a === 'pier' || a === 'shipyard' || a === 'harborup' || a === 'pierstaff' || a === 'ledger' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'inbox' || a === 'settings') ui.open = ui.open === a ? null : a;
+  else if (a === 'market' || a === 'tackle' || a === 'baitshop' || a === 'pouch' || a === 'harbor' || a === 'pier' || a === 'shipyard' || a === 'harborup' || a === 'pierstaff' || a === 'ledger' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'inbox' || a === 'settings' || a === 'tree' || a === 'retire') ui.open = ui.open === a ? null : a;
   else if (a.startsWith('bait:')) game.selectBait(a.slice(5) as BaitId);
   else if (a === 'buyCompany') {
     if (game.buyCompany()) { ui.open = null; note.clearBanners(); note.banner(pixelIcon('boat'), 'THE FISHING CO.', 'is yours', 'rare'); }
@@ -167,7 +167,7 @@ function onAction(a: Action): void {
     const paid = game.claim(ui.pick);
     if (paid) note.banner(pixelIcon('coin'), 'COLLECTED', `$${paid.toLocaleString()}`);
   }
-  else if (a === 'close') ui.open = ui.open === 'boat' || ui.open === 'shipyard' || ui.open === 'harborup' || ui.open === 'ledger' ? 'harbor' : ui.open === 'hand' || ui.open === 'pierstaff' ? 'pier' : null;
+  else if (a === 'close') ui.open = ui.open === 'boat' || ui.open === 'shipyard' || ui.open === 'harborup' || ui.open === 'ledger' ? 'harbor' : ui.open === 'hand' || ui.open === 'pierstaff' ? 'pier' : ui.open === 'tree' || ui.open === 'retire' ? 'settings' : null;
   else if (a === 'sellAll') { const n = game.sellAll(); if (n) note.banner(pixelIcon('coin'), 'SOLD', `$${n.toLocaleString()}`); }
   else if (a.startsWith('sellFish:')) {
     const f = fishById(a.slice(9));
@@ -184,6 +184,23 @@ function onAction(a: Action): void {
   } else if (a === 'toggleDev') {
     game.dev = !game.dev;
     note.banner(pixelIcon('coin'), 'DEV MODE', game.dev ? `On, prices x${DEV_MULTIPLIER}` : 'Off', 'plain');
+  } else if (a.startsWith('treeTier:')) { const t = Number(a.slice(9)) as Tier; ui.treeTier = t; ui.treeSel = ''; }
+  else if (a.startsWith('treeSel:')) ui.treeSel = a.slice(8);
+  else if (a.startsWith('journalTier:')) ui.journalTier = Number(a.slice(12)) as Tier;
+  else if (a.startsWith('unlock:')) {
+    const id = a.slice(7), f = fishById(id);
+    if (game.unlockFish(id)) note.banner(fishIcon(f, false, 48, 28), 'UNLOCKED', f.name, 'rare');
+  } else if (a === 'doRetire') {
+    const gain = game.pearlsOnRetire();
+    if (gain >= 1 && confirm(`Retire and start a new run with +${gain} Pearls? Your money, gear, skills, boats and pier reset. You keep Pearls, the Fish Tree, your journal and achievements.`)) {
+      const next = game.retire();
+      if (next) {
+        wiping = true; // nothing may save the old run over the new one
+        localStorage.setItem(SAVE_KEY, JSON.stringify(next));
+        location.reload();
+        return;
+      }
+    }
   } else if (a === 'reset') {
     if (confirm('Start over? Your money, gear, skills and journal will be wiped.')) {
       wiping = true;

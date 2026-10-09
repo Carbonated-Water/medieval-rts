@@ -153,10 +153,24 @@ arrows walk, Space casts / reels, E opens the building you stand at.
   keeps only the Harbor Master (boats).
 - Only Legendary / rare-variant catches by fishermen float a "+$".
 
-## Phase 3: prestige across the whole game (next)
+## Phase 3: prestige across the whole game (2026-10-09)
 
-The town (seafood empire) was built and scrapped 2026-10-09: too linear
-(upgrade plant, upgrade restaurant, repeat). Kept: the $/sec readout.
+- **Retire** (menu): once a run has earned $1M. Pearls = floor(sqrt(run
+  earnings / $1M)): $1M 1, $100M 10, $1B 31, $10B 100. Keeps Pearls, the
+  Fish Tree, the journal and achievements; resets everything else (letters
+  replay).
+- **Fish Tree** (menu): Pearls only unlock fish (no bonus for keeping
+  them; the user found two pulls on one page confusing). 50 fish, 5 tier
+  tabs, each a constellation: river side (you and your fishermen) and sea
+  side (a boat type, from a ground and deeper). Root, two branches, two tips;
+  costs tier + 0/1/2 Pearls (210 total). Any fish of a tier opens the next.
+- New fish share their tier's bites with the old ones (tier weight scaled
+  by original rarity / current rarity), so unlocks never crowd out rarer
+  tiers; they're worth more than the originals, so each tier speeds up its
+  stage of a run: twig +78%, bamboo +60%, fiberglass +50%, carbon +62%,
+  mythril +110%; a Net Boat at Open Sea +6/27/45/88% then x2.9.
+- Journal: a tab per tier (4 originals + 5 tree fish, locked until unlocked).
+- The town (seafood empire) was built and scrapped the same day: too linear.
 
 ## Roadmap (agreed order, 2026-10-09)
 

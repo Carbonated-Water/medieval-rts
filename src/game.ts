@@ -7,6 +7,7 @@ import {
   MIN_BITE_WAIT, REEL_WINDOW, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, START_WORMS, STRENGTH_PER_LEVEL, TIERS,
   TOO_STRONG_WEIGHT, VARIANTS, VARIANT_ORDER, WORMS_PER_PICK, WORM_SPAWN_SECONDS, WORM_SPOTS, baitById,
   type AchStat, type AchievementDef, type BaitId, type FishDef, type GearKind, type SkillId, type Tier, type Variant,
+  BILLFISH, SEA_FISH, SHELLFISH, TREE_FISH, pearlsFor, treeFishById, type TreeFish,
 } from './data';
 
 export interface Catch {
@@ -55,6 +56,10 @@ export interface JournalEntry { count: number; bestKg: number; variants?: Partia
 
 /** Everything that gets saved. Fields added later default sensibly for old saves. */
 export interface SaveData {
+  /** Prestige: Pearls in the pouch, fish unlocked in the Fish Tree, times retired. These survive retiring. */
+  pearls?: number;
+  fishTree?: string[];
+  retirements?: number;
   money: number;
   rod: number;
   holders: number;
@@ -113,9 +118,23 @@ export type Line =
   | { type: 'bite'; t: number; window: number; fish: FishDef; tooStrong: boolean; bait?: BaitId }
   | { type: 'result'; t: number; outcome: 'caught' | 'escaped' | 'snapped' | 'scared'; fish?: FishDef; caught?: Catch; strong?: boolean };
 
-export const fishById = (id: string): FishDef => FISH.find((f) => f.id === id)!;
+/** Every fish in the game: river, sea, and the Fish Tree. */
+const ALL_FISH: FishDef[] = [...FISH, ...SEA_FISH, ...SHELLFISH, ...BILLFISH, ...TREE_FISH];
+export const fishById = (id: string): FishDef => ALL_FISH.find((f) => f.id === id)!;
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(v)));
+
+/**
+ * Unlocked fish split their tier's share of bites with the old ones instead
+ * of adding to it (more Common fish mustn't crowd out the rare tiers): a
+ * fish's weight is scaled by the tier's original total rarity over its total
+ * rarity now. A tier with no original fish (the sea's Legendary) is left as is.
+ */
+function tierShare(base: FishDef[], pool: FishDef[], f: FishDef): number {
+  const sum = (list: FishDef[]) => list.reduce((s, x) => s + (x.tier === f.tier ? x.rarity : 0), 0);
+  const was = sum(base);
+  return was > 0 ? was / sum(pool) : 1;
+}
 
 export class Game {
   money = START_MONEY;
@@ -140,6 +159,9 @@ export class Game {
   journal: Record<string, JournalEntry> = {};
   /** Lifetime earnings. */
   earned = 0;
+  pearls = 0;
+  fishTree: string[] = [];
+  retirements = 0;
   /** Value made so far this session, by source (fish caught at their price, boat hauls). For the $/sec readout; not saved. */
   made = { you: 0, hands: 0, boats: 0 };
   /** One entry per line in the water (length = lineCount). */
@@ -224,7 +246,63 @@ export class Game {
 
   /** Fish that can bite: everything a rod lands, plus one tier above it. */
   private biters(rodTier: Tier = this.rodTier): FishDef[] {
-    return FISH.filter((f) => f.tier <= rodTier + 1);
+    return this.riverFish().filter((f) => f.tier <= rodTier + 1);
+  }
+
+  // ---------- prestige: Pearls and the Fish Tree ----------
+
+  /** River fish that can bite you and your fishermen: the 20 originals plus those unlocked in the tree. */
+  riverFish(): FishDef[] {
+    return [...FISH, ...TREE_FISH.filter((f) => f.side === 'river' && this.fishTree.includes(f.id))];
+  }
+
+  /** What a boat can bring back from a ground: its own catch plus tree fish of that boat from this ground or shallower; cheapest first. */
+  seaPool(type: BoatType, ground: GroundId): FishDef[] {
+    const depth = GROUNDS.findIndex((g) => g.id === ground);
+    const extra = TREE_FISH.filter((f) => f.side === 'sea' && f.boat === type && this.fishTree.includes(f.id) && GROUNDS.findIndex((g) => g.id === f.ground) <= depth);
+    return [...BOATS[type].catch, ...extra].sort((a, b) => a.price - b.price);
+  }
+
+  /** A tier of the tree opens once you own any fish of the tier below. */
+  treeTierOpen(tier: Tier): boolean {
+    return tier === 1 || TREE_FISH.some((f) => f.tier === tier - 1 && this.fishTree.includes(f.id));
+  }
+
+  /** Can this tree fish be unlocked now (tier open, its parent owned, enough Pearls)? */
+  canUnlock(id: string): boolean {
+    const f = treeFishById(id);
+    return !!f && !this.fishTree.includes(id) && this.treeTierOpen(f.tier) && (!f.parent || this.fishTree.includes(f.parent)) && this.pearls >= f.cost;
+  }
+
+  /** Reachable but maybe not affordable: tier open and parent owned. */
+  treeReachable(f: TreeFish): boolean {
+    return this.treeTierOpen(f.tier) && (!f.parent || this.fishTree.includes(f.parent));
+  }
+
+  unlockFish(id: string): boolean {
+    if (!this.canUnlock(id)) return false;
+    this.pearls -= treeFishById(id)!.cost;
+    this.fishTree.push(id);
+    return true;
+  }
+
+  /** Pearls you'd get for retiring now. */
+  pearlsOnRetire(): number {
+    return pearlsFor(this.earned);
+  }
+
+  /**
+   * Retire: the save for the next run. Pearls (old plus new), the Fish Tree,
+   * the journal and claimed achievements carry over; everything else starts
+   * fresh. Returns null if this run hasn't earned a Pearl yet.
+   */
+  retire(): Partial<SaveData> | null {
+    const gain = this.pearlsOnRetire();
+    if (gain < 1) return null;
+    return {
+      pearls: this.pearls + gain, fishTree: [...this.fishTree], retirements: this.retirements + 1,
+      journal: this.journal, claimed: [...this.claimed], dev: this.dev,
+    };
   }
 
   /**
@@ -248,8 +326,9 @@ export class Game {
   private weight(f: FishDef, skill: number, bait: BaitId, rodTier: Tier = this.rodTier): number {
     const step = 1 + SKILL_TIER_BONUS * (skill - 1) + baitById(bait).lure;
     // Too-strong fish bite at a steady share of the rod's top tier: levels and bait don't make snaps more common.
-    if (f.tier > rodTier) return TIERS[f.tier].weight * f.rarity * Math.pow(step, rodTier - 1) * TOO_STRONG_WEIGHT;
-    return TIERS[f.tier].weight * f.rarity * Math.pow(step, f.tier - 1);
+    const share = tierShare(FISH, this.riverFish(), f);
+    if (f.tier > rodTier) return TIERS[f.tier].weight * f.rarity * share * Math.pow(step, rodTier - 1) * TOO_STRONG_WEIGHT;
+    return TIERS[f.tier].weight * f.rarity * share * Math.pow(step, f.tier - 1);
   }
 
   /** Which fish bites (bait as cast). */
@@ -641,12 +720,13 @@ export class Game {
     const ground = this.groundOf(x.ground), def = BOATS[x.type];
     const step = 1 + ground.step + SONAR_STEP * x.tracks.sonar;
     const worth = ground.size * (1 + ICE_VALUE * x.tracks.ice);
-    const weights = def.catch.map((c) => TIERS[c.tier].weight * c.rarity * Math.pow(step, c.tier - 1));
+    const pool = this.seaPool(x.type, x.ground);
+    const weights = pool.map((c) => TIERS[c.tier].weight * c.rarity * tierShare(def.catch, pool, c) * Math.pow(step, c.tier - 1));
     const total = weights.reduce((s, w) => s + w, 0);
-    const avg = def.catch.reduce((s, c, k) => s + (weights[k]! / total) * c.price, 0) * worth;
+    const avg = pool.reduce((s, c, k) => s + (weights[k]! / total) * c.price, 0) * worth;
     const storm = this.stormChance(x);
     const luck = 1 - STORM_LOSS * storm + SCHOOL_CHANCE * (1 - storm);
-    const sighting = GROUNDS.indexOf(ground) >= 2 ? SIGHTING_CHANCE * 3 * def.catch[def.catch.length - 1]!.price * worth : 0;
+    const sighting = GROUNDS.indexOf(ground) >= 2 ? SIGHTING_CHANCE * 3 * pool[pool.length - 1]!.price * worth : 0;
     const raw = this.haulSize(x) * avg * luck + sighting;
     const keep = (1 + HAGGLE_PER_LEVEL * this.haggling) * (this.dev ? DEV_MULTIPLIER : 1)
       * (x.tracks.captain > 0 ? 1 - CAPTAIN_WAGE : 1) * (this.harbor.master ? 1 - HARBOR_UPGRADES.master.fee : 1);
@@ -770,7 +850,8 @@ export class Game {
       e.value += Math.round(fish.price * worth * mult * (0.6 + this.rng() * 0.8));
       out.set(fish.id, e);
     };
-    for (let k = this.haulSize(b); k > 0; k--) add(this.pick(def.catch, (x) => TIERS[x.tier].weight * x.rarity * Math.pow(step, x.tier - 1)));
+    const pool = this.seaPool(b.type, groundId);
+    for (let k = this.haulSize(b); k > 0; k--) add(this.pick(pool, (x) => TIERS[x.tier].weight * x.rarity * tierShare(def.catch, pool, x) * Math.pow(step, x.tier - 1)));
     b.event = null;
     const roll = this.rng();
     const storm = this.stormChance(b, groundId);
@@ -782,9 +863,9 @@ export class Game {
       for (const e of out.values()) { e.n *= 2; e.value *= 2; }
     } else if (GROUNDS.indexOf(ground) >= 2 && roll < storm + SCHOOL_CHANCE + SIGHTING_CHANCE) {
       b.event = 'sighting';
-      add(def.catch[def.catch.length - 1]!, 3);
+      add(pool[pool.length - 1]!, 3);
     }
-    return def.catch.filter((x) => (out.get(x.id)?.n ?? 0) > 0).map((x) => out.get(x.id)!);
+    return pool.filter((x) => (out.get(x.id)?.n ?? 0) > 0).map((x) => out.get(x.id)!);
   }
 
   private tickBoats(dt: number): void {
@@ -1089,6 +1170,7 @@ export class Game {
       company: this.company, letters: this.letters, boats: this.boats,
       berths: this.berths, harbor: { ...this.harbor }, warehouse: this.warehouse, savedAt: Date.now(),
       pierSections: this.pierSections, managerBudget: this.managerBudget,
+      pearls: this.pearls, fishTree: this.fishTree, retirements: this.retirements,
       hands: this.hands.map((h) => ({ ...h, line: { type: 'idle' as const }, react: null })), crate: this.crate,
     };
   }

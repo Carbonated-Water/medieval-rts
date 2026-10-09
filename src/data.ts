@@ -25,6 +25,8 @@ export interface FishDef {
   colors: [string, string, string];
   /** Body shape: length-to-height ratio. */
   shape: number;
+  /** Drawn as a crab, a lobster/prawn, a squid/octopus, or a billfish instead of a plain fish. */
+  look?: 'crab' | 'lobster' | 'squid' | 'billed';
 }
 
 export const FISH: FishDef[] = [
@@ -303,6 +305,87 @@ export const BOAT_ORDER: BoatType[] = ['net', 'lobster', 'sword'];
 export const BOAT_RESALE = 0.5;
 /** Every extra boat of the same kind costs this much more (+50%, +100%, ...). */
 export const BOAT_REPEAT = 0.5;
+
+// ---------- prestige: retire for Pearls, unlock new fish ----------
+
+/** You can retire once a run has earned enough for one Pearl. Pearls = floor(sqrt(run earnings / PEARL_UNIT)). */
+export const PEARL_UNIT = 1_000_000;
+export const pearlsFor = (earned: number) => Math.floor(Math.sqrt(Math.max(0, earned) / PEARL_UNIT));
+
+/**
+ * The Fish Tree: 50 more fish, bought with Pearls, tier by tier. Each tier
+ * has a river side (you and your fishermen catch them) and a sea side (a boat
+ * type brings them back from a ground or deeper). Within a side: a root, two
+ * branches, two tips (slot 0..4; `parent` must be owned first). A tier opens
+ * once you own any fish of the tier below. New fish are worth more than the
+ * old ones in their tier, so every unlock raises what that tier pays.
+ */
+export interface TreeFish extends FishDef {
+  side: 'river' | 'sea';
+  boat?: BoatType;
+  ground?: GroundId;
+  slot: number;
+  cost: number;
+  parent?: string;
+}
+export const TREE_FISH: TreeFish[] = [
+  // Common
+  { id: 'sunfish', name: 'Pumpkinseed', tier: 1, price: 8, kg: 0.3, rarity: 1.1, colors: ['#d08a30', '#f8d070', '#3a8ab0'], shape: 1.8, side: 'river', slot: 0, cost: 1 },
+  { id: 'roach', name: 'Roach', tier: 1, price: 9, kg: 0.4, rarity: 1, colors: ['#8a9aa8', '#eef0f0', '#d04030'], shape: 2.8, side: 'river', slot: 1, cost: 2, parent: 'sunfish' },
+  { id: 'dace', name: 'Dace', tier: 1, price: 10, kg: 0.2, rarity: 1, colors: ['#9ab0b8', '#f0f4f4', '#6a8088'], shape: 3.4, side: 'river', slot: 2, cost: 2, parent: 'sunfish' },
+  { id: 'rudd', name: 'Rudd', tier: 1, price: 12, kg: 0.6, rarity: 0.9, colors: ['#b0a050', '#f4e8b0', '#e04020'], shape: 2.6, side: 'river', slot: 3, cost: 3, parent: 'roach' },
+  { id: 'goldshiner', name: 'Golden Shiner', tier: 1, price: 14, kg: 0.2, rarity: 0.8, colors: ['#e0b040', '#fff0a0', '#c08020'], shape: 3.2, side: 'river', slot: 4, cost: 3, parent: 'dace' },
+  { id: 'sardine', name: 'Sardine', tier: 1, price: 60, kg: 0.1, rarity: 1.2, colors: ['#6a8aa8', '#eef2f6', '#3a5a78'], shape: 3.8, side: 'sea', boat: 'net', ground: 'coast', slot: 0, cost: 1 },
+  { id: 'sprat', name: 'Sprat', tier: 1, price: 66, kg: 0.1, rarity: 1.1, colors: ['#90a0a8', '#f4f6f6', '#607078'], shape: 3.6, side: 'sea', boat: 'net', ground: 'coast', slot: 1, cost: 2, parent: 'sardine' },
+  { id: 'rockcrab', name: 'Rock Crab', tier: 1, price: 220, kg: 0.6, rarity: 1.1, colors: ['#a04a30', '#f0c8a8', '#702818'], shape: 1.6, look: 'crab', side: 'sea', boat: 'lobster', ground: 'coast', slot: 2, cost: 2, parent: 'sardine' },
+  { id: 'prawn', name: 'Tiger Prawn', tier: 1, price: 260, kg: 0.2, rarity: 1, colors: ['#e08050', '#ffe0c0', '#603020'], shape: 2.6, look: 'lobster', side: 'sea', boat: 'lobster', ground: 'reef', slot: 3, cost: 3, parent: 'sprat' },
+  { id: 'bonito', name: 'Bonito', tier: 1, price: 660, kg: 5, rarity: 1, colors: ['#3a5a8a', '#e8eef4', '#20304a'], shape: 3.4, side: 'sea', boat: 'sword', ground: 'reef', slot: 4, cost: 3, parent: 'rockcrab' },
+  // Uncommon
+  { id: 'crappie', name: 'Crappie', tier: 2, price: 30, kg: 0.8, rarity: 1.1, colors: ['#7a8a60', '#e8ecd0', '#4a5a38'], shape: 2.2, side: 'river', slot: 0, cost: 2 },
+  { id: 'smallmouth', name: 'Smallmouth Bass', tier: 2, price: 34, kg: 1.5, rarity: 1, colors: ['#8a7040', '#f0e0b0', '#5a4420'], shape: 2.6, side: 'river', slot: 1, cost: 3, parent: 'crappie' },
+  { id: 'chub', name: 'Chub', tier: 2, price: 38, kg: 2, rarity: 1, colors: ['#7a8890', '#e8ece8', '#c06030'], shape: 3, side: 'river', slot: 2, cost: 3, parent: 'crappie' },
+  { id: 'tench', name: 'Tench', tier: 2, price: 44, kg: 2.5, rarity: 0.9, colors: ['#4a6a30', '#c0d080', '#2a4018'], shape: 2.7, side: 'river', slot: 3, cost: 4, parent: 'smallmouth' },
+  { id: 'burbot', name: 'Burbot', tier: 2, price: 52, kg: 3, rarity: 0.8, colors: ['#6a6040', '#d8d0a0', '#40381e'], shape: 5, side: 'river', slot: 4, cost: 4, parent: 'chub' },
+  { id: 'pollock', name: 'Pollock', tier: 2, price: 260, kg: 4, rarity: 1.1, colors: ['#5a7068', '#e8eee8', '#384a44'], shape: 3.3, side: 'sea', boat: 'net', ground: 'reef', slot: 0, cost: 2 },
+  { id: 'snapper', name: 'Red Snapper', tier: 2, price: 320, kg: 4, rarity: 1, colors: ['#d04a40', '#ffd8c8', '#a02a20'], shape: 2.6, side: 'sea', boat: 'net', ground: 'reef', slot: 1, cost: 3, parent: 'pollock' },
+  { id: 'snowcrab', name: 'Snow Crab', tier: 2, price: 760, kg: 1, rarity: 1, colors: ['#e08a60', '#fff0e0', '#a05030'], shape: 1.6, look: 'crab', side: 'sea', boat: 'lobster', ground: 'arctic', slot: 2, cost: 3, parent: 'pollock' },
+  { id: 'langoustine', name: 'Langoustine', tier: 2, price: 840, kg: 0.3, rarity: 0.9, colors: ['#f0a090', '#fff0e8', '#c06050'], shape: 2.6, look: 'lobster', side: 'sea', boat: 'lobster', ground: 'open', slot: 3, cost: 4, parent: 'snapper' },
+  { id: 'wahoo', name: 'Wahoo', tier: 2, price: 1900, kg: 25, rarity: 0.9, colors: ['#2a5a8a', '#e0eaf4', '#4a8ac0'], shape: 4.4, side: 'sea', boat: 'sword', ground: 'open', slot: 4, cost: 4, parent: 'snowcrab' },
+  // Rare
+  { id: 'grayling', name: 'Grayling', tier: 3, price: 100, kg: 1.5, rarity: 1.1, colors: ['#7a7a98', '#e0e0f0', '#b04a8a'], shape: 3.2, side: 'river', slot: 0, cost: 3 },
+  { id: 'steelhead', name: 'Steelhead', tier: 3, price: 115, kg: 5, rarity: 1, colors: ['#7a90a0', '#f0e8f0', '#d06080'], shape: 3.3, side: 'river', slot: 1, cost: 4, parent: 'grayling' },
+  { id: 'barbel', name: 'Barbel', tier: 3, price: 130, kg: 4, rarity: 1, colors: ['#9a7a48', '#f0e0c0', '#c05a30'], shape: 3.4, side: 'river', slot: 2, cost: 4, parent: 'grayling' },
+  { id: 'muskie', name: 'Muskellunge', tier: 3, price: 150, kg: 12, rarity: 0.9, colors: ['#7a8a50', '#e8ecc0', '#4a5a28'], shape: 4.4, side: 'river', slot: 3, cost: 5, parent: 'steelhead' },
+  { id: 'goldtrout', name: 'Golden Trout', tier: 3, price: 175, kg: 2, rarity: 0.8, colors: ['#e0a030', '#ff8060', '#a06010'], shape: 3, side: 'river', slot: 4, cost: 5, parent: 'barbel' },
+  { id: 'monkfish', name: 'Monkfish', tier: 3, price: 840, kg: 15, rarity: 1.1, colors: ['#7a6048', '#d8c0a0', '#4a3828'], shape: 2, side: 'sea', boat: 'net', ground: 'open', slot: 0, cost: 3 },
+  { id: 'arcticchar', name: 'Arctic Char', tier: 3, price: 960, kg: 6, rarity: 1, colors: ['#4a6a7a', '#f08060', '#2a4a5a'], shape: 3.2, side: 'sea', boat: 'net', ground: 'arctic', slot: 1, cost: 4, parent: 'monkfish' },
+  { id: 'slipper', name: 'Slipper Lobster', tier: 3, price: 1600, kg: 1.5, rarity: 1, colors: ['#a07040', '#f0d8a8', '#604020'], shape: 2.6, look: 'lobster', side: 'sea', boat: 'lobster', ground: 'reef', slot: 2, cost: 4, parent: 'monkfish' },
+  { id: 'octopus', name: 'Giant Octopus', tier: 3, price: 1800, kg: 15, rarity: 0.9, colors: ['#b04a5a', '#f0b0b8', '#702a38'], shape: 2, look: 'squid', side: 'sea', boat: 'lobster', ground: 'open', slot: 3, cost: 5, parent: 'arcticchar' },
+  { id: 'yellowfin', name: 'Yellowfin Tuna', tier: 3, price: 5200, kg: 80, rarity: 0.9, colors: ['#2a3a6a', '#d8e0ea', '#f0d020'], shape: 3.4, side: 'sea', boat: 'sword', ground: 'open', slot: 4, cost: 5, parent: 'slipper' },
+  // Epic
+  { id: 'gar', name: 'Alligator Gar', tier: 4, price: 450, kg: 50, rarity: 1.1, colors: ['#6a6a40', '#d8d4a0', '#3a3a1a'], shape: 5.2, side: 'river', slot: 0, cost: 4 },
+  { id: 'paddlefish', name: 'Paddlefish', tier: 4, price: 520, kg: 30, rarity: 1, colors: ['#7a8a98', '#e8eef2', '#4a5a68'], shape: 4.6, side: 'river', slot: 1, cost: 5, parent: 'gar' },
+  { id: 'wels', name: 'Wels Catfish', tier: 4, price: 600, kg: 70, rarity: 1, colors: ['#4a4a40', '#c8c0a8', '#2a2a22'], shape: 4.2, side: 'river', slot: 2, cost: 5, parent: 'gar' },
+  { id: 'taimen', name: 'Taimen', tier: 4, price: 700, kg: 25, rarity: 0.9, colors: ['#8a5040', '#f0c0a0', '#c03020'], shape: 3.8, side: 'river', slot: 3, cost: 6, parent: 'paddlefish' },
+  { id: 'peacock', name: 'Peacock Bass', tier: 4, price: 820, kg: 6, rarity: 0.8, colors: ['#c0b020', '#f0f080', '#2a8a40'], shape: 2.6, side: 'river', slot: 4, cost: 6, parent: 'wels' },
+  { id: 'opah', name: 'Opah', tier: 4, price: 3600, kg: 50, rarity: 1, colors: ['#c04a50', '#f0a0a0', '#e0e0f0'], shape: 1.8, side: 'sea', boat: 'net', ground: 'open', slot: 0, cost: 4 },
+  { id: 'anglerfish', name: 'Anglerfish', tier: 4, price: 3800, kg: 20, rarity: 0.9, colors: ['#3a3040', '#7a6a80', '#f0e070'], shape: 2.2, side: 'sea', boat: 'net', ground: 'deep', slot: 1, cost: 5, parent: 'opah' },
+  { id: 'spidercrab', name: 'Spider Crab', tier: 4, price: 4800, kg: 15, rarity: 0.9, colors: ['#d07040', '#f8d0a8', '#904020'], shape: 1.6, look: 'crab', side: 'sea', boat: 'lobster', ground: 'deep', slot: 2, cost: 5, parent: 'opah' },
+  { id: 'greenland', name: 'Greenland Shark', tier: 4, price: 14400, kg: 400, rarity: 0.9, colors: ['#5a6070', '#a8b0b8', '#3a4048'], shape: 4.6, side: 'sea', boat: 'sword', ground: 'arctic', slot: 3, cost: 6, parent: 'anglerfish' },
+  { id: 'giantsquid', name: 'Giant Squid', tier: 4, price: 16000, kg: 250, rarity: 0.8, colors: ['#c05a3a', '#f0b090', '#80301a'], shape: 3, look: 'squid', side: 'sea', boat: 'sword', ground: 'deep', slot: 4, cost: 6, parent: 'spidercrab' },
+  // Legendary
+  { id: 'mahseer', name: 'Golden Mahseer', tier: 5, price: 3200, kg: 40, rarity: 1.2, colors: ['#e0a020', '#fff0a0', '#b06010'], shape: 3.2, side: 'river', slot: 0, cost: 5 },
+  { id: 'moonsalmon', name: 'Moon Salmon', tier: 5, price: 3800, kg: 15, rarity: 1, colors: ['#c0c8e0', '#ffffff', '#8090c0'], shape: 3.1, side: 'river', slot: 1, cost: 6, parent: 'mahseer' },
+  { id: 'thundersturgeon', name: 'Thunder Sturgeon', tier: 5, price: 4500, kg: 90, rarity: 0.9, colors: ['#3a4a6a', '#a0d0ff', '#f0e040'], shape: 4.6, side: 'river', slot: 2, cost: 6, parent: 'mahseer' },
+  { id: 'spiritkoi', name: 'Spirit Koi', tier: 5, price: 5200, kg: 10, rarity: 0.8, colors: ['#f0f0ff', '#a0f0ff', '#60a0ff'], shape: 2.8, side: 'river', slot: 3, cost: 7, parent: 'moonsalmon' },
+  { id: 'rivergod', name: 'River God', tier: 5, price: 7000, kg: 200, rarity: 0.5, colors: ['#1a5a4a', '#80e0b0', '#f0c040'], shape: 5, side: 'river', slot: 4, cost: 7, parent: 'thundersturgeon' },
+  { id: 'goldbluefin', name: 'Golden Bluefin', tier: 5, price: 9000, kg: 300, rarity: 0.4, colors: ['#e0a020', '#fff0b0', '#b07010'], shape: 3.4, side: 'sea', boat: 'net', ground: 'open', slot: 0, cost: 5 },
+  { id: 'crystalcrab', name: 'Crystal King Crab', tier: 5, price: 13000, kg: 8, rarity: 0.36, colors: ['#80e0f0', '#e0ffff', '#40a0c0'], shape: 1.6, look: 'crab', side: 'sea', boat: 'lobster', ground: 'arctic', slot: 1, cost: 6, parent: 'goldbluefin' },
+  { id: 'abyssallobster', name: 'Abyssal Lobster', tier: 5, price: 11000, kg: 4, rarity: 0.36, colors: ['#40306a', '#a090d0', '#201848'], shape: 2.6, look: 'lobster', side: 'sea', boat: 'lobster', ground: 'deep', slot: 2, cost: 6, parent: 'goldbluefin' },
+  { id: 'megalodon', name: 'Megalodon', tier: 5, price: 25000, kg: 2000, rarity: 0.28, colors: ['#4a5a6a', '#d0d8e0', '#2a3440'], shape: 4, side: 'sea', boat: 'sword', ground: 'deep', slot: 3, cost: 7, parent: 'crystalcrab' },
+  { id: 'kraken', name: 'Kraken', tier: 5, price: 32000, kg: 1500, rarity: 0.2, colors: ['#7a2a5a', '#e080b0', '#400a30'], shape: 3, look: 'squid', side: 'sea', boat: 'sword', ground: 'deep', slot: 4, cost: 7, parent: 'abyssallobster' },
+];
+export const treeFishById = (id: string) => TREE_FISH.find((f) => f.id === id);
 
 /** The harbor: berths (how many boats), automation, and the warehouse (offline earnings cap). */
 export const BERTHS: { boats: number; price: number }[] = [

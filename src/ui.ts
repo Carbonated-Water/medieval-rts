@@ -2,18 +2,19 @@ import {
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_ORDER, COMPANY_PRICE, COMPANY_UNLOCK_EARNED, DEV_MULTIPLIER, GROUNDS, HARBOR_UPGRADES,
   MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, PIER_STAFF, HANDS_MAX,
   TRACKS, TRACK_MAX, TRACK_ORDER, WAREHOUSE, type HarborUpgradeId, type TrackId, HAND_NAMES, HAND_SKILL_MAX, LETTERS, RODS, FISH, GEAR, REFLEX_PER_LEVEL, SKILLS, STRENGTH_PER_LEVEL, HAGGLE_PER_LEVEL,
-  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier,
+  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, TREE_FISH, type TreeFish,
 } from './data';
-import { type Boat, type Game } from './game';
+import { type Boat, type Game, fishById } from './game';
 import { Notices, lineHtml, timeAgo } from './notify';
 import { pixelFishIcon as fishIcon, pixelIcon, type IconName } from './pixelart';
 import type { Place } from './scene';
 
 /** One panel per job: the market sells fish, the tackle shop sells gear, the school trains skills. */
-export type Panel = 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'ledger' | 'boat' | 'shipyard' | 'harborup' | 'pier' | 'pierstaff' | 'hand' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
+export type Panel = 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'ledger' | 'boat' | 'tree' | 'retire' | 'shipyard' | 'harborup' | 'pier' | 'pierstaff' | 'hand' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
 
 export type Action =
   | 'cast' | 'reel' | 'close' | 'reset' | 'toggleDev' | Panel
+  | `treeTier:${number}` | `treeSel:${string}` | `unlock:${string}` | 'doRetire' | `journalTier:${number}`
   | 'sellAll' | `sellFish:${string}` | `buy:${GearKind}` | `train:${SkillId}` | 'claimAll' | `trophy:${string}`
   | `bait:${BaitId}` | `buyBait:${BaitId}:${number}`
   | 'buyCompany' | `buyBoat:${BoatType}` | `boat:${number}` | `send:${number}` | `collect:${number}` | `crew:${number}` | `net:${number}`
@@ -24,6 +25,10 @@ export type Action =
 
 const GEAR_ORDER: GearKind[] = ['rod', 'holders', 'auto', 'clothes', 'boots'];
 export const GEAR_ICON: Record<GearKind, IconName> = { rod: 'rod', holders: 'holder', auto: 'auto', clothes: 'shirt', boots: 'boot' };
+const ROMAN: Record<Tier, string> = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V' };
+/** Where each slot of a tree side sits in its half of the sky (percent): root at the bottom, two branches, two tips. */
+const POS = [{ x: 50, y: 84 }, { x: 24, y: 52 }, { x: 76, y: 52 }, { x: 24, y: 18 }, { x: 76, y: 18 }];
+
 export const BAIT_ICON: Record<BaitId, IconName> = { worm: 'bait', cricket: 'cricket', shiner: 'shiner', leech: 'leech', glow: 'glow', gold: 'gold' };
 export const SKILL_ICON: Record<SkillId, IconName> = { fishing: 'hook', reflexes: 'bolt', haggling: 'bag', strength: 'fist' };
 export const ACH_ICON: Record<AchStat, IconName> = {
@@ -67,6 +72,10 @@ export class UI {
   handSel = 0;
   /** Upgrade track shown in the boat panel's detail strip. */
   trackSel: TrackId = 'hull';
+  /** Fish Tree page: which tier is showing, which fish is selected. Journal: which tier. */
+  treeTier: Tier = 1;
+  treeSel = '';
+  journalTier: Tier = 1;
   /** Money made per second by source, averaged over the last minute (set by main). */
   rates: { you: number; hands: number; boats: number } | null = null;
 
@@ -170,7 +179,9 @@ export class UI {
           : panel === 'pierstaff' ? ['Pier Staff', this.pierStaffHtml(game)]
           : panel === 'hand' ? [HAND_NAMES[this.handSel] ?? 'Fisherman', this.handHtml(game)]
           : panel === 'training' ? ['Fishing School', this.schoolHtml(game)]
-            : panel === 'journal' ? [`Journal ${Object.keys(game.journal).length}/${FISH.length}`, this.journalHtml(game)]
+            : panel === 'journal' ? [`Journal ${Object.keys(game.journal).length}/${FISH.length + TREE_FISH.filter((f) => f.side === 'river').length}`, this.journalHtml(game)]
+            : panel === 'tree' ? ['Fish Tree', this.treeHtml(game)]
+            : panel === 'retire' ? ['Retire', this.retireHtml(game)]
               : panel === 'trophies' ? [`Trophies ${game.claimed.length}/${ACHIEVEMENTS.length}`, this.trophiesHtml(game)]
                 : panel === 'inbox' ? ['Log', this.inboxHtml()]
                   : ['Settings', this.settingsHtml(game)];
@@ -187,7 +198,7 @@ export class UI {
       g.n++; g.value += game.priceOf(c); if (c.variant) g.rare++;
       groups.set(c.fish, g);
     }
-    const cells = FISH.filter((f) => groups.has(f.id)).map((f) => {
+    const cells = game.riverFish().filter((f) => groups.has(f.id)).map((f) => {
       const g = groups.get(f.id)!;
       return `<div class="cell"><button class="slot" data-act="sellFish:${f.id}" title="${f.name}">${g.rare ? '<i class="rare"></i>' : ''}
         <img src="${fishIcon(f, false, 48, 28)}" alt="${f.name}">${g.n > 1 ? `<i class="n">x${g.n}</i>` : ''}</button><span class="price">${coin(g.value, 1)}</span></div>`;
@@ -318,7 +329,7 @@ export class UI {
     const status = `<div class="row"><div class="slot">${icon(this.trackIcon(b, 'gear'))}</div><div class="meta"><b>${def.gearNames[b.tracks.gear]} <span class="small">$${kmb(rate)}/min</span></b>
       <div class="sub"><small>${this.boatStatus(game, b)}</small></div></div>${this.boatAction(game, b, i)}</div>`;
     const haul = b.haul ? `<div class="haul">${b.haul.map((h) => {
-      const f = def.catch.find((x) => x.id === h.fish)!;
+      const f = fishById(h.fish);
       return `<span><img src="${fishIcon(f, false, 48, 28)}" alt="${f.name}">x${h.n}</span>`;
     }).join('')}</div>` : '';
     // Fishing grounds: tap to choose; locked ones show what they need.
@@ -476,15 +487,19 @@ export class UI {
     return step(`${TIERS[best].name} ${odds(game.tierOdds())}`, odds(game.tierOdds(lvl + 1)));
   }
 
-  /** The collection, nothing else: four species per row, one row per tier. */
+  /** The collection, nothing else: one tier per tab, the four originals then the five from the Fish Tree (locked until unlocked there). */
   private journalHtml(game: Game): string {
-    const cells = FISH.map((f) => {
+    const t = this.journalTier;
+    const tabs = `<div class="tiers">${([1, 2, 3, 4, 5] as Tier[]).map((k) => `<button class="tab${k === t ? ' on' : ''}" style="--c:${TIERS[k].color}" data-act="journalTier:${k}">${ROMAN[k]}</button>`).join('')}</div>`;
+    const tree = TREE_FISH.filter((f) => f.side === 'river' && f.tier === t);
+    const locked = tree.filter((f) => !game.fishTree.includes(f.id)).map(() => `<div class="cell"><div class="slot dim">${icon('lock')}</div><span class="small">Tree</span><span class="vm"></span></div>`).join('');
+    const cells = [...FISH.filter((f) => f.tier === t), ...tree.filter((f) => game.fishTree.includes(f.id))].map((f) => {
       const j = game.journal[f.id];
       const marks = VARIANT_ORDER.map((v) => `<i class="${j?.variants?.[v] ? 'got' : ''}" style="--c:${VARIANTS[v].color}"></i>`).join('');
       return `<div class="cell"><div class="slot ${j ? '' : 'dim'}" title="${j ? `${f.name} · best ${j.bestKg} kg` : TIERS[f.tier].name}">
         <img src="${fishIcon(f, !j, 48, 28)}" alt=""></div><span class="small">${j ? `x${num(j.count)}` : '?'}</span><span class="vm">${marks}</span></div>`;
     }).join('');
-    return `<div class="grid">${cells}</div><p class="note">Rare finds ${game.variantsFound()}/${FISH.length * VARIANT_ORDER.length} · Giant, Golden, Shiny</p>`;
+    return `${tabs}<div class="grid">${cells}${locked}</div><p class="note">Rare finds ${game.variantsFound()}/${game.riverFish().length * VARIANT_ORDER.length} · Giant, Golden, Shiny</p>`;
   }
 
   /** Achievements, nothing else: a 4x5 trophy grid and a detail strip for the selected one. */
@@ -514,8 +529,55 @@ export class UI {
   }
 
   /** Game settings, nothing else. */
+  // ---------- prestige ----------
+
+  /**
+   * The Fish Tree: one tier per tab, drawn as a night-sky constellation, the
+   * river fish (you and your fishermen) on the left, the sea fish (boats) on
+   * the right, lines from each fish to the one it needs. Tap a fish for its
+   * details and UNLOCK.
+   */
+  private treeHtml(game: Game): string {
+    const t = this.treeTier;
+    const pearls = `<div class="row tight"><div class="slot">${icon('pearl')}</div><div class="meta"><b>${game.pearls} Pearls</b><div class="sub"><small>Spend them on new fish</small></div></div></div>`;
+    const tabs = `<div class="tiers">${([1, 2, 3, 4, 5] as Tier[]).map((k) => `<button class="tab${k === t ? ' on' : ''}${game.treeTierOpen(k) ? '' : ' shut'}" style="--c:${TIERS[k].color}" data-act="treeTier:${k}">${game.treeTierOpen(k) ? ROMAN[k] : icon('lock', 2)}</button>`).join('')}</div>`;
+    const fish = TREE_FISH.filter((f) => f.tier === t);
+    const at = (f: TreeFish) => ({ x: (f.side === 'river' ? 0 : 50) + POS[f.slot]!.x / 2, y: POS[f.slot]!.y });
+    const lines = fish.filter((f) => f.parent).map((f) => {
+      const a = at(f), b = at(fish.find((p) => p.id === f.parent)!), lit = game.fishTree.includes(f.id);
+      return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" class="${lit ? 'lit' : ''}"/>`;
+    }).join('');
+    const nodes = fish.map((f) => {
+      const p = at(f), own = game.fishTree.includes(f.id);
+      const state = own ? 'own' : game.canUnlock(f.id) ? 'buy' : game.treeReachable(f) ? 'next' : 'far';
+      return `<button class="star ${state}${this.treeSel === f.id ? ' sel' : ''}" style="left:${p.x}%;top:${p.y}%" data-act="treeSel:${f.id}">
+        <img src="${fishIcon(f, !own, 40, 24)}" alt=""><i>${own ? '' : f.cost}</i></button>`;
+    }).join('');
+    const sky = `<div class="sky"><span class="side l">RIVER</span><span class="side r">SEA</span><svg viewBox="0 0 100 100" preserveAspectRatio="none">${lines}<line x1="50" y1="4" x2="50" y2="96" class="split"/></svg>${nodes}</div>`;
+    const sel = fish.find((f) => f.id === this.treeSel);
+    const detail = !game.treeTierOpen(t)
+      ? `<p class="note">Unlock any ${TIERS[(t - 1) as Tier].name} fish to open this tier.</p>`
+      : !sel ? '<p class="note">Tap a fish. River fish bite for you and your fishermen; sea fish come back on boats.</p>'
+      : `<div class="row"><div class="meta"><b>${sel.name} <span class="small">$${kmb(sel.price)} each</span></b><div class="sub"><small class="wrap">${
+          sel.side === 'river' ? 'River: you and your fishermen' : `${BOATS[sel.boat!].name}: ${GROUNDS.find((g) => g.id === sel.ground)!.name} and deeper`}</small></div></div>
+        ${game.fishTree.includes(sel.id) ? '<span class="maxed">OWNED</span>' : `<button class="btn" data-act="unlock:${sel.id}" ${game.canUnlock(sel.id) ? '' : 'disabled'}>${icon('pearl', 2)} ${sel.cost}</button>`}</div>`;
+    return pearls + tabs + sky + detail;
+  }
+
+  /** Retire: what this run turns into, what stays, what goes. */
+  private retireHtml(game: Game): string {
+    const gain = game.pearlsOnRetire();
+    return `<div class="row"><div class="slot">${icon('coin')}</div><div class="meta"><b>This run</b><div class="sub"><small>Earned so far</small></div></div>${coin(game.earned, 3)}</div>
+      <div class="row"><div class="slot">${icon('pearl')}</div><div class="meta"><b>+${gain} Pearls</b><div class="sub"><small>You have ${game.pearls}. Spend them in the Fish Tree</small></div></div></div>
+      <p class="note">Keep: Pearls, Fish Tree, journal, achievements. Reset: money, gear, skills, bait, boats, pier, staff.</p>
+      ${gain >= 1 ? `<button class="btn wide" data-act="doRetire">RETIRE ${icon('pearl', 2)} +${gain}</button>` : '<p class="note">Earn $1M in a run to retire.</p>'}
+      <button class="btn wide plain" data-act="tree">FISH TREE</button>`;
+  }
+
   private settingsHtml(game: Game): string {
-    return `<div class="row"><div class="slot">${icon('coin')}</div><div class="meta"><b>Lifetime earnings</b></div>${coin(game.earned, 3)}</div>
+    return `<div class="row"><div class="slot">${icon('coin')}</div><div class="meta"><b>This run</b></div>${coin(game.earned, 3)}</div>
+      <div class="row"><div class="slot">${icon('pearl')}</div><div class="meta"><b>${game.pearls} Pearls</b><div class="sub"><small>${game.fishTree.length}/${TREE_FISH.length} tree fish · retired ${game.retirements}x</small></div></div>
+        <button class="btn plain" data-act="tree">TREE</button><button class="btn" data-act="retire">RETIRE</button></div>
       <button class="btn wide ${game.dev ? 'red' : 'plain'}" data-act="toggleDev">DEV MODE ${game.dev ? 'ON' : 'OFF'} (x${DEV_MULTIPLIER} PRICES)</button>
       <button class="btn wide red" data-act="reset">START OVER</button>`;
   }

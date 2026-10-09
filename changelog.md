@@ -4,6 +4,19 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Prestige: Retire for Pearls, the Fish Tree
+  WHAT: Retire once a run earns $1M: Pearls = sqrt(earned / 1M); keeps
+        Pearls, Fish Tree, journal, achievements. Fish Tree: 50 new fish in
+        5 tier tabs, river side and sea side (boat + ground), Skyrim-style
+        constellations, any fish of a tier opens the next. Unlocked fish join
+        the river pool or a boat's pool at its ground and deeper, sharing
+        their tier's bite share (no dilution). Crab, lobster, squid shapes.
+        Journal gets tier tabs. Unspent Pearls give no bonus.
+  WHY:  The user wanted prestige across the whole game, gated by new fish
+        ("fish is the driver of the whole game"), tier by tier with a clear
+        river / sea split. A +2% for unspent Pearls was dropped: on the same
+        page as spending them it read as two conflicting ideas.
+
 2026-10-09  Town scrapped; back to fishing
   WHAT: Source restored to efa3f56 (fleet ledger) minus the town: no plant,
         restaurants, export or town screen. Kept the $/sec readout under the
