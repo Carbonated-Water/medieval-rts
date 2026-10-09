@@ -25,8 +25,10 @@ const ui = new UI(onAction);
 const note = ui.notices;
 
 let dirty = false;
+/** Set by Start over: nothing may be saved again, or the unload save would bring the old game back. */
+let wiping = false;
 const save = () => {
-  if (!dirty) return;
+  if (!dirty || wiping) return;
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(game.save())); dirty = false; } catch { /* storage full or blocked: keep playing */ }
 };
 setInterval(save, 2000);
@@ -110,6 +112,7 @@ function onAction(a: Action): void {
     note.banner(pixelIcon('coin'), 'DEV MODE', game.dev ? `On, prices x${DEV_MULTIPLIER}` : 'Off', 'plain');
   } else if (a === 'reset') {
     if (confirm('Start over? Your money, gear, skills and journal will be wiped.')) {
+      wiping = true;
       localStorage.removeItem(SAVE_KEY);
       location.reload();
       return;

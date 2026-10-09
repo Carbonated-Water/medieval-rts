@@ -4,6 +4,14 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Fix: Start over didn't wipe the game
+  WHAT: Start over removed the save and reloaded, but the pagehide autosave
+        (any action had set dirty) wrote the old game straight back. A
+        `wiping` flag now blocks every save once Start over is confirmed.
+  WHY:  User: "start over button doesn't work". Reproduced in Edge first.
+
+---
+
 2026-10-09  Bait becomes a budget: Bait Shop, worms, pouch; Fishing to 25
   WHAT: The permanent Bait gear line is gone. Bait is now consumable (one
         per line per cast; casting with none is impossible, the autofisher
