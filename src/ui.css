@@ -90,6 +90,7 @@ button { font: inherit; color: inherit; cursor: pointer; padding: 0; border: 0; 
 #sheet .cell .slot.sel { outline: 2px solid var(--outline); outline-offset: 2px; background: #ffe58a; }
 #sheet .row .slot .badge.count { right: -4px; bottom: -4px; }
 #sheet .row .btn + .btn { margin-left: -2px; }
+#sheet .baitshop .row .btn { padding: 4px 6px; }
 
 /* Harbor: progress to the reveal, letters, a haul's catch. */
 #sheet .row.letter p { flex: 1; margin: 0; font: 16px/1.35 'Kenney Mini'; color: var(--ink); }

@@ -4,6 +4,13 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Bait Shop: +100
+  WHAT: Every bait row gets a +100 button next to +1 / +10 (slimmer
+        buttons in the Bait Shop so three fit a 360 px phone).
+  WHY:  User asked for a +100 Golden Lure button (stocking fishermen).
+
+---
+
 2026-10-09  Big lures, big fish (why the supplier bought cheap bait)
   WHAT: Bait gained a size bonus on what it catches (Shiner x1.05, Leech
         x1.15, Glow x1.35, Golden x1.7; weight and price), applied to your

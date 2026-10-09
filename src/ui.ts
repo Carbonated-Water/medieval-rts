@@ -177,7 +177,7 @@ export class UI {
       const { top } = this.baitOdds(game, b.id);
       const buy = (n: number) => `<button class="btn" data-act="buyBait:${b.id}:${n}" ${game.money < b.price * n ? 'disabled' : ''}>+${n}</button>`;
       return `<div class="row"><div class="slot">${icon(BAIT_ICON[b.id])}<i class="badge count">${game.baitCount(b.id)}</i></div><div class="meta">
-        <b>${b.name}</b><div class="sub">${coin(b.price, 1)}<small>${best} ${pct(top)}</small></div></div>${buy(1)}${buy(10)}</div>`;
+        <b>${b.name}</b><div class="sub">${coin(b.price, 1)}<small>${best} ${pct(top)}</small></div></div>${buy(1)}${buy(10)}${buy(100)}</div>`;
     }).join('') + '<p class="note">Bait is used up: one per line, every cast. Worms are free on the bank.</p>';
   }
 
