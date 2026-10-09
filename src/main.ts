@@ -347,6 +347,7 @@ function frame(now: number): void {
   announceAchievements();
   scene.update(dt);
   sampleRates(now);
+  note.floats = scene.mode === 'river';
   ui.update(dt, game, scene.place, scene.walking, scene.mode === 'town');
   requestAnimationFrame(frame);
 }

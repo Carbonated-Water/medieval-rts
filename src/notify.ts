@@ -35,8 +35,19 @@ export class Notices {
     document.body.appendChild(this.bannerEl);
   }
 
+  /**
+   * Floats belong to the riverbank (they rise from the fisher, the pier, the
+   * harbor), so they're off in the town. Switching off clears any still rising.
+   */
+  set floats(on: boolean) {
+    if (!on && this.floatsOn) this.root.querySelectorAll('.float').forEach((el) => el.remove());
+    this.floatsOn = on;
+  }
+  private floatsOn = true;
+
   /** Text rising from a screen point (CSS px). */
   float(text: string, x: number, y: number, tone: Tone = 'good'): void {
+    if (!this.floatsOn) return;
     const el = document.createElement('div');
     el.className = `float ${tone}`;
     el.textContent = text;

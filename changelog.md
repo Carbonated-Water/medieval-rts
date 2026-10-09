@@ -4,6 +4,11 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  No riverbank pop-ups in town
+  WHAT: Notices.floats switch; main turns floats off while the town shows
+        (and clears any still rising), back on at the river.
+  WHY:  "+$" floats from your fishing kept popping up over the town screen.
+
 2026-10-09  Town as a single chain, all automatic
   WHAT: The town is built one step at a time in a fixed order (plant, Fish &
         Chips, Cannery, Smokehouse, Smoke & Grill, Kitchen, Lobster Bistro,
