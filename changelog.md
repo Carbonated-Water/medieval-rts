@@ -4,6 +4,19 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Town as a single chain, all automatic
+  WHAT: The town is built one step at a time in a fixed order (plant, Fish &
+        Chips, Cannery, Smokehouse, Smoke & Grill, Kitchen, Lobster Bistro,
+        Sushi Palace, Export Office); only built things and the next lot
+        show, and the bar shows NEXT with its price. Catch goes to the plant
+        by itself while it has room; extra products sell at value; contracts
+        deliver themselves. Removed the per-boat / crate switches, line
+        on/off, SELL RAW, wholesale and DELIVER buttons. Panel titles no
+        longer push the close button off narrow screens. No '$0 IS BACK'
+        banner for hauls that went to the plant.
+  WHY:  The first town showed everything at once with no order and needed
+        switches flipped before it earned anything; it wasn't intuitive.
+
 2026-10-09  Phase 3: the seafood empire; $/sec readout
   WHAT: Town screen (TOWN / RIVER on the action bar, fade). Processing Plant
         with Freezer, Cannery, Smokehouse, Kitchen lines (stations / speed /

@@ -155,23 +155,23 @@ arrows walk, Space casts / reels, E opens the building you stand at.
 
 ## The seafood empire (phase 3, 2026-10-09)
 
-- **Town** screen: the TOWN button on the action bar (with the company)
-  fades to a street with the plant, the Export Office and 4 restaurant lots;
-  tap a building for its panel, RIVER goes back.
-- **Processing Plant** $500k, comes with a Freezer (any fish, x1.4). Lines:
-  Cannery $300k (small fish, 4 per can, x2), Smokehouse $600k (salmon,
-  trout, eel, pike... x2.4), Kitchen $1.2M (shellfish and big game, x3).
-  Each line: Stations (batches at once), Speed (-12%/level), Quality
-  (+10%/level). Best fish first; the freezer takes what other running lines
-  skip. Boats (per boat: MARKET / PLANT) and the pier crate (button, or the
-  Fish Seller when switched) feed the raw stock; SELL RAW empties it.
-- **Restaurants** (Fish & Chips $750k, Smoke & Grill $2M, Lobster Bistro $5M,
-  Sushi Palace $12M): each sells its menu products at 10-34/min, x1.25-1.49,
-  5 levels. **Export Office** $400k: up to 3 timed contracts at x1.8, plus
-  wholesale at value.
-- Sim (6 boats LV3, arctic): raw $125k/min, empire unupgraded x3.1, maxed x6.9.
-- HUD: $/sec under the money (You / Fishermen / Boats / Town, last minute);
-  no log line per catch (the +$ float says it); other log lines sit top-left.
+- **Town** screen: TOWN / RIVER on the action bar (with the company).
+- **One chain, one step at a time**: Fish Plant $500k (freezer, x1.4) >
+  Fish & Chips $750k > Cannery $300k (x2) > Smokehouse $600k (x2.4) >
+  Smoke & Grill $2M > Kitchen $1.2M (x3) > Lobster Bistro $5M > Sushi
+  Palace $12M > Export Office $400k. Only built things and the next lot
+  (FOR SALE, or a marker on the plant for a new line) show in town; the
+  bar always says NEXT with its price.
+- **Everything is automatic**: boat hauls and the Fish Seller's crate go to
+  the plant while it has under 2 minutes of work waiting, else sold as
+  before. Restaurants serve their menu at a premium; anything beyond a
+  minute of restaurant demand plus open contracts sells at value; export
+  contracts (x1.8) deliver themselves.
+- Each line upgrades stations / speed / quality; restaurants 5 levels.
+- Sim (6 boats LV3, arctic) vs raw: plant x1.22, +chips x1.29, 4 steps
+  x1.40, 6 steps x1.76, all x2.13, all maxed x6.4.
+- HUD: $/sec under the money (You / Fishermen / Boats / Town; Town counts
+  only what it adds over the raw fish), no log line per catch.
 
 ## Roadmap (agreed order, 2026-10-09)
 

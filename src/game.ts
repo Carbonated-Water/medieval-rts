@@ -5,7 +5,7 @@ import {
   type GroundDef, type GroundId, type HarborUpgradeId, type TrackId,
   CONTRACT_EVERY, CONTRACT_PREMIUM, CONTRACT_SLOTS, EXPORT_PRICE, LINES, LINE_ORDER, LINE_QUALITY, LINE_SPEED, LINE_TRACK_MAX,
   LINE_UPGRADE_BASE, LINE_UPGRADE_GROWTH, PLANT_PRICE, RESTAURANTS, RESTAURANT_MAX, restaurantPremium, restaurantRate, restaurantUpgrade,
-  type LineId, type LineTrack, type RestaurantId,
+  PLANT_BACKLOG_MIN, TOWN_CHAIN, type LineId, type LineTrack, type RestaurantId, type TownStep,
   HANDS_MAX, MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, SELLER_BAG, handCost, HAND_REACT, HAND_REACT_PER_LEVEL, HAND_REST, HAND_SKILL_MAX, LETTERS, handSkillCost, type BoatType, BITE_WAIT, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, GEAR, HAGGLE_PER_LEVEL, HOLDERS, MAX_GROUND_WORMS,
   MIN_BITE_WAIT, REEL_WINDOW, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, START_WORMS, STRENGTH_PER_LEVEL, TIERS,
   TOO_STRONG_WEIGHT, VARIANTS, VARIANT_ORDER, WORMS_PER_PICK, WORM_SPAWN_SECONDS, WORM_SPOTS, baitById,
@@ -34,8 +34,6 @@ export interface Boat {
   haul: HaulItem[] | null;
   /** What happened on the last trip, for the haul screen. */
   event: TripEvent | null;
-  /** Where this boat's catch goes: sold raw at the harbor, or to the processing plant. */
-  toPlant?: boolean;
   /** The ledger: money put into this boat, money it has brought in, trips made. */
   invested: number;
   earned: number;
@@ -56,10 +54,10 @@ export interface Hand {
   react: number | null;
 }
 
-/** A pile of something (raw fish of one kind, or one product) and what it's all worth. */
-export interface Lot { n: number; value: number }
+/** A pile of something (raw fish of one kind, or one product), what it's all worth, and what the fish in it were worth raw. */
+export interface Lot { n: number; value: number; raw?: number }
 /** A production line: its upgrades, whether it's running, and the batches in progress. */
-export interface PlantLine { stations: number; speed: number; quality: number; on: boolean; jobs: { t: number; dur: number; value: number }[] }
+export interface PlantLine { stations: number; speed: number; quality: number; on: boolean; jobs: { t: number; dur: number; value: number; raw: number }[] }
 /** An export order: deliver `qty` of a line's product before time runs out. */
 export interface Contract { id: number; line: LineId; qty: number; reward: number; left: number }
 
@@ -112,7 +110,6 @@ export interface SaveData {
   restaurants: Partial<Record<RestaurantId, { level: number; earned: number }>>;
   exportOffice: boolean;
   contracts: Contract[];
-  pierToPlant: boolean;
   hands: Hand[];
   /** Hired fishermen's catches, waiting to be sold. */
   crate: Catch[];
@@ -185,7 +182,6 @@ export class Game {
   restaurants: Partial<Record<RestaurantId, { level: number; earned: number }>> = {};
   exportOffice = false;
   contracts: Contract[] = [];
-  pierToPlant = false;
   private restaurantClock: Partial<Record<RestaurantId, number>> = {};
   private contractClock = 0;
   private nextContractId = 1;
@@ -778,7 +774,7 @@ export class Game {
   collectHaul(i: number, fee = 0): number {
     const b = this.boats[i];
     if (!b?.haul) return 0;
-    if (b.toPlant && this.plant) {
+    if (this.plantWants()) {
       // Unloaded at the plant: no sale, no harbor fee; the ledger counts it at raw value.
       const keep = (b.tracks.captain > 0 ? 1 - CAPTAIN_WAGE : 1) * (1 + HAGGLE_PER_LEVEL * this.haggling);
       let raw = 0;
@@ -886,7 +882,7 @@ export class Game {
    */
   private tickHarbor(dt: number): void {
     if (this.harbor.seller) {
-      if ((this.buyerClock += dt) >= 60) { this.buyerClock = 0; if (this.pierToPlant && this.plant) this.crateToPlant(); else this.sellCrate(HARBOR_UPGRADES.seller.fee); }
+      if ((this.buyerClock += dt) >= 60) { this.buyerClock = 0; if (this.plantWants()) this.crateToPlant(); else this.sellCrate(HARBOR_UPGRADES.seller.fee); }
       if (this.bag.length >= SELLER_BAG) {
         const total = Math.round(this.bagValue() * (1 - HARBOR_UPGRADES.seller.fee));
         this.bag = [];
@@ -1085,19 +1081,31 @@ export class Game {
 
   // ---------- the seafood empire ----------
 
-  buyPlant(): boolean {
-    if (!this.company || this.plant || this.money < PLANT_PRICE) return false;
-    this.money -= PLANT_PRICE;
-    this.plant = true;
-    this.plantLines.freezer = { stations: 1, speed: 0, quality: 0, on: true, jobs: [] };
-    return true;
+  /** Is this step of the town already built? */
+  townBuilt(step: TownStep): boolean {
+    return step.kind === 'plant' ? this.plant : step.kind === 'export' ? this.exportOffice
+      : step.kind === 'line' ? !!this.plantLines[step.id] : !!this.restaurants[step.id];
   }
 
-  buyLine(id: LineId): boolean {
-    const price = LINES[id].price;
-    if (!this.plant || this.plantLines[id] || this.money < price) return false;
-    this.money -= price;
-    this.plantLines[id] = { stations: 1, speed: 0, quality: 0, on: true, jobs: [] };
+  /** The one thing for sale in town right now (null once it's all built, or before the company). */
+  nextTownStep(): TownStep | null {
+    return this.company ? TOWN_CHAIN.find((st) => !this.townBuilt(st)) ?? null : null;
+  }
+
+  townStepPrice(step: TownStep): number {
+    return step.kind === 'plant' ? PLANT_PRICE : step.kind === 'export' ? EXPORT_PRICE
+      : step.kind === 'line' ? LINES[step.id].price : RESTAURANTS[step.id].price;
+  }
+
+  /** Buy the next step of the town. */
+  buyTownStep(): boolean {
+    const step = this.nextTownStep();
+    if (!step || this.money < this.townStepPrice(step)) return false;
+    this.money -= this.townStepPrice(step);
+    if (step.kind === 'plant') { this.plant = true; this.plantLines.freezer = { stations: 1, speed: 0, quality: 0, on: true, jobs: [] }; }
+    else if (step.kind === 'line') this.plantLines[step.id] = { stations: 1, speed: 0, quality: 0, on: true, jobs: [] };
+    else if (step.kind === 'restaurant') this.restaurants[step.id] = { level: 1, earned: 0 };
+    else { this.exportOffice = true; this.contractClock = CONTRACT_EVERY; } // first contract right away
     return true;
   }
 
@@ -1119,16 +1127,11 @@ export class Game {
     return true;
   }
 
-  toggleLine(id: LineId): void {
-    const l = this.plantLines[id];
-    if (l) l.on = !l.on;
-  }
-
-  /** Does this line take this fish? The freezer takes whatever no other running line wants. */
+  /** Does this line take this fish? The freezer takes whatever no other line wants. */
   lineAccepts(id: LineId, fish: string): boolean {
     const acc = LINES[id].accepts;
     if (acc !== 'any') return acc.includes(fish);
-    return !LINE_ORDER.some((o) => o !== id && this.plantLines[o]?.on && (LINES[o].accepts as string[]).includes?.(fish));
+    return !LINE_ORDER.some((o) => o !== id && this.plantLines[o] && (LINES[o].accepts as string[]).includes?.(fish));
   }
 
   private addStock(fish: string, n: number, value: number): void {
@@ -1142,36 +1145,20 @@ export class Game {
     return Object.values(this.stock).reduce((s, l) => s + l.n, 0);
   }
 
-  stockValue(): number {
-    return Math.round(Object.values(this.stock).reduce((s, l) => s + l.value, 0));
+  /** Fish the whole plant can process per minute. */
+  plantCapacity(): number {
+    return LINE_ORDER.reduce((s, id) => s + this.lineCapacity(id), 0);
   }
 
-  /** Where a boat's catch goes: raw sale, or the plant (only once there is one). */
-  setBoatToPlant(i: number, on: boolean): void {
-    const b = this.boats[i];
-    if (b) b.toPlant = on && this.plant;
+  /** Should catch go to the plant? Yes while it has room (processing always beats selling raw); otherwise it's sold as before. */
+  plantWants(): boolean {
+    return this.plant && this.stockCount() < this.plantCapacity() * PLANT_BACKLOG_MIN;
   }
 
-  setPierToPlant(on: boolean): void {
-    this.pierToPlant = on && this.plant;
-  }
-
-  /** Send the pier crate to the plant instead of selling it. */
-  crateToPlant(): number {
-    if (!this.plant) return 0;
-    const n = this.crate.length;
+  /** The pier crate goes to the plant (the Fish Seller does this when it has room). */
+  private crateToPlant(): void {
     for (const c of this.crate) this.addStock(c.fish, 1, c.value);
     this.crate = [];
-    return n;
-  }
-
-  /** Sell the raw stock as it is (no processing). */
-  sellStock(): number {
-    const total = this.stockValue();
-    this.stock = {};
-    this.money += total;
-    this.earned += total;
-    return total;
   }
 
   /** Seconds per batch on a line. */
@@ -1195,30 +1182,22 @@ export class Game {
     return p && p.n > 0 ? p.value / p.n : 0;
   }
 
-  private takeProduct(id: LineId, n: number): number {
+  /** Take n of a product: its value, and what the fish in it were worth raw (already counted as boat or pier income). */
+  private takeProduct(id: LineId, n: number): { value: number; raw: number } {
     const p = this.products[id];
-    if (!p || n <= 0 || p.n < n) return 0;
-    const value = (p.value / p.n) * n;
+    if (!p || n <= 0 || p.n < n) return { value: 0, raw: 0 };
+    const value = (p.value / p.n) * n, raw = ((p.raw ?? 0) / p.n) * n;
     p.n -= n;
     p.value -= value;
-    return value;
+    p.raw = (p.raw ?? 0) - raw;
+    return { value, raw };
   }
 
-  /** Sell a product's stock wholesale (at its value, no premium). */
-  sellProducts(id: LineId): number {
-    const value = Math.round(this.takeProduct(id, this.products[id]?.n ?? 0));
-    this.made.town += value;
-    this.money += value;
-    this.earned += value;
-    return value;
-  }
-
-  buyRestaurant(id: RestaurantId): boolean {
-    const price = RESTAURANTS[id].price;
-    if (!this.plant || this.restaurants[id] || this.money < price) return false;
-    this.money -= price;
-    this.restaurants[id] = { level: 1, earned: 0 };
-    return true;
+  /** Money from the town: the $/sec readout counts only what it adds on top of the fish's raw value. */
+  private townIncome(paid: number, raw: number): void {
+    this.money += paid;
+    this.earned += paid;
+    this.made.town += Math.max(0, paid - raw);
   }
 
   nextRestaurantCost(id: RestaurantId): number | null {
@@ -1234,29 +1213,14 @@ export class Game {
     return true;
   }
 
-  buyExport(): boolean {
-    if (!this.plant || this.exportOffice || this.money < EXPORT_PRICE) return false;
-    this.money -= EXPORT_PRICE;
-    this.exportOffice = true;
-    this.contractClock = CONTRACT_EVERY; // first contract right away
-    return true;
-  }
-
-  deliverContract(id: number): number {
-    const c = this.contracts.find((x) => x.id === id);
-    if (!c || (this.products[c.line]?.n ?? 0) < c.qty) return 0;
-    this.takeProduct(c.line, c.qty);
-    this.contracts = this.contracts.filter((x) => x !== c);
-    this.money += c.reward;
-    this.earned += c.reward;
-    this.made.town += c.reward;
-    return c.reward;
-  }
+  /** Contracts finished by themselves this tick, for the banner. */
+  contractNews: number[] = [];
 
   /**
-   * The empire at work: lines start batches from the stock (most valuable
-   * fish first) and finish products; restaurants sell from the products on
-   * their menu; export contracts count down and new ones arrive.
+   * The town at work: lines start batches from the stock (most valuable fish
+   * first) and finish products; export contracts deliver themselves once
+   * there's enough; restaurants sell from their menu; whatever nobody will
+   * need soon is sold wholesale at its value.
    */
   private tickEmpire(dt: number): void {
     if (!this.plant) return;
@@ -1265,13 +1229,14 @@ export class Game {
       if (!l) continue;
       for (const job of l.jobs) job.t += dt;
       for (const job of l.jobs.filter((j) => j.t >= j.dur)) {
-        const p = this.products[id] ?? { n: 0, value: 0 };
+        const p = this.products[id] ?? { n: 0, value: 0, raw: 0 };
         p.n++;
         p.value += job.value;
+        p.raw = (p.raw ?? 0) + job.raw;
         this.products[id] = p;
       }
       l.jobs = l.jobs.filter((j) => j.t < j.dur);
-      while (l.on && l.jobs.length < l.stations) {
+      while (l.jobs.length < l.stations) {
         const kinds = Object.keys(this.stock).filter((k) => this.stock[k]!.n > 0 && this.lineAccepts(id, k))
           .sort((a, b) => this.stock[b]!.value / this.stock[b]!.n - this.stock[a]!.value / this.stock[a]!.n);
         if (kinds.reduce((s, k) => s + this.stock[k]!.n, 0) < LINES[id].batch) break;
@@ -1282,7 +1247,29 @@ export class Game {
           if (s.n === 0) delete this.stock[k];
           if (!need) break;
         }
-        l.jobs.push({ t: 0, dur: this.lineSecs(id), value: value * LINES[id].mult * (1 + LINE_QUALITY * l.quality) });
+        l.jobs.push({ t: 0, dur: this.lineSecs(id), value: value * LINES[id].mult * (1 + LINE_QUALITY * l.quality), raw: value });
+      }
+    }
+    if (this.exportOffice) {
+      for (const c of this.contracts) c.left -= dt;
+      this.contracts = this.contracts.filter((c) => c.left > 0);
+      for (const c of [...this.contracts]) {
+        if ((this.products[c.line]?.n ?? 0) < c.qty) continue;
+        this.townIncome(c.reward, this.takeProduct(c.line, c.qty).raw);
+        this.contracts = this.contracts.filter((x) => x !== c);
+        this.contractNews.push(c.reward);
+      }
+      if (this.contracts.length < CONTRACT_SLOTS && (this.contractClock += dt) >= CONTRACT_EVERY) {
+        this.contractClock = 0;
+        const options = LINE_ORDER.filter((id) => this.plantLines[id] && !this.contracts.some((c) => c.line === id));
+        const line = options[Math.floor(this.rng() * options.length)];
+        if (line) {
+          const minutes = 4 + Math.floor(this.rng() * 5);
+          const perMin = this.lineCapacity(line) / LINES[line].batch;
+          const qty = Math.max(10, Math.min(500, Math.round((perMin * minutes * 0.6) / 5) * 5));
+          const unit = this.productAvg(line) || this.estimateProduct(line);
+          this.contracts.push({ id: this.nextContractId++, line, qty, reward: Math.round(qty * unit * CONTRACT_PREMIUM), left: minutes * 2 * 60 });
+        }
       }
     }
     for (const [id, r] of Object.entries(this.restaurants) as [RestaurantId, { level: number; earned: number }][]) {
@@ -1292,27 +1279,22 @@ export class Game {
         this.restaurantClock[id]! -= every;
         const dish = RESTAURANTS[id].menu.filter((m) => (this.products[m]?.n ?? 0) > 0).sort((a, b) => this.productAvg(b) - this.productAvg(a))[0];
         if (!dish) { this.restaurantClock[id] = 0; break; }
-        const paid = Math.round(this.takeProduct(dish, 1) * restaurantPremium(r.level) * (this.dev ? DEV_MULTIPLIER : 1));
-        this.money += paid;
-        this.earned += paid;
+        const took = this.takeProduct(dish, 1);
+        const paid = Math.round(took.value * restaurantPremium(r.level) * (this.dev ? DEV_MULTIPLIER : 1));
         r.earned += paid;
-        this.made.town += paid;
+        this.townIncome(paid, took.raw);
       }
     }
-    if (this.exportOffice) {
-      for (const c of this.contracts) c.left -= dt;
-      this.contracts = this.contracts.filter((c) => c.left > 0);
-      if (this.contracts.length < CONTRACT_SLOTS && (this.contractClock += dt) >= CONTRACT_EVERY) {
-        this.contractClock = 0;
-        const options = LINE_ORDER.filter((id) => this.plantLines[id]?.on);
-        const line = options[Math.floor(this.rng() * options.length)];
-        if (line) {
-          const minutes = 4 + Math.floor(this.rng() * 5);
-          const perMin = this.lineCapacity(line) / LINES[line].batch;
-          const qty = Math.max(10, Math.min(500, Math.round((perMin * minutes * 0.6) / 5) * 5));
-          const unit = this.productAvg(line) || this.estimateProduct(line);
-          this.contracts.push({ id: this.nextContractId++, line, qty, reward: Math.round(qty * unit * CONTRACT_PREMIUM), left: minutes * 2 * 60 });
-        }
+    // Wholesale: keep a minute of what the restaurants serve, plus what open contracts need; sell the rest at value.
+    for (const id of LINE_ORDER) {
+      const n = this.products[id]?.n ?? 0;
+      if (!n) continue;
+      const keep = (Object.entries(this.restaurants) as [RestaurantId, { level: number }][])
+        .filter(([rid]) => RESTAURANTS[rid].menu.includes(id)).reduce((s, [, r]) => s + restaurantRate(r.level), 0)
+        + this.contracts.filter((c) => c.line === id).reduce((s, c) => s + c.qty, 0);
+      if (n > keep) {
+        const took = this.takeProduct(id, n - Math.floor(keep));
+        this.townIncome(Math.round(took.value), took.raw);
       }
     }
   }
@@ -1375,7 +1357,7 @@ export class Game {
       berths: this.berths, harbor: { ...this.harbor }, warehouse: this.warehouse, savedAt: Date.now(),
       pierSections: this.pierSections, managerBudget: this.managerBudget,
       plant: this.plant, plantLines: this.plantLines, stock: this.stock, products: this.products, restaurants: this.restaurants,
-      exportOffice: this.exportOffice, contracts: this.contracts, pierToPlant: this.pierToPlant,
+      exportOffice: this.exportOffice, contracts: this.contracts,
       hands: this.hands.map((h) => ({ ...h, line: { type: 'idle' as const }, react: null })), crate: this.crate,
     };
   }

@@ -365,34 +365,38 @@ export class Scene {
     };
     place('plant', plantCanvas, T.plantX, T.back);
     place('export', exportCanvas, T.exportX, T.back);
-    for (const lot of T.lots) {
-      const r = RESTAURANTS[lot.id];
-      const s = place(`lot-${lot.id}:`, lotCanvas, lot.x, T.front);
-      s.texture = this.cached(`rest:${lot.id}`, () => restaurantCanvas(SIGNS[lot.id], r.color));
-    }
+    for (const lot of T.lots) place(`lot-${lot.id}:`, lotCanvas, lot.x, T.front);
     this.townFx = add(new Graphics());
   }
 
-  /** The town each frame: restaurants (or empty lots), chimney smoke while lines run, "!" on export when a contract is ready. */
+  /**
+   * The town each frame: what's built, and the one next lot FOR SALE (nothing
+   * else, so the next step is obvious). A bobbing marker over the plant when
+   * the next step is a new line inside it; chimney smoke while it works.
+   */
   private drawTown(): void {
-    const T = this.townLayout(), g = this.townFx.clear(), game = this.game;
-    this.townSprites.plant!.alpha = game.plant ? 1 : 0.55;
-    this.townSprites.export!.alpha = game.exportOffice ? 1 : 0.55;
+    const T = this.townLayout(), g = this.townFx.clear(), game = this.game, next = game.nextTownStep();
+    const show = (s: Sprite, built: boolean, isNext: boolean, texKey: string, canvas: () => HTMLCanvasElement) => {
+      s.visible = built || isNext;
+      s.texture = built ? this.cached(texKey, canvas) : this.cached('lot', () => lotCanvas());
+    };
+    show(this.townSprites.plant!, game.plant, next?.kind === 'plant', 'plant', plantCanvas);
+    show(this.townSprites.export!, game.exportOffice, next?.kind === 'export', 'export', exportCanvas);
     for (const lot of T.lots) {
-      const s = this.townSprites[`lot-${lot.id}`]!;
-      s.texture = this.cached(game.restaurants[lot.id] ? `rest:${lot.id}` : 'lot', () => lotCanvas());
+      show(this.townSprites[`lot-${lot.id}`]!, !!game.restaurants[lot.id], next?.kind === 'restaurant' && next.id === lot.id,
+        `rest:${lot.id}`, () => restaurantCanvas(SIGNS[lot.id], RESTAURANTS[lot.id].color));
     }
-    // Smoke from the chimneys while anything is being processed.
-    const busy = Object.values(game.plantLines).some((l) => l && l.jobs.length);
-    if (busy) {
+    if (Object.values(game.plantLines).some((l) => l && l.jobs.length)) {
       for (let k = 0; k < 6; k++) {
         const p = (this.time * 0.4 + k / 6) % 1;
         for (const cx of [T.plantX - 23, T.plantX + 21]) g.circle(Math.round(cx + p * 6), Math.round(T.back - 50 - p * 26), Math.round(2 + p * 4)).fill({ color: PAL.grey, alpha: 0.7 * (1 - p) });
       }
     }
-    if (game.contracts.some((c) => (game.products[c.line]?.n ?? 0) >= c.qty)) {
-      const y = T.back - 46 + Math.round(Math.sin(this.time * 6) * 2);
-      g.rect(T.exportX - 3, y, 7, 10).fill(PAL.outline).rect(T.exportX - 2, y + 1, 5, 8).fill(PAL.gold);
+    if (next?.kind === 'line') {
+      const y = T.back - 62 + Math.round(Math.sin(this.time * 5) * 2);
+      g.rect(T.plantX - 5, y, 11, 11).fill(PAL.outline).rect(T.plantX - 4, y + 1, 9, 9).fill(PAL.gold)
+        .rect(T.plantX - 1, y + 3, 3, 5).fill(PAL.outline).rect(T.plantX - 3, y + 4, 7, 3).fill(PAL.outline)
+        .rect(T.plantX, y + 4, 1, 3).fill(PAL.gold).rect(T.plantX - 2, y + 5, 5, 1).fill(PAL.gold);
     }
   }
 
@@ -406,9 +410,10 @@ export class Scene {
   /** What's under a tap in the town. */
   hitTown(cx: number, cy: number): 'plant' | 'export' | RestaurantId | null {
     const x = cx / this.scale, y = cy / this.scale, T = this.townLayout();
-    if (Math.abs(x - T.plantX) < 32 && y > T.back - 50 && y < T.back) return 'plant';
-    if (Math.abs(x - T.exportX) < 26 && y > T.back - 40 && y < T.back) return 'export';
-    const lot = T.lots.find((l) => Math.abs(x - l.x) < 22 && y > T.front - 40 && y < T.front);
+    const on = (key: string) => this.townSprites[key]?.visible;
+    if (on('plant') && Math.abs(x - T.plantX) < 32 && y > T.back - 64 && y < T.back) return 'plant';
+    if (on('export') && Math.abs(x - T.exportX) < 26 && y > T.back - 40 && y < T.back) return 'export';
+    const lot = T.lots.find((l) => on(`lot-${l.id}`) && Math.abs(x - l.x) < 22 && y > T.front - 40 && y < T.front);
     return lot ? lot.id : null;
   }
 

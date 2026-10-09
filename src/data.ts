@@ -409,6 +409,22 @@ export const restaurantUpgrade = (price: number, level: number) => Math.round((p
 
 /** The Export Office: timed contracts at a premium, and wholesale for any surplus. */
 export const EXPORT_PRICE = 400000;
+
+/** The town is built in this order, one step at a time: the next step is always the only thing for sale. */
+export type TownStep = { kind: 'plant' } | { kind: 'line'; id: LineId } | { kind: 'restaurant'; id: RestaurantId } | { kind: 'export' };
+export const TOWN_CHAIN: TownStep[] = [
+  { kind: 'plant' },
+  { kind: 'restaurant', id: 'chips' },
+  { kind: 'line', id: 'cannery' },
+  { kind: 'line', id: 'smokehouse' },
+  { kind: 'restaurant', id: 'grill' },
+  { kind: 'line', id: 'kitchen' },
+  { kind: 'restaurant', id: 'bistro' },
+  { kind: 'restaurant', id: 'sushi' },
+  { kind: 'export' },
+];
+/** The plant takes boat and pier catch while its waiting stock is under this many minutes of work. */
+export const PLANT_BACKLOG_MIN = 2;
 export const CONTRACT_SLOTS = 3;
 export const CONTRACT_PREMIUM = 1.8;
 /** A new contract appears this often while a slot is free. */

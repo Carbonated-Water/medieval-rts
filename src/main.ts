@@ -1,10 +1,10 @@
-import { LINES, RESTAURANTS, type LineId, type LineTrack, type RestaurantId } from './data';
+import { RESTAURANTS, type LineId, type LineTrack, type RestaurantId } from './data';
 import { ACHIEVEMENTS, BOATS, DEV_MULTIPLIER, HAND_NAMES, HARBOR_UPGRADES, LETTERS, TRACKS, type GroundId, type HarborUpgradeId, type TrackId, RODS, SKILLS, VARIANTS, baitById, type BaitId, type BoatType, type GearKind, type SkillId } from './data';
 import { Game, fishById, type Line, type SaveData } from './game';
 import { Scene, WORM_SPOT_X } from './scene';
 import './ui.css';
 import { pixelFishIcon as fishIcon, pixelIcon } from './pixelart';
-import { ACH_ICON, BAIT_ICON, GEAR_ICON, LINE_ICON, SKILL_ICON, UI, type Action } from './ui';
+import { ACH_ICON, BAIT_ICON, GEAR_ICON, LINE_ICON, SKILL_ICON, UI, stepName, type Action } from './ui';
 
 const SAVE_KEY = 'riverside-fishing-v1';
 
@@ -66,7 +66,9 @@ canvas.addEventListener('click', (e) => {
   // In town: buildings open their panels (the action bar has the way back).
   if (scene.mode === 'town') {
     const hit = scene.hitTown(e.clientX, e.clientY);
-    if (hit === 'plant') ui.open = 'plant';
+    const built = hit === 'plant' ? game.plant : hit === 'export' ? game.exportOffice : hit ? !!game.restaurants[hit] : false;
+    if (hit && !built) ui.open = 'next';
+    else if (hit === 'plant') ui.open = 'plant';
     else if (hit === 'export') ui.open = 'export';
     else if (hit) { ui.restSel = hit; ui.open = 'restaurant'; }
     return;
@@ -129,21 +131,21 @@ function onAction(a: Action): void {
     }
   } else if (a.startsWith('boat:')) { ui.boatSel = Number(a.slice(5)); ui.trackSel = 'hull'; ui.open = 'boat'; }
   else if (a === 'town' || a === 'river') scene.travel(a);
-  else if (a === 'buyPlant') { if (game.buyPlant()) note.banner(pixelIcon('factory'), 'PROCESSING PLANT', 'Send your boats here', 'rare'); }
-  else if (a.startsWith('buyLine:')) { const id = a.slice(8) as LineId; if (game.buyLine(id)) note.banner(pixelIcon(LINE_ICON[id]), 'NEW LINE', LINES[id].name); }
+  else if (a === 'townNext') {
+    // From the bar: open the step's panel; from that panel: build it.
+    if (ui.open !== 'next') ui.open = 'next';
+    else {
+      const step = game.nextTownStep();
+      if (step && game.buyTownStep()) {
+        ui.open = null;
+        const ic = step.kind === 'plant' ? 'factory' : step.kind === 'export' ? 'anchor' : step.kind === 'line' ? LINE_ICON[step.id] : 'dish';
+        note.banner(pixelIcon(ic), 'BUILT', stepName(step), 'rare');
+      }
+    }
+  }
   else if (a.startsWith('line:')) { ui.lineSel = a.slice(5) as LineId; ui.open = 'line'; }
   else if (a.startsWith('lineUp:')) { const [, id, tr] = a.split(':') as [string, LineId, LineTrack]; game.upgradeLine(id, tr); }
-  else if (a.startsWith('lineToggle:')) game.toggleLine(a.slice(11) as LineId);
-  else if (a === 'sellStock') { const n = game.sellStock(); if (n) note.banner(pixelIcon('fish'), 'SOLD RAW', `$${n.toLocaleString()}`, 'plain'); }
-  else if (a === 'sellAllProducts') {
-    const n = (Object.keys(game.products) as LineId[]).reduce((s, id) => s + game.sellProducts(id), 0);
-    if (n) note.banner(pixelIcon('can'), 'WHOLESALE', `$${n.toLocaleString()}`);
-  } else if (a.startsWith('buyRestaurant:')) { const id = a.slice(14) as RestaurantId; if (game.buyRestaurant(id)) note.banner(pixelIcon('dish'), 'OPENED', RESTAURANTS[id].name, 'rare'); }
   else if (a.startsWith('upRestaurant:')) { const id = a.slice(13) as RestaurantId; if (game.upgradeRestaurant(id)) note.banner(pixelIcon('dish'), RESTAURANTS[id].name.toUpperCase(), `Level ${game.restaurants[id]!.level}`); }
-  else if (a === 'buyExport') { if (game.buyExport()) note.banner(pixelIcon('anchor'), 'EXPORT OFFICE', 'Contracts incoming', 'rare'); }
-  else if (a.startsWith('deliver:')) { const n = game.deliverContract(Number(a.slice(8))); if (n) note.banner(pixelIcon('anchor'), 'CONTRACT DONE', `$${n.toLocaleString()}`, 'rare'); }
-  else if (a.startsWith('toPlant:')) { const i = Number(a.slice(8)); game.setBoatToPlant(i, !game.boats[i]?.toPlant); }
-  else if (a === 'crateToPlant') { const n = game.crateToPlant(); if (n) note.float(`${n} FISH TO PLANT`, innerWidth / 2, innerHeight / 2, 'plain'); }
   else if (a === 'buyPierSection') { if (game.buyPierSection()) note.banner(pixelIcon('anchor'), 'PIER EXTENDED', `${game.pierSpots} spots`); }
   else if (a.startsWith('budget:')) game.setManagerBudget(Number(a.slice(7)));
   else if (a === 'hire') { if (game.hireHand()) note.banner(pixelIcon('crew'), 'HIRED', HAND_NAMES[game.hands.length - 1]!); }
@@ -161,8 +163,9 @@ function onAction(a: Action): void {
   }
   else if (a.startsWith('send:')) game.sendBoat(Number(a.slice(5)));
   else if (a.startsWith('collect:')) {
-    const paid = game.collectHaul(Number(a.slice(8)));
+    const i = Number(a.slice(8)), had = !!game.boats[i]?.haul, paid = game.collectHaul(i);
     if (paid) note.banner(pixelIcon('boat'), 'HAUL SOLD', `$${paid.toLocaleString()}`);
+    else if (had) note.banner(pixelIcon('factory'), 'HAUL', 'Sent to the plant', 'plain');
   } else if (a.startsWith('crew:')) { if (game.hireCrew(Number(a.slice(5)))) note.banner(pixelIcon('crew'), 'HIRED', 'A new deckhand'); }
   else if (a.startsWith('track:')) ui.trackSel = a.slice(6) as TrackId;
   else if (a.startsWith('upgrade:')) {
@@ -173,8 +176,9 @@ function onAction(a: Action): void {
     game.setGround(Number(i), id);
   } else if (a === 'sendAll') game.boats.forEach((_, i) => game.sendBoat(i));
   else if (a === 'collectAll') {
-    const paid = game.boats.reduce((s, _, i) => s + game.collectHaul(i), 0);
+    const had = game.boats.some((b) => b.haul), paid = game.boats.reduce((s, _, i) => s + game.collectHaul(i), 0);
     if (paid) note.banner(pixelIcon('boat'), 'HAULS SOLD', `$${paid.toLocaleString()}`);
+    else if (had) note.banner(pixelIcon('factory'), 'HAULS', 'Sent to the plant', 'plain');
   } else if (a === 'buyBerth') { if (game.buyBerth()) note.banner(pixelIcon('anchor'), 'NEW BERTH', `Room for ${game.berthCount} boats`); }
   else if (a === 'buyWarehouse') { if (game.buyWarehouse()) note.banner(pixelIcon('trap'), 'WAREHOUSE', `${game.offlineHours} hours`); }
   else if (a.startsWith('buyHarbor:')) {
@@ -267,6 +271,7 @@ function announceHarbor(): void {
     note.log(`letter:${text}`, pixelIcon('letter'), 'A letter from H.', 'plain');
     dirty = true;
   }
+  for (const n of game.contractNews.splice(0)) note.banner(pixelIcon('anchor'), 'CONTRACT DONE', `$${n.toLocaleString()}`, 'rare');
   if (game.sellerNews) { note.log('seller', pixelIcon('coin'), `Fish Seller sold your bag $${game.sellerNews.toLocaleString()}`, 'plain'); game.sellerNews = 0; }
   for (const n of game.fleetNews.splice(0)) {
     const name = game.boatName(n.boat), b = game.boats[n.boat]!;
@@ -274,7 +279,7 @@ function announceHarbor(): void {
     else if (n.event === 'school') note.banner(pixelIcon('boat'), `${name.toUpperCase()}: LUCKY SCHOOL`, 'Double haul!', 'rare');
     else if (n.event === 'sighting') note.banner(pixelIcon('star'), `${name.toUpperCase()}: TROPHY`, 'A giant on the line!', 'rare');
     if (n.paid) note.log(`sold:${n.boat}`, pixelIcon('boat'), `${name} sold $${n.paid.toLocaleString()}`, 'plain');
-    else if (!n.event) note.banner(pixelIcon('boat'), `${name.toUpperCase()} IS BACK`, `$${game.haulValue(b).toLocaleString()}`, 'rare');
+    else if (!n.event && b.haul) note.banner(pixelIcon('boat'), `${name.toUpperCase()} IS BACK`, `$${game.haulValue(b).toLocaleString()}`, 'rare');
   }
   game.hands.forEach((h, i) => {
     const starved = game.handStarved(h);

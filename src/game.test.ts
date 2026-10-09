@@ -838,71 +838,104 @@ describe('seafood empire', () => {
     g.buyCompany(); g.buyBoat('net'); g.buyBoat('lobster');
     return g;
   };
+  /** Build the town up to (and including) step n of the chain. */
+  const build = (g: Game, n: number) => { for (let k = 0; k < n; k++) expect(g.buyTownStep()).toBe(true); };
+  const addStock = (g: Game, f: string, n: number, v: number) => (g as unknown as { addStock: (f: string, n: number, v: number) => void }).addStock(f, n, v);
 
-  it('the plant opens with a freezer; lines and buildings need the plant', () => {
+  it('builds one step at a time, in order: plant first, export last', () => {
     const g = empire();
-    expect(g.buyLine('cannery')).toBe(false);
-    expect(g.buyPlant()).toBe(true);
+    expect(g.nextTownStep()).toEqual({ kind: 'plant' });
+    build(g, 1);
     expect(g.plantLines.freezer).toBeTruthy();
-    expect(g.buyLine('cannery')).toBe(true);
-    expect(g.buyRestaurant('chips')).toBe(true);
-    expect(g.buyExport()).toBe(true);
+    expect(g.nextTownStep()).toEqual({ kind: 'restaurant', id: 'chips' });
+    build(g, 8);
+    expect(g.exportOffice).toBe(true);
+    expect(g.nextTownStep()).toBeNull();
+    expect(g.buyTownStep()).toBe(false);
   });
 
-  it('boats switched to the plant unload into stock instead of selling', () => {
+  it('nothing for sale in town before the company; needs the money', () => {
+    expect(new Game({ money: 1e9 }, rng(1)).nextTownStep()).toBeNull();
+    const g = empire({ money: 0 });
+    g.money = 1000;
+    expect(g.buyTownStep()).toBe(false);
+  });
+
+  it('boats unload at the plant by themselves while it has room, and sell when it is full', () => {
     const g = empire();
-    g.buyPlant();
-    g.setBoatToPlant(0, true);
+    build(g, 1);
     const money = g.money;
     g.sendBoat(0);
     tick(g, g.boats[0]!.trip!.dur + 0.1);
     g.collectHaul(0);
-    expect(g.money).toBe(money);
-    expect(g.stockCount() + g.productCount() + (g.plantLines.freezer!.jobs.length)).toBeGreaterThan(0);
+    expect(g.money).toBeGreaterThanOrEqual(money); // nothing sold raw (products may already be selling)
     expect(g.boats[0]!.earned).toBeGreaterThan(0); // the ledger still counts it
+    addStock(g, 'cod', 1000, 1000);
+    expect(g.plantWants()).toBe(false);
+    g.sendBoat(1);
+    tick(g, g.boats[1]!.trip!.dur + 0.1);
+    const before = g.money;
+    expect(g.collectHaul(1)).toBeGreaterThan(0);
+    expect(g.money).toBeGreaterThan(before);
   });
 
   it('lines turn fish into products worth more, with the right line taking the right fish', () => {
     const g = empire();
-    g.buyPlant(); g.buyLine('kitchen');
-    (g as unknown as { addStock: (f: string, n: number, v: number) => void }).addStock('lobster', 10, 3000);
-    (g as unknown as { addStock: (f: string, n: number, v: number) => void }).addStock('herring', 10, 200);
+    build(g, 6); // plant, chips, cannery, smokehouse, grill, kitchen
+    for (const r of Object.keys(g.restaurants)) delete g.restaurants[r as 'chips'];
+    addStock(g, 'lobster', 10, 3000);
+    addStock(g, 'herring', 12, 240);
+    const money = g.money;
     tick(g, 120);
     expect(g.stockCount()).toBe(0);
-    expect(g.products.kitchen!.n).toBe(10);
-    expect(g.products.kitchen!.value).toBeCloseTo(3000 * 3, 0); // lobster went to the kitchen (x3)
-    expect(g.products.freezer!.value).toBeCloseTo(200 * 1.4, 0); // herring to the freezer (x1.4)
+    // Herring went to the cannery (x2), lobster to the kitchen (x3); with no restaurants it all sold at value.
+    expect(g.money - money).toBeCloseTo(3000 * 3 + 240 * 2, -1);
   });
 
   it('stations and speed raise capacity; quality raises value', () => {
     const g = empire();
-    g.buyPlant();
+    build(g, 1);
     const cap = g.lineCapacity('freezer');
     g.upgradeLine('freezer', 'stations'); g.upgradeLine('freezer', 'speed');
     expect(g.lineCapacity('freezer')).toBeGreaterThan(cap * 2);
     g.upgradeLine('freezer', 'quality');
-    (g as unknown as { addStock: (f: string, n: number, v: number) => void }).addStock('cod', 1, 100);
+    addStock(g, 'cod', 1, 100);
+    const money = g.money;
     tick(g, 10);
-    expect(g.products.freezer!.value).toBeCloseTo(100 * 1.4 * 1.1, 0);
+    expect(g.money - money).toBeCloseTo(100 * 1.4 * 1.1, 0);
   });
 
-  it('restaurants sell products at a premium; contracts pay extra on delivery', () => {
+  it('restaurants sell at a premium; only the extra counts as town income', () => {
     const g = empire();
-    g.buyPlant(); g.buyRestaurant('chips'); g.buyExport();
-    g.products.freezer = { n: 100, value: 10000 };
+    build(g, 2);
+    g.products.freezer = { n: 100, value: 10000, raw: 5000 };
     const money = g.money;
     tick(g, 60);
     expect(g.restaurants.chips!.earned).toBeGreaterThan(0);
-    expect(g.money - money).toBeCloseTo(g.restaurants.chips!.earned, -1);
-    expect(g.contracts.length).toBeGreaterThan(0);
+    // Served at x1.25, the rest beyond a minute's worth wholesale at 100; town income = paid minus raw (50 a piece).
+    const sold = 100 - (g.products.freezer?.n ?? 0);
+    expect(g.made.town).toBeCloseTo(g.money - money - 50 * sold, -1);
+    expect(g.money - money).toBeGreaterThan(sold * 100);
+  });
+
+  it('contracts deliver themselves when there is enough', () => {
+    const g = empire();
+    build(g, 9);
+    tick(g, 1);
     const c = g.contracts[0]!;
-    g.products[c.line] = { n: c.qty, value: c.qty * 100 };
-    expect(g.deliverContract(c.id)).toBe(c.reward);
+    expect(c).toBeTruthy();
+    const money = g.money;
+    g.products[c.line] = { n: c.qty, value: c.qty * 100, raw: 0 };
+    tick(g, 0.1);
+    expect(g.contracts.includes(c)).toBe(false);
+    expect(g.money - money).toBeGreaterThanOrEqual(c.reward);
+    expect(g.contractNews).toContain(c.reward);
   });
 
   it('round-trips through save data', () => {
     const g = empire();
-    g.buyPlant(); g.buyLine('cannery'); g.buyRestaurant('chips'); g.setBoatToPlant(0, true); g.setPierToPlant(true);
+    build(g, 4);
+    addStock(g, 'cod', 50, 500);
     tick(g, 5);
     const { savedAt: _a, ...saved } = g.save();
     const { savedAt: _b, ...again } = new Game(JSON.parse(JSON.stringify(g.save()))).save();
