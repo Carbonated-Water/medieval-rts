@@ -888,6 +888,14 @@ describe('prestige: Pearls and the Fish Tree', () => {
     expect(b.priceOf(c)).toBe(a.priceOf(c));
   });
 
+  it('every tree fish is worth more than every original fish of its tier on its side (river, or any boat)', () => {
+    const baseSea = [...BOATS.net.catch, ...BOATS.lobster.catch, ...BOATS.sword.catch];
+    for (const f of TREE_FISH) {
+      const rivals = (f.side === 'river' ? FISH : baseSea).filter((b) => b.tier === f.tier);
+      for (const b of rivals) expect(f.price, `${f.name} vs ${b.name}`).toBeGreaterThan(b.price);
+    }
+  });
+
   it('round-trips prestige through save data', () => {
     const g = new Game({ pearls: 7, fishTree: ['sunfish', 'sardine'], retirements: 2 });
     const again = new Game(JSON.parse(JSON.stringify(g.save())));

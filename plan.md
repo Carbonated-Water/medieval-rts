@@ -168,7 +168,9 @@ arrows walk, Space casts / reels, E opens the building you stand at.
   by original rarity / current rarity), so unlocks never crowd out rarer
   tiers; they're worth more than the originals, so each tier speeds up its
   stage of a run: twig +78%, bamboo +60%, fiberglass +50%, carbon +62%,
-  mythril +110%; a Net Boat at Open Sea +6/27/45/88% then x2.9.
+  mythril +110%; a Net Boat at the Coast x2.4 with tier 1, at Open Sea x5 with all five.
+- Rule (tested): every tree fish is worth more than every original fish of
+  its tier on its side (river fish vs river; sea fish vs every boat).
 - Journal: a tab per tier (4 originals + 5 tree fish, locked until unlocked).
 - The town (seafood empire) was built and scrapped the same day: too linear.
 
