@@ -4,6 +4,21 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Big lures, big fish (why the supplier bought cheap bait)
+  WHAT: Bait gained a size bonus on what it catches (Shiner x1.05, Leech
+        x1.15, Glow x1.35, Golden x1.7; weight and price), applied to your
+        catches and the fishermen's; the Manager's estimate includes it.
+  WHY:  User: the Bait Supplier was buying 'shit tier' bait. It buys what
+        the Manager assigns, and the Manager was right by the old numbers:
+        at high Fishing levels a pricier lure barely moved the odds, so
+        even a maxed Mythril fisherman earned less on Golden (~5.6k/min)
+        than on Shiners (~6.7k/min, supplier prices). Now each lure tier
+        pays once rod and level can use it: Mythril fishermen go Golden
+        (~13.6k/min maxed); the Manager's pick matched the simulated best
+        bait in all 8 checked profiles. Player sim: Bamboo still ~5 min.
+
+---
+
 2026-10-09  The pier: 24 fishermen, sections, Manager, Fish Seller
   WHAT: Pier sections (4 spots each, up to 24; decks of 8-12 by screen
         width, stepping toward the bank). Pier staff moved off the Harbor

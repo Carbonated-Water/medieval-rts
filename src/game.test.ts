@@ -762,6 +762,16 @@ describe('pier staff', () => {
     expect(JSON.stringify(g.hands.map((h) => [h.rod, h.skill]))).toBe(before); // budget Off: no spending
   });
 
+  it('with the Supplier, the Manager puts trained Mythril fishermen on Golden Lures (big lures, big fish)', () => {
+    const g = pier();
+    g.buyHarbor('supplier');
+    g.hireHand(); g.hireHand();
+    Object.assign(g.hands[0]!, { rod: 4, skill: 18 });
+    Object.assign(g.hands[1]!, { rod: 1, skill: 5 });
+    expect(g.bestBait(g.hands[0]!)).toBe('gold');
+    expect(['worm', 'cricket']).toContain(g.bestBait(g.hands[1]!));
+  });
+
   it('pier sections cost money and add four spots each', () => {
     const g = pier();
     expect(g.pierSpots).toBe(PIER_SPOTS);

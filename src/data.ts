@@ -74,14 +74,14 @@ export type BaitId = 'worm' | 'cricket' | 'shiner' | 'leech' | 'glow' | 'gold';
  * Fishing levels) and bites sooner (`wait` multiplies the wait). Still a
  * roll: a Glow Lure can bring up a Minnow. Worms are free but must be found.
  */
-export interface BaitDef { id: BaitId; name: string; price: number; wait: number; lure: number }
+export interface BaitDef { id: BaitId; name: string; price: number; wait: number; lure: number; /** big lures attract big fish: catch weight (and price) x this */ size: number }
 export const BAITS: BaitDef[] = [
-  { id: 'worm', name: 'Ground Worm', price: 0, wait: 1, lure: 0 },
-  { id: 'cricket', name: 'Cricket', price: 1, wait: 0.8, lure: 0.3 },
-  { id: 'shiner', name: 'Shiner', price: 5, wait: 0.7, lure: 0.7 },
-  { id: 'leech', name: 'Leech', price: 25, wait: 0.6, lure: 1.2 },
-  { id: 'glow', name: 'Glow Lure', price: 150, wait: 0.5, lure: 2 },
-  { id: 'gold', name: 'Golden Lure', price: 400, wait: 0.4, lure: 3.2 },
+  { id: 'worm', name: 'Ground Worm', price: 0, wait: 1, lure: 0, size: 1 },
+  { id: 'cricket', name: 'Cricket', price: 1, wait: 0.8, lure: 0.3, size: 1 },
+  { id: 'shiner', name: 'Shiner', price: 5, wait: 0.7, lure: 0.7, size: 1.05 },
+  { id: 'leech', name: 'Leech', price: 25, wait: 0.6, lure: 1.2, size: 1.15 },
+  { id: 'glow', name: 'Glow Lure', price: 150, wait: 0.5, lure: 2, size: 1.35 },
+  { id: 'gold', name: 'Golden Lure', price: 400, wait: 0.4, lure: 3.2, size: 1.7 },
 ];
 export const baitById = (id: BaitId): BaitDef => BAITS.find((b) => b.id === id)!;
 /** Worms you start with. */

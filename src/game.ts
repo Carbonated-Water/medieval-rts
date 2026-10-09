@@ -106,7 +106,7 @@ export type Line =
   | { type: 'idle' }
   | { type: 'casting'; t: number; bait: BaitId }
   | { type: 'waiting'; t: number; biteAt: number; bait: BaitId }
-  | { type: 'bite'; t: number; window: number; fish: FishDef; tooStrong: boolean }
+  | { type: 'bite'; t: number; window: number; fish: FishDef; tooStrong: boolean; bait?: BaitId }
   | { type: 'result'; t: number; outcome: 'caught' | 'escaped' | 'snapped' | 'scared'; fish?: FishDef; caught?: Catch; strong?: boolean };
 
 export const fishById = (id: string): FishDef => FISH.find((f) => f.id === id)!;
@@ -401,7 +401,7 @@ export class Game {
     } else if (line.type === 'bite') {
       const strong = line.tooStrong && this.rng() < this.strengthChance();
       if (line.tooStrong && !strong) this.lines[i] = { type: 'result', t: 0, outcome: 'snapped', fish: line.fish };
-      else this.lines[i] = { type: 'result', t: 0, outcome: 'caught', fish: line.fish, caught: this.land(line.fish), strong };
+      else this.lines[i] = { type: 'result', t: 0, outcome: 'caught', fish: line.fish, caught: this.land(line.fish, false, line.bait), strong };
     }
   }
 
@@ -427,7 +427,7 @@ export class Game {
         this.lines[i] = { type: 'waiting', t: 0, biteAt: this.biteWait(line.bait), bait: line.bait };
       } else if (line.type === 'waiting' && line.t >= line.biteAt) {
         const { fish, tooStrong } = this.rollFish(line.bait);
-        this.lines[i] = { type: 'bite', t: 0, window: this.reelWindow(), fish, tooStrong };
+        this.lines[i] = { type: 'bite', t: 0, window: this.reelWindow(), fish, tooStrong, bait: line.bait };
       } else if (line.type === 'bite' && line.t >= line.window) {
         this.lines[i] = { type: 'result', t: 0, outcome: 'escaped', fish: line.fish };
       } else if (line.type === 'result' && line.t >= RESULT_SECONDS) {
@@ -459,10 +459,10 @@ export class Game {
 
   /** A fish is landed: maybe a variant, weigh it (clothes make it bigger), price it, bag it, log it. */
   /** A fish is landed (by you, or by a hired hand into the pier crate): variant, weight, price, journal. */
-  private land(fish: FishDef, byHand = false): Catch {
+  private land(fish: FishDef, byHand = false, bait: BaitId = 'worm'): Catch {
     const variant = this.rollVariant();
     const v = variant ? VARIANTS[variant] : { size: 1, value: 1 };
-    const ratio = (0.6 + this.rng() * 0.8) * (byHand ? 1 : 1 + CLOTHES[this.clothes]!.size) * v.size;
+    const ratio = (0.6 + this.rng() * 0.8) * (byHand ? 1 : 1 + CLOTHES[this.clothes]!.size) * v.size * baitById(bait).size;
     const kg = Math.round(fish.kg * ratio * 100) / 100;
     const value = Math.max(1, Math.round(fish.price * ratio * v.value));
     const c: Catch = { id: this.nextId++, fish: fish.id, kg, value, ...(variant ? { variant } : {}) };
@@ -898,7 +898,7 @@ export class Game {
     for (const b of BAITS) {
       if (this.baitCount(b.id) <= 0 && !(this.harbor.supplier && b.price > 0)) continue;
       const odds = this.handOdds({ ...h, bait: b.id });
-      const ev = odds.reduce((s, o) => s + (o.tooStrong ? 0 : o.p * o.fish.price), 0);
+      const ev = odds.reduce((s, o) => s + (o.tooStrong ? 0 : o.p * o.fish.price), 0) * b.size;
       const cost = b.price * (this.harbor.supplier ? 1 + HARBOR_UPGRADES.supplier.fee : 1);
       const secs = ((BITE_WAIT[0] + BITE_WAIT[1]) / 2) * b.wait * (1 - 0.06 * h.rod) + 4.5;
       const rate = (ev - cost) / secs;
@@ -988,13 +988,13 @@ export class Game {
         h.line = { type: 'waiting', t: 0, biteAt: this.biteWait(line.bait, h.rod), bait: line.bait };
       } else if (line.type === 'waiting' && line.t >= line.biteAt) {
         const { fish, tooStrong } = this.rollFish(line.bait, tier, h.skill);
-        h.line = { type: 'bite', t: 0, window: REEL_WINDOW, fish, tooStrong };
+        h.line = { type: 'bite', t: 0, window: REEL_WINDOW, fish, tooStrong, bait: line.bait };
         const slow = Math.max(HAND_REACT[0], HAND_REACT[1] - HAND_REACT_PER_LEVEL * (h.skill - 1));
         h.react = HAND_REACT[0] + this.rng() * (slow - HAND_REACT[0]);
       } else if (line.type === 'bite' && line.t >= (h.react ?? 0)) {
         if (h.react! > line.window) h.line = { type: 'result', t: 0, outcome: 'escaped', fish: line.fish };
         else if (line.tooStrong) h.line = { type: 'result', t: 0, outcome: 'snapped', fish: line.fish };
-        else h.line = { type: 'result', t: 0, outcome: 'caught', fish: line.fish, caught: this.land(line.fish, true) };
+        else h.line = { type: 'result', t: 0, outcome: 'caught', fish: line.fish, caught: this.land(line.fish, true, line.bait) };
         h.react = null;
       } else if (line.type === 'result' && line.t >= HAND_REST) {
         h.line = { type: 'idle' };
