@@ -4,6 +4,24 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Gear lines, more skills, dev mode, next-only upgrades
+  WHAT: Market tabs are now Sell / Gear / Skills. Gear: Rod, plus new
+        Bait (faster bites, slight rare boost), Clothes (bigger, pricier
+        fish; shown on the fisher) and Boots (faster walking; shown on
+        the fisher), 5 levels each, bought in order. Every gear line shows
+        only the equipped item and the next one (later rods etc. hidden).
+        Skills: Fishing (odds only now), Reflexes (reel window), Haggling
+        (sale price), Strength (chance to land a too-strong fish). Dev
+        mode toggle in the journal / ?dev=1: fish sell for 20×. Old saves
+        load with the new fields at their defaults.
+  WHY:  User asked: show only the n+1 rod upgrade; add fishing clothes,
+        boots and bait upgrades plus more skill upgrades; add a dev mode
+        with 20× money per fish.
+  Pacing: re-simulated (cheapest-upgrade buyer saving for rods): Bamboo
+        ≈ 5.5 min, everything maxed ≈ 1h45. 22 tests.
+
+---
+
 2026-10-08  Rebuilt as Riverside Fishing (2D)
   WHAT: Hex Conquest is tagged hex-v1 and removed, along with Three.js,
         the KayKit models and the model pipeline (no runtime deps now).

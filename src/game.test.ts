@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { FISH, RODS, SKILL_MAX, TOO_STRONG_SHARE, skillCost } from './data';
-import { Game, fishById } from './game';
+import {
+  BAIT, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, HAGGLE_PER_LEVEL, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_MAX,
+  STRENGTH_PER_LEVEL, TOO_STRONG_SHARE, skillCost,
+} from './data';
+import { Game, fishById, type Line } from './game';
 
 /** Deterministic RNG for tests. */
 function rng(seed = 1) {
@@ -108,16 +111,93 @@ describe('fishing', () => {
     expect(g.line).toMatchObject({ outcome: 'snapped' });
     expect(g.bag).toHaveLength(0);
   });
+});
 
-  it('skill makes bites faster and the reel window wider', () => {
-    const avgWait = (skill: number) => {
-      const g = new Game({ skill }, rng(11));
+describe('gear', () => {
+  it('each line is bought in order, one level at a time, and costs money', () => {
+    const start = RODS[1]!.price + RODS[2]!.price - 1; // enough for Bamboo, then $1 short of Fiberglass
+    const g = new Game({ money: start });
+    expect(g.nextGear('rod')!.name).toBe('Bamboo Rod');
+    expect(g.buyGear('rod')).toBe(true);
+    expect(g.money).toBe(start - RODS[1]!.price);
+    expect(g.rodTier).toBe(2);
+    expect(g.nextGear('rod')!.name).toBe('Fiberglass Rod');
+    expect(g.buyGear('rod')).toBe(false); // can't afford
+    const rich = new Game({ money: 1e9 });
+    for (const kind of ['rod', 'bait', 'clothes', 'boots'] as const) {
+      while (rich.buyGear(kind));
+      expect(rich.nextGear(kind)).toBeNull();
+    }
+    expect(rich.gearLevel('boots')).toBe(BOOTS.length - 1);
+  });
+
+  it('better bait makes bites come sooner', () => {
+    const avgWait = (bait: number) => {
+      const g = new Game({ bait }, rng(11));
       let s = 0;
       for (let i = 0; i < 500; i++) s += g.biteWait();
       return s / 500;
     };
-    expect(avgWait(SKILL_MAX)).toBeLessThan(avgWait(1) * 0.75);
-    expect(new Game({ skill: SKILL_MAX }).reelWindow()).toBeGreaterThan(new Game({ skill: 1 }).reelWindow());
+    expect(avgWait(BAIT.length - 1)).toBeLessThan(avgWait(0) * 0.5);
+  });
+
+  it('better bait also nudges the odds toward rare fish', () => {
+    const plain = new Game({ rod: 4, bait: 0 }).tierOdds();
+    const golden = new Game({ rod: 4, bait: BAIT.length - 1 }).tierOdds();
+    expect(golden[5]!).toBeGreaterThan(plain[5]!);
+  });
+
+  it('clothes make catches bigger and pricier', () => {
+    const avg = (clothes: number) => {
+      const g = new Game({ rod: 4, clothes }, rng(5));
+      for (let i = 0; i < 300; i++) { waitForBite(g); g.reel(); }
+      return g.bag.reduce((s, c) => s + c.value / fishById(c.fish).price, 0) / g.bag.length;
+    };
+    expect(avg(CLOTHES.length - 1)).toBeGreaterThan(avg(0) * (1 + CLOTHES[CLOTHES.length - 1]!.size) * 0.9);
+  });
+
+  it('boots make you walk faster', () => {
+    expect(new Game({ boots: BOOTS.length - 1 }).walkSpeed()).toBeCloseTo(1 + BOOTS[BOOTS.length - 1]!.speed);
+    expect(new Game().walkSpeed()).toBe(1);
+  });
+});
+
+describe('skills', () => {
+  it('training costs money, rises in price and stops at the max', () => {
+    for (const id of Object.keys(SKILLS) as (keyof typeof SKILLS)[]) {
+      const g = new Game({ money: 1e9 });
+      const first = g.nextSkillCost(id)!;
+      expect(g.train(id)).toBe(true);
+      expect(g.money).toBe(1e9 - first);
+      expect(g.nextSkillCost(id)!).toBeGreaterThan(first);
+      while (g.train(id));
+      expect(g.level(id)).toBe(SKILLS[id].max);
+      expect(g.nextSkillCost(id)).toBeNull();
+    }
+    expect(SKILL_MAX).toBe(SKILLS.fishing.max);
+  });
+
+  it('reflexes widen the reel window', () => {
+    expect(new Game({ reflexes: 10 }).reelWindow()).toBeCloseTo(new Game().reelWindow() + 10 * REFLEX_PER_LEVEL);
+  });
+
+  it('haggling raises sale prices', () => {
+    const bag = [{ id: 1, fish: 'carp', kg: 3, value: 100 }];
+    expect(new Game({ bag: [...bag], haggling: 10 }).sellAll()).toBe(Math.round(100 * (1 + 10 * HAGGLE_PER_LEVEL)));
+  });
+
+  it('strength can land a fish too strong for the rod', () => {
+    let landed = 0;
+    for (let s = 0; s < 400; s++) {
+      const g = new Game({ rod: 0, strength: 10 }, rng(s + 1));
+      g.cast();
+      tick(g, 1);
+      g.line = { type: 'bite', t: 0, window: 1, fish: fishById('trout'), tooStrong: true };
+      g.reel();
+      const res = g.line as Line; // reel() changed it; TS still thinks it's the bite we set
+      if (res.type === 'result' && res.outcome === 'caught') { landed++; expect(res.strong).toBe(true); }
+    }
+    expect(landed / 400).toBeCloseTo(10 * STRENGTH_PER_LEVEL, 1);
   });
 });
 
@@ -132,29 +212,27 @@ describe('market', () => {
     expect(g.earned).toBe(11);
   });
 
-  it('rods are bought in order and cost money', () => {
-    const start = RODS[1]!.price + RODS[2]!.price - 1; // enough for Bamboo, then $1 short of Fiberglass
-    const g = new Game({ money: start });
-    expect(g.buyRod(2)).toBe(false); // must buy Bamboo first
-    expect(g.buyRod(1)).toBe(true);
-    expect(g.money).toBe(start - RODS[1]!.price);
-    expect(g.rodTier).toBe(2);
-    expect(g.buyRod(2)).toBe(false);
+  it('dev mode pays 20× per fish', () => {
+    const g = new Game({ dev: true, bag: [{ id: 1, fish: 'carp', kg: 3, value: 7 }] });
+    expect(g.bagValue()).toBe(7 * DEV_MULTIPLIER);
+    expect(g.sellAll()).toBe(7 * DEV_MULTIPLIER);
   });
 
-  it('skill upgrades cost money and stop at the max', () => {
-    const g = new Game({ money: 1e9 });
-    const first = g.nextSkillCost()!;
-    expect(g.upgradeSkill()).toBe(true);
-    expect(g.money).toBe(1e9 - first);
-    while (g.upgradeSkill());
-    expect(g.skill).toBe(SKILL_MAX);
-    expect(g.nextSkillCost()).toBeNull();
+  it('old saves without the new fields still load', () => {
+    const g = new Game({ money: 50, rod: 1, skill: 3, bag: [], journal: {}, nextId: 4, earned: 50 });
+    expect(g.bait).toBe(0);
+    expect(g.clothes).toBe(0);
+    expect(g.boots).toBe(0);
+    expect(g.reflexes).toBe(0);
+    expect(g.dev).toBe(false);
+    expect(g.rodTier).toBe(2);
   });
 
   it('round-trips through save data', () => {
-    const g = new Game({ money: 500 }, rng());
-    g.buyRod(1);
+    const g = new Game({ money: 5000 }, rng());
+    g.buyGear('rod');
+    g.buyGear('bait');
+    g.train('haggling');
     waitForBite(g);
     g.reel();
     const copy = new Game(JSON.parse(JSON.stringify(g.save())));

@@ -105,6 +105,23 @@
       #sheet .fish.seen { border-color: var(--c); }
       #sheet .fish img { width: 84px; height: 48px; }
       #sheet .fish small { opacity: 0.7; font-size: 11px; }
+      #sheet section { margin-bottom: 12px; }
+      #sheet section h3 { margin: 4px 2px 6px; font-size: 15px; }
+      #sheet section h3 small { font-weight: 400; opacity: 0.6; font-size: 12px; }
+      #sheet section .item + .item { margin-top: 6px; }
+      #sheet .item .next { font-size: 10px; font-weight: 700; color: #fff; background: #3f8fe0; border-radius: 6px; padding: 2px 5px; }
+      #sheet .item .emoji { width: 64px; text-align: center; font-size: 26px; font-style: normal; }
+      #sheet .item .swatch { width: 64px; height: 30px; display: flex; justify-content: center; }
+      #sheet .item .swatch::before { content: ''; width: 26px; height: 30px; border-radius: 6px; border: 1px solid rgba(0, 0, 0, 0.3); }
+      #sheet .item .swatch.shirt::before { background: linear-gradient(var(--c) 55%, var(--d) 55%); }
+      #sheet .item .swatch.boot::before { width: 30px; height: 20px; margin-top: 10px; border-radius: 4px 10px 4px 4px; background: var(--c); }
+      #sheet .skillrow .meta { gap: 3px; }
+      #sheet .skillrow .effect { opacity: 0.9; color: #2a5a8a; }
+      #sheet .skillrow .upc { color: #2f8a3a; font-weight: 700; }
+      #sheet .skillrow .oddslist { margin: 6px 0 2px; }
+      #sheet .wide.toggle { margin-top: 10px; background: #fff; color: var(--ink); border-color: var(--wood); }
+      #sheet .wide.toggle.on { background: linear-gradient(#8e44c9, #6a2a9a); color: #fff; border-color: #4a1a6a; }
+      .pill.dev { background: #8e44c9; color: #fff; border-color: #4a1a6a; }
     </style>
   </head>
   <body>

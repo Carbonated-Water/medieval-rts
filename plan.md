@@ -20,20 +20,28 @@ at, the upgrade system and an interface. Wanted 2D graphics.
   (Uncommon) → Fiberglass $900 (Rare) → Carbon $5,000 (Epic) → Mythril
   $25,000 (Legendary). A rod lands fish up to its tier. 12% of bites are a
   fish one tier above the rod, which snaps the line ("you need a …").
-- **Fishing skill 1–20**, bought at the market (cost grows ×1.4 per
-  level). Each level multiplies every tier's bite weight by
-  (1 + 0.14·(skill−1))^(tier−1), so rarer tiers grow fastest; bites also
-  come sooner and the reel window widens.
+- **More gear lines** (5 levels each, bought in order; the market only
+  shows what you have and the next level): **Bait** (bites up to 60%
+  sooner + a small rare-fish boost), **Clothes** (fish up to 55% bigger
+  and pricier; changes the fisher's outfit), **Boots** (walk up to 110%
+  faster; shown on the fisher).
+- **Skills**, trained with money: **Fishing 1–20** (each level multiplies
+  every tier's bite weight by (1 + 0.14·(level−1))^(tier−1)), **Reflexes
+  0–10** (+0.06 s reel window each), **Haggling 0–10** (+5% sale price
+  each), **Strength 0–10** (+4% chance each to land a fish one tier above
+  your rod instead of snapping).
+- **Dev mode**: fish sell for 20×. Toggle in the journal or ?dev=1;
+  a DEV ×20 badge shows while it's on.
 - **Fishing:** Cast → wait 2–6.5 s for a bite → the bobber dips and you
   have ~0.9 s (more with skill) to reel. Too early scares the fish, too
   late it escapes.
-- **Market:** sell one fish or everything; buy the next rod; train skill.
+- **Market:** tabs Sell / Gear / Skills.
 - **Journal:** all 20 species, caught ones with count and best weight.
 - Progress saves to the browser (localStorage) every 2 s.
 
-Pacing (bot-free sim of a decent player, see changelog): Bamboo ≈ 4 min,
-Fiberglass ≈ 22 min, Carbon ≈ 55 min, Mythril ≈ 97 min, everything maxed
-≈ 1 h 40.
+Pacing (sim of a decent player buying the cheapest upgrade, saving for
+rods): Bamboo ≈ 5.5 min, Fiberglass ≈ 35 min, Carbon ≈ 75 min, Mythril
+≈ 99 min, every gear line and skill maxed ≈ 1 h 45.
 
 ## Look & input
 

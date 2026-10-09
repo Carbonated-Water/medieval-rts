@@ -64,19 +64,77 @@ export const RODS: RodDef[] = [
   { name: 'Mythril Rod', tier: 5, price: 25000, color: '#70d8e8', blurb: 'Lands Legendary fish.' },
 ];
 
-export const SKILL_MAX = 20;
-/** Cost to go from `level` to `level + 1`. */
-export const skillCost = (level: number): number => Math.round(30 * Math.pow(1.4, level - 1) / 5) * 5;
-/** Per skill level above 1, each tier above Common gets this much more likely (multiplicative per tier step). */
-export const SKILL_TIER_BONUS = 0.14;
+// ---------- gear: each line is bought in order, one level at a time ----------
 
-/** Chance a fish one tier above your rod bites (and then snaps the line). */
+export interface BaitDef { name: string; price: number; blurb: string; /** multiplies bite wait */ wait: number; /** extra rare-fish weight per tier step */ lure: number }
+export const BAIT: BaitDef[] = [
+  { name: 'Bread Crumbs', price: 0, blurb: 'Better than nothing.', wait: 1, lure: 0 },
+  { name: 'Earthworms', price: 60, blurb: 'Bites come 15% sooner.', wait: 0.85, lure: 0 },
+  { name: 'Crickets', price: 450, blurb: 'Bites 30% sooner, rare fish +5%.', wait: 0.7, lure: 0.05 },
+  { name: 'Shiny Lure', price: 3000, blurb: 'Bites 45% sooner, rare fish +12%.', wait: 0.55, lure: 0.12 },
+  { name: 'Golden Bait', price: 15000, blurb: 'Bites 60% sooner, rare fish +25%.', wait: 0.4, lure: 0.25 },
+];
+
+export interface ClothesDef { name: string; price: number; blurb: string; /** catches are this much heavier (and pricier) */ size: number; shirt: string; trousers: string }
+export const CLOTHES: ClothesDef[] = [
+  { name: 'Old T-Shirt', price: 0, blurb: 'Comfy, at least.', size: 0, shirt: '#e8d8b0', trousers: '#4a6aa0' },
+  { name: 'Flannel Shirt', price: 80, blurb: 'Fish are 10% bigger.', size: 0.1, shirt: '#c0402c', trousers: '#3a4a6a' },
+  { name: 'Rain Jacket', price: 600, blurb: 'Fish are 22% bigger.', size: 0.22, shirt: '#f0c020', trousers: '#3a4a6a' },
+  { name: "Angler's Vest", price: 3500, blurb: 'Fish are 36% bigger.', size: 0.36, shirt: '#6a7a3a', trousers: '#5a4a30' },
+  { name: 'Pro Waders Suit', price: 18000, blurb: 'Fish are 55% bigger.', size: 0.55, shirt: '#2a5a4a', trousers: '#2a5a4a' },
+];
+
+export interface BootsDef { name: string; price: number; blurb: string; /** extra walking speed */ speed: number; color: string | null }
+export const BOOTS: BootsDef[] = [
+  { name: 'Bare Feet', price: 0, blurb: 'Ouch, pebbles.', speed: 0, color: null },
+  { name: 'Sandals', price: 50, blurb: 'Walk 20% faster.', speed: 0.2, color: '#a8784a' },
+  { name: 'Rubber Boots', price: 400, blurb: 'Walk 45% faster.', speed: 0.45, color: '#3f8a3a' },
+  { name: 'Hiking Boots', price: 2500, blurb: 'Walk 75% faster.', speed: 0.75, color: '#6b4526' },
+  { name: 'Seven-League Boots', price: 12000, blurb: 'Walk 110% faster.', speed: 1.1, color: '#8e44c9' },
+];
+
+export type GearKind = 'rod' | 'bait' | 'clothes' | 'boots';
+export const GEAR: Record<GearKind, { title: string; levels: { name: string; price: number; blurb: string }[] }> = {
+  rod: { title: 'Rod', levels: RODS },
+  bait: { title: 'Bait', levels: BAIT },
+  clothes: { title: 'Clothes', levels: CLOTHES },
+  boots: { title: 'Boots', levels: BOOTS },
+};
+
+// ---------- skills: trained with money, level by level ----------
+
+export type SkillId = 'fishing' | 'reflexes' | 'haggling' | 'strength';
+export interface SkillDef { name: string; max: number; start: number; blurb: string; cost: (level: number) => number }
+const curve = (base: number, growth: number) => (level: number) => Math.round((base * Math.pow(growth, level)) / 5) * 5;
+export const SKILLS: Record<SkillId, SkillDef> = {
+  fishing: { name: 'Fishing', max: 20, start: 1, blurb: 'Rarer fish bite more often.', cost: (l) => Math.round((30 * Math.pow(1.4, l - 1)) / 5) * 5 },
+  reflexes: { name: 'Reflexes', max: 10, start: 0, blurb: 'More time to hit REEL!', cost: curve(40, 1.55) },
+  haggling: { name: 'Haggling', max: 10, start: 0, blurb: 'Sell fish for 5% more per level.', cost: curve(60, 1.6) },
+  strength: { name: 'Strength', max: 10, start: 0, blurb: 'Chance to land a fish too strong for your rod.', cost: curve(120, 1.6) },
+};
+
+export const SKILL_MAX = SKILLS.fishing.max;
+/** Cost to go from fishing level `level` to `level + 1`. */
+export const skillCost = SKILLS.fishing.cost;
+/** Per fishing level above 1, each tier above Common gets this much more likely (multiplicative per tier step). */
+export const SKILL_TIER_BONUS = 0.14;
+/** Seconds of extra reel window per Reflexes level. */
+export const REFLEX_PER_LEVEL = 0.06;
+/** Sale price bonus per Haggling level. */
+export const HAGGLE_PER_LEVEL = 0.05;
+/** Chance per Strength level to land a too-strong fish instead of snapping. */
+export const STRENGTH_PER_LEVEL = 0.04;
+
+/** Chance a fish one tier above your rod bites (and snaps the line unless Strength lands it). */
 export const TOO_STRONG_SHARE = 0.12;
 
-/** Seconds to wait for a bite: random in [min, max], shortened by skill and rod. */
+/** Seconds to wait for a bite: random in [min, max], shortened by bait and rod. */
 export const BITE_WAIT: [number, number] = [2.2, 6.5];
-/** Seconds you have to hit Reel once the bobber dips. */
+export const MIN_BITE_WAIT = 0.6;
+/** Seconds you have to hit Reel once the bobber dips (before Reflexes). */
 export const REEL_WINDOW = 0.9;
-export const REEL_WINDOW_PER_SKILL = 0.035;
+
+/** Dev mode: fish sell for this many times their price. */
+export const DEV_MULTIPLIER = 20;
 
 export const START_MONEY = 0;

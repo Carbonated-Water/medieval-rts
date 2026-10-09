@@ -1,16 +1,29 @@
-import { FISH, RODS, SKILL_MAX, TIERS, type Tier } from './data';
+import {
+  BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, GEAR, HAGGLE_PER_LEVEL, REFLEX_PER_LEVEL, RODS, SKILLS, STRENGTH_PER_LEVEL,
+  TIERS, type GearKind, type SkillId, type Tier,
+} from './data';
 import { fishIcon } from './fishart';
 import { fishById, type Game } from './game';
 import type { Place } from './scene';
 
 export type Action =
-  | 'cast' | 'reel' | 'market' | 'journal' | 'close'
-  | 'sellAll' | `sell:${number}` | `buyRod:${number}` | 'upgradeSkill'
-  | 'tab:sell' | 'tab:rods' | 'tab:skill' | 'reset';
+  | 'cast' | 'reel' | 'market' | 'journal' | 'close' | 'reset' | 'toggleDev'
+  | 'sellAll' | `sell:${number}` | `buy:${GearKind}` | `train:${SkillId}`
+  | 'tab:sell' | 'tab:gear' | 'tab:skills';
 
-type Tab = 'sell' | 'rods' | 'skill';
+type Tab = 'sell' | 'gear' | 'skills';
+const GEAR_ORDER: GearKind[] = ['rod', 'bait', 'clothes', 'boots'];
 const money = (n: number) => `$${n.toLocaleString('en-US')}`;
+const pct = (x: number) => `${Math.round(x * 100)}%`;
 const tierTag = (t: Tier) => `<span class="tier" style="--c:${TIERS[t].color}">${TIERS[t].name}</span>`;
+
+/** A small picture for a gear level: rod colour bar, bait emoji, clothes/boots swatches. */
+function gearIcon(kind: GearKind, level: number): string {
+  if (kind === 'rod') return `<i class="rod" style="--c:${RODS[level]!.color}"></i>`;
+  if (kind === 'bait') return `<i class="emoji">${['🍞', '🪱', '🦗', '✨', '🌟'][level]}</i>`;
+  if (kind === 'clothes') return `<i class="swatch shirt" style="--c:${CLOTHES[level]!.shirt};--d:${CLOTHES[level]!.trousers}"></i>`;
+  return `<i class="swatch boot" style="--c:${BOOTS[level]!.color ?? '#f0c8a0'}"></i>`;
+}
 
 /**
  * The DOM interface: top bar, the big context button, the market and the
@@ -48,7 +61,8 @@ export class UI {
     this.set('top', this.top,
       `<span class="pill money">${money(game.money)}</span>` +
       `<span class="pill" style="--c:${TIERS[rod.tier].color}"><i class="dot"></i>${rod.name}</span>` +
-      `<span class="pill">Skill ${game.skill}</span>` +
+      `<span class="pill">Fishing ${game.skill}</span>` +
+      (game.dev ? `<span class="pill dev">DEV ×${DEV_MULTIPLIER}</span>` : '') +
       `<button class="pill btn" data-act="journal" aria-label="journal">📖 ${Object.keys(game.journal).length}/${FISH.length}</button>`);
 
     this.set('action', this.action, this.actionHtml(game, place, walking));
@@ -73,44 +87,70 @@ export class UI {
   }
 
   private marketHtml(game: Game): string {
-    const tabs = (['sell', 'rods', 'skill'] as Tab[]).map((t) =>
-      `<button class="tab ${this.tab === t ? 'on' : ''}" data-act="tab:${t}">${{ sell: 'Sell fish', rods: 'Rods', skill: 'Skill' }[t]}</button>`).join('');
-    let body = '';
-    if (this.tab === 'sell') {
-      body = game.bag.length === 0
-        ? '<p class="empty">Your bag is empty. Go catch something!</p>'
-        : `<button class="wide go" data-act="sellAll">Sell all ${game.bag.length} for ${money(game.bagValue())}</button>
-           <div class="list">${[...game.bag].reverse().map((c) => {
-             const f = fishById(c.fish);
-             return `<div class="item"><img src="${fishIcon(f)}" alt=""><div class="meta"><b>${f.name}</b>${tierTag(f.tier)}<small>${c.kg} kg</small></div>
-               <button data-act="sell:${c.id}">${money(c.value)}</button></div>`;
-           }).join('')}</div>`;
-    } else if (this.tab === 'rods') {
-      body = `<div class="list">${RODS.map((r, i) => {
-        const owned = i <= game.rod, next = i === game.rod + 1;
-        const btn = owned ? `<span class="owned">${i === game.rod ? 'Equipped' : 'Owned'}</span>`
-          : next ? `<button data-act="buyRod:${i}" ${game.money < r.price ? 'disabled' : ''}>${money(r.price)}</button>`
-          : `<span class="locked">${money(r.price)}</span>`;
-        return `<div class="item ${owned ? 'have' : ''}"><i class="rod" style="--c:${r.color}"></i><div class="meta"><b>${r.name}</b>${tierTag(r.tier)}<small>${r.blurb}</small></div>${btn}</div>`;
-      }).join('')}</div><p class="note">A fish one tier above your rod can still bite — but it will snap the line.</p>`;
-    } else {
-      const cost = game.nextSkillCost();
-      const now = game.tierOdds();
-      const after = cost === null ? null : game.tierOdds(game.skill + 1);
-      const rows = ([1, 2, 3, 4, 5] as Tier[]).filter((t) => t <= game.rodTier).map((t) => {
-        const p = now[t] ?? 0, q = after?.[t];
-        return `<div class="odds"><span>${tierTag(t)}</span><div class="bar"><i style="width:${(p * 100).toFixed(1)}%;background:${TIERS[t].color}"></i></div>
-          <b>${(p * 100).toFixed(1)}%</b>${q !== undefined ? `<small class="${q > p ? 'up' : 'down'}">→ ${(q * 100).toFixed(1)}%</small>` : ''}</div>`;
-      }).join('');
-      body = `<div class="skill"><div class="lvl">Fishing skill <b>${game.skill}</b> / ${SKILL_MAX}</div>
-        <p class="note">Each level makes rarer fish bite more often, bites come sooner, and you get longer to reel.</p>
-        <div class="oddslist">${rows}</div>
-        ${game.rodTier < 5 ? `<p class="note">Odds shown for your ${RODS[game.rod]!.name}. Better rods unlock more tiers.</p>` : ''}
-        ${cost === null ? '<p class="maxed">Max level!</p>'
-          : `<button class="wide go" data-act="upgradeSkill" ${game.money < cost ? 'disabled' : ''}>Train to level ${game.skill + 1} · ${money(cost)}</button>`}</div>`;
-    }
+    const tabs = (['sell', 'gear', 'skills'] as Tab[]).map((t) =>
+      `<button class="tab ${this.tab === t ? 'on' : ''}" data-act="tab:${t}">${{ sell: 'Sell fish', gear: 'Gear', skills: 'Skills' }[t]}</button>`).join('');
+    const body = this.tab === 'sell' ? this.sellHtml(game) : this.tab === 'gear' ? this.gearHtml(game) : this.skillsHtml(game);
     return `<div class="card"><div class="head"><h2>Fish Market</h2><button class="x" data-act="close" aria-label="close">✕</button></div>
       <div class="tabs">${tabs}</div><div class="body">${body}</div></div>`;
+  }
+
+  private sellHtml(game: Game): string {
+    if (game.bag.length === 0) return '<p class="empty">Your bag is empty. Go catch something!</p>';
+    const bonus = game.haggling ? ` <small>(haggling +${pct(game.haggling * HAGGLE_PER_LEVEL)})</small>` : '';
+    return `<button class="wide go" data-act="sellAll">Sell all ${game.bag.length} for ${money(game.bagValue())}</button>
+      ${bonus ? `<p class="note">${bonus}</p>` : ''}
+      <div class="list">${[...game.bag].reverse().map((c) => {
+        const f = fishById(c.fish);
+        return `<div class="item"><img src="${fishIcon(f)}" alt=""><div class="meta"><b>${f.name}</b>${tierTag(f.tier)}<small>${c.kg} kg</small></div>
+          <button data-act="sell:${c.id}">${money(game.priceOf(c))}</button></div>`;
+      }).join('')}</div>`;
+  }
+
+  /** Each gear line shows only what you have and the very next upgrade. */
+  private gearHtml(game: Game): string {
+    return GEAR_ORDER.map((kind) => {
+      const lvl = game.gearLevel(kind);
+      const cur = GEAR[kind].levels[lvl]!;
+      const next = game.nextGear(kind);
+      const tier = (l: number) => (kind === 'rod' ? tierTag(RODS[l]!.tier) : '');
+      const nextRow = next
+        ? `<div class="item"><span class="next">Next</span>${gearIcon(kind, next.level)}<div class="meta"><b>${next.name}</b>${tier(next.level)}<small>${next.blurb}</small></div>
+            <button data-act="buy:${kind}" ${game.money < next.price ? 'disabled' : ''}>${money(next.price)}</button></div>`
+        : '<p class="maxed">Fully upgraded!</p>';
+      return `<section><h3>${GEAR[kind].title} <small>${lvl + 1}/${GEAR[kind].levels.length}</small></h3>
+        <div class="item have">${gearIcon(kind, lvl)}<div class="meta"><b>${cur.name}</b>${tier(lvl)}<small>${cur.blurb}</small></div><span class="owned">Equipped</span></div>
+        ${nextRow}</section>`;
+    }).join('') + '<p class="note">A fish one tier above your rod can still bite — it snaps the line unless your Strength lands it.</p>';
+  }
+
+  private skillsHtml(game: Game): string {
+    const ids: SkillId[] = ['fishing', 'reflexes', 'haggling', 'strength'];
+    return ids.map((id) => {
+      const def = SKILLS[id];
+      const lvl = game.level(id);
+      const cost = game.nextSkillCost(id);
+      const effect = this.skillEffect(game, id, lvl, cost !== null);
+      const btn = cost === null ? '<span class="owned">Max</span>'
+        : `<button data-act="train:${id}" ${game.money < cost ? 'disabled' : ''}>${money(cost)}</button>`;
+      return `<section><div class="item skillrow"><div class="meta"><b>${def.name} <small>Lv ${lvl}/${def.max}</small></b>
+        <small>${def.blurb}</small>${effect}</div>${btn}</div></section>`;
+    }).join('');
+  }
+
+  /** "now → next" line for a skill; Fishing gets the full odds table. */
+  private skillEffect(game: Game, id: SkillId, lvl: number, canTrain: boolean): string {
+    const arrow = (a: string, b: string) => `<small class="effect">${a}${canTrain ? ` <span class="upc">→ ${b}</span>` : ''}</small>`;
+    if (id === 'reflexes') return arrow(`Reel window ${game.reelWindow().toFixed(2)} s`, `${(game.reelWindow() + REFLEX_PER_LEVEL).toFixed(2)} s`);
+    if (id === 'haggling') return arrow(`Prices +${pct(lvl * HAGGLE_PER_LEVEL)}`, `+${pct((lvl + 1) * HAGGLE_PER_LEVEL)}`);
+    if (id === 'strength') return arrow(`${pct(game.strengthChance())} to land too-strong fish`, pct(game.strengthChance() + STRENGTH_PER_LEVEL));
+    const now = game.tierOdds();
+    const after = canTrain ? game.tierOdds(lvl + 1) : null;
+    const rows = ([1, 2, 3, 4, 5] as Tier[]).filter((t) => t <= game.rodTier).map((t) => {
+      const p = now[t] ?? 0, q = after?.[t];
+      return `<div class="odds"><span>${tierTag(t)}</span><div class="bar"><i style="width:${(p * 100).toFixed(1)}%;background:${TIERS[t].color}"></i></div>
+        <b>${(p * 100).toFixed(1)}%</b>${q !== undefined ? `<small class="${q > p ? 'up' : 'down'}">→ ${(q * 100).toFixed(1)}%</small>` : ''}</div>`;
+    }).join('');
+    return `<div class="oddslist">${rows}</div>`;
   }
 
   private journalHtml(game: Game): string {
@@ -123,6 +163,7 @@ export class UI {
     return `<div class="card"><div class="head"><h2>Fish Journal · ${Object.keys(game.journal).length}/${FISH.length}</h2><button class="x" data-act="close" aria-label="close">✕</button></div>
       <div class="body"><div class="grid">${cells}</div>
       <p class="note">Lifetime earnings: ${money(game.earned)}</p>
+      <button class="wide toggle ${game.dev ? 'on' : ''}" data-act="toggleDev">Dev mode: ${game.dev ? 'ON' : 'OFF'} · fish sell for ${DEV_MULTIPLIER}×</button>
       <button class="wide danger" data-act="reset">Start over</button></div></div>`;
   }
 

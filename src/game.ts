@@ -1,22 +1,32 @@
 import {
-  BITE_WAIT, FISH, REEL_WINDOW, REEL_WINDOW_PER_SKILL, RODS, SKILL_MAX, SKILL_TIER_BONUS, START_MONEY,
-  TIERS, TOO_STRONG_SHARE, skillCost, type FishDef, type Tier,
+  BAIT, BITE_WAIT, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, GEAR, HAGGLE_PER_LEVEL, MIN_BITE_WAIT, REEL_WINDOW,
+  REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, STRENGTH_PER_LEVEL, TIERS, TOO_STRONG_SHARE,
+  type FishDef, type GearKind, type SkillId, type Tier,
 } from './data';
 
 export interface Catch {
   id: number;
   fish: string; // FishDef id
   kg: number;
+  /** Base price (weight and clothes included); Haggling and dev mode apply at sale. */
   value: number;
 }
 
 export interface JournalEntry { count: number; bestKg: number }
 
-/** Everything that gets saved. */
+/** Everything that gets saved. Fields added later default sensibly for old saves. */
 export interface SaveData {
   money: number;
-  rod: number; // index into RODS
+  rod: number;
+  bait: number;
+  clothes: number;
+  boots: number;
+  /** Fishing skill level (named `skill` since the first save format). */
   skill: number;
+  reflexes: number;
+  haggling: number;
+  strength: number;
+  dev: boolean;
   bag: Catch[];
   journal: Record<string, JournalEntry>;
   nextId: number;
@@ -29,21 +39,32 @@ const RESULT_SECONDS = 2.2;
 /**
  * The fishing line's state. Cast → wait for a bite → the bobber dips and
  * you have a short window to reel. Reeling early scares the fish, late lets
- * it go; a fish too strong for your rod snaps the line.
+ * it go; a fish too strong for your rod snaps the line unless Strength
+ * lands it anyway.
  */
 export type Line =
   | { type: 'idle' }
   | { type: 'casting'; t: number }
   | { type: 'waiting'; t: number; biteAt: number }
   | { type: 'bite'; t: number; window: number; fish: FishDef; tooStrong: boolean }
-  | { type: 'result'; t: number; outcome: 'caught' | 'escaped' | 'snapped' | 'scared'; fish?: FishDef; caught?: Catch };
+  | { type: 'result'; t: number; outcome: 'caught' | 'escaped' | 'snapped' | 'scared'; fish?: FishDef; caught?: Catch; strong?: boolean };
 
 export const fishById = (id: string): FishDef => FISH.find((f) => f.id === id)!;
+
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(v)));
 
 export class Game {
   money = START_MONEY;
   rod = 0;
-  skill = 1;
+  bait = 0;
+  clothes = 0;
+  boots = 0;
+  skill = SKILLS.fishing.start;
+  reflexes = SKILLS.reflexes.start;
+  haggling = SKILLS.haggling.start;
+  strength = SKILLS.strength.start;
+  /** Dev mode: fish sell for DEV_MULTIPLIER× their price. */
+  dev = false;
   bag: Catch[] = [];
   journal: Record<string, JournalEntry> = {};
   /** Lifetime earnings. */
@@ -53,17 +74,34 @@ export class Game {
 
   constructor(save?: Partial<SaveData>, private rng: () => number = Math.random) {
     if (save) Object.assign(this, { ...save, nextId: save.nextId ?? 1 });
-    this.rod = Math.max(0, Math.min(RODS.length - 1, this.rod));
-    this.skill = Math.max(1, Math.min(SKILL_MAX, this.skill));
+    this.rod = clamp(this.rod, 0, RODS.length - 1);
+    this.bait = clamp(this.bait, 0, BAIT.length - 1);
+    this.clothes = clamp(this.clothes, 0, CLOTHES.length - 1);
+    this.boots = clamp(this.boots, 0, BOOTS.length - 1);
+    for (const id of Object.keys(SKILLS) as SkillId[]) this.setLevel(id, clamp(this.level(id), SKILLS[id].start, SKILLS[id].max));
   }
 
   get rodTier(): Tier {
     return RODS[this.rod]!.tier;
   }
 
-  // ---------- odds ----------
+  // ---------- upgrade levels ----------
 
-  /** How likely each landable fish is per bite (at a given skill level, default yours). */
+  gearLevel(kind: GearKind): number {
+    return this[kind];
+  }
+
+  level(id: SkillId): number {
+    return id === 'fishing' ? this.skill : this[id];
+  }
+
+  private setLevel(id: SkillId, v: number): void {
+    if (id === 'fishing') this.skill = v; else this[id] = v;
+  }
+
+  // ---------- odds & effects ----------
+
+  /** How likely each landable fish is per bite (at a given fishing level, default yours). */
   odds(skill = this.skill): { fish: FishDef; p: number }[] {
     const weights = FISH.filter((f) => f.tier <= this.rodTier).map((f) => ({ fish: f, w: this.weight(f, skill) }));
     const total = weights.reduce((s, x) => s + x.w, 0);
@@ -78,11 +116,13 @@ export class Game {
     return out;
   }
 
+  /** Bite weight: tier base × rarity, boosted per tier step by fishing skill and bait. */
   private weight(f: FishDef, skill = this.skill): number {
-    return TIERS[f.tier].weight * f.rarity * Math.pow(1 + SKILL_TIER_BONUS * (skill - 1), f.tier - 1);
+    const perStep = (1 + SKILL_TIER_BONUS * (skill - 1)) * (1 + BAIT[this.bait]!.lure);
+    return TIERS[f.tier].weight * f.rarity * Math.pow(perStep, f.tier - 1);
   }
 
-  /** Which fish bites. Sometimes one a tier above the rod, which will snap the line. */
+  /** Which fish bites. Sometimes one a tier above the rod. */
   rollFish(): { fish: FishDef; tooStrong: boolean } {
     if (this.rodTier < 5 && this.rng() < TOO_STRONG_SHARE) {
       const strong = FISH.filter((f) => f.tier === this.rodTier + 1);
@@ -98,15 +138,30 @@ export class Game {
     return list[list.length - 1]!;
   }
 
-  /** Bites come sooner with skill and better rods. */
+  /** Bites come sooner with better bait and rods. */
   biteWait(): number {
     const [lo, hi] = BITE_WAIT;
-    const speed = (1 - 0.022 * (this.skill - 1)) * (1 - 0.06 * this.rod);
-    return (lo + this.rng() * (hi - lo)) * speed;
+    const wait = (lo + this.rng() * (hi - lo)) * BAIT[this.bait]!.wait * (1 - 0.06 * this.rod);
+    return Math.max(MIN_BITE_WAIT, wait);
   }
 
   reelWindow(): number {
-    return REEL_WINDOW + REEL_WINDOW_PER_SKILL * (this.skill - 1);
+    return REEL_WINDOW + REFLEX_PER_LEVEL * this.reflexes;
+  }
+
+  /** Chance to land a fish one tier above the rod instead of snapping. */
+  strengthChance(): number {
+    return STRENGTH_PER_LEVEL * this.strength;
+  }
+
+  /** Walking speed multiplier from boots. */
+  walkSpeed(): number {
+    return 1 + BOOTS[this.boots]!.speed;
+  }
+
+  /** What a catch sells for right now (Haggling, dev mode). */
+  priceOf(c: Catch): number {
+    return Math.round(c.value * (1 + HAGGLE_PER_LEVEL * this.haggling) * (this.dev ? DEV_MULTIPLIER : 1));
   }
 
   // ---------- fishing ----------
@@ -124,8 +179,9 @@ export class Game {
     if (line.type === 'waiting' || line.type === 'casting') {
       this.line = { type: 'result', t: 0, outcome: 'scared' };
     } else if (line.type === 'bite') {
-      if (line.tooStrong) this.line = { type: 'result', t: 0, outcome: 'snapped', fish: line.fish };
-      else this.line = { type: 'result', t: 0, outcome: 'caught', fish: line.fish, caught: this.land(line.fish) };
+      const strong = line.tooStrong && this.rng() < this.strengthChance();
+      if (line.tooStrong && !strong) this.line = { type: 'result', t: 0, outcome: 'snapped', fish: line.fish };
+      else this.line = { type: 'result', t: 0, outcome: 'caught', fish: line.fish, caught: this.land(line.fish), strong };
     }
     return this.line.type;
   }
@@ -151,10 +207,9 @@ export class Game {
     }
   }
 
-  /** A fish is landed: weigh it, price it, bag it, log it. */
+  /** A fish is landed: weigh it (clothes make it bigger), price it, bag it, log it. */
   private land(fish: FishDef): Catch {
-    // Weight varies ±40% around the species' typical size; price follows weight.
-    const ratio = 0.6 + this.rng() * 0.8;
+    const ratio = (0.6 + this.rng() * 0.8) * (1 + CLOTHES[this.clothes]!.size);
     const kg = Math.round(fish.kg * ratio * 100) / 100;
     const value = Math.max(1, Math.round(fish.price * ratio));
     const c: Catch = { id: this.nextId++, fish: fish.id, kg, value };
@@ -169,14 +224,15 @@ export class Game {
   sell(catchId: number): number {
     const i = this.bag.findIndex((c) => c.id === catchId);
     if (i < 0) return 0;
-    const [c] = this.bag.splice(i, 1);
-    this.money += c!.value;
-    this.earned += c!.value;
-    return c!.value;
+    const price = this.priceOf(this.bag[i]!);
+    this.bag.splice(i, 1);
+    this.money += price;
+    this.earned += price;
+    return price;
   }
 
   sellAll(): number {
-    const total = this.bag.reduce((s, c) => s + c.value, 0);
+    const total = this.bagValue();
     this.money += total;
     this.earned += total;
     this.bag = [];
@@ -184,31 +240,43 @@ export class Game {
   }
 
   bagValue(): number {
-    return this.bag.reduce((s, c) => s + c.value, 0);
+    return this.bag.reduce((s, c) => s + this.priceOf(c), 0);
   }
 
-  /** Buy the next rod up (rods must be bought in order). */
-  buyRod(level: number): boolean {
-    const rod = RODS[level];
-    if (!rod || level !== this.rod + 1 || this.money < rod.price) return false;
-    this.money -= rod.price;
-    this.rod = level;
+  /** The next level of a gear line, or null when maxed. */
+  nextGear(kind: GearKind): { level: number; name: string; price: number; blurb: string } | null {
+    const level = this.gearLevel(kind) + 1;
+    const def = GEAR[kind].levels[level];
+    return def ? { level, ...def } : null;
+  }
+
+  /** Buy the next level of a gear line. */
+  buyGear(kind: GearKind): boolean {
+    const next = this.nextGear(kind);
+    if (!next || this.money < next.price) return false;
+    this.money -= next.price;
+    this[kind] = next.level;
     return true;
   }
 
-  nextSkillCost(): number | null {
-    return this.skill >= SKILL_MAX ? null : skillCost(this.skill);
+  nextSkillCost(id: SkillId = 'fishing'): number | null {
+    const l = this.level(id);
+    return l >= SKILLS[id].max ? null : SKILLS[id].cost(l);
   }
 
-  upgradeSkill(): boolean {
-    const cost = this.nextSkillCost();
+  train(id: SkillId = 'fishing'): boolean {
+    const cost = this.nextSkillCost(id);
     if (cost === null || this.money < cost) return false;
     this.money -= cost;
-    this.skill++;
+    this.setLevel(id, this.level(id) + 1);
     return true;
   }
 
   save(): SaveData {
-    return { money: this.money, rod: this.rod, skill: this.skill, bag: this.bag, journal: this.journal, nextId: this.nextId, earned: this.earned };
+    return {
+      money: this.money, rod: this.rod, bait: this.bait, clothes: this.clothes, boots: this.boots,
+      skill: this.skill, reflexes: this.reflexes, haggling: this.haggling, strength: this.strength, dev: this.dev,
+      bag: this.bag, journal: this.journal, nextId: this.nextId, earned: this.earned,
+    };
   }
 }

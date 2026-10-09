@@ -1,4 +1,4 @@
-import { RODS, TIERS, type FishDef } from './data';
+import { BOOTS, CLOTHES, RODS, TIERS, type FishDef } from './data';
 import { drawFish } from './fishart';
 import type { Game } from './game';
 
@@ -21,7 +21,7 @@ interface Layout {
 interface Shadow { x: number; y: number; speed: number; size: number; phase: number }
 interface Ripple { x: number; y: number; t: number; big: boolean }
 
-const WALK_SPEED = 0.42; // screen widths per second
+const WALK_SPEED = 0.42; // screen widths per second, before boots
 const SKY = ['#8fd0f0', '#cdeefa'];
 
 /**
@@ -94,7 +94,7 @@ export class Scene {
     this.arrival = null;
     if (this.game.line.type !== 'idle') this.game.stopFishing();
     if (this.onDock > 0) { this.onDock = Math.max(0, this.onDock - dt * 2.5); this.walkPhase += dt * 10; return; }
-    this.px = Math.max(0.06, Math.min(0.94, this.px + dir * WALK_SPEED * dt));
+    this.px = Math.max(0.06, Math.min(0.94, this.px + dir * WALK_SPEED * this.game.walkSpeed() * dt));
     this.facing = dir;
     this.stepping = 0.1;
     this.walkPhase += dt * 10;
@@ -129,7 +129,7 @@ export class Scene {
     this.walkPhase += dt * 10;
     if (step.x !== undefined) {
       const d = step.x - this.px;
-      const move = WALK_SPEED * dt;
+      const move = WALK_SPEED * this.game.walkSpeed() * dt;
       if (Math.abs(d) <= move) { this.px = step.x; this.route.shift(); } else { this.px += Math.sign(d) * move; this.facing = Math.sign(d); }
     } else if (step.dock !== undefined) {
       const d = step.dock - this.onDock;
@@ -442,16 +442,22 @@ export class Scene {
     // Shadow.
     ctx.fillStyle = 'rgba(0,0,0,0.2)';
     ctx.beginPath(); ctx.ellipse(0, 2, 16, 5, 0, 0, Math.PI * 2); ctx.fill();
-    // Legs.
-    ctx.strokeStyle = '#3a4a6a';
+    const outfit = CLOTHES[this.game.clothes]!;
+    const boots = BOOTS[this.game.boots]!.color;
+    // Legs (trousers), then boots over the feet if any.
+    ctx.strokeStyle = outfit.trousers;
     ctx.lineWidth = 6;
     ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(-4, -22); ctx.lineTo(-4 + swing, 0); ctx.moveTo(4, -22); ctx.lineTo(4 - swing, 0); ctx.stroke();
-    // Body (overalls).
-    ctx.fillStyle = '#4a6aa0';
+    ctx.fillStyle = boots ?? '#f0c8a0';
+    for (const [x, dx] of [[-4 + swing, -1], [4 - swing, 1]] as const) {
+      ctx.beginPath(); ctx.roundRect(x - 4 + dx, boots ? -8 : -3, 8, boots ? 10 : 5, 2); ctx.fill();
+    }
+    // Body: shirt on top, trousers below.
+    ctx.fillStyle = outfit.trousers;
     ctx.beginPath(); ctx.roundRect(-11, -46, 22, 28, 6); ctx.fill();
-    ctx.fillStyle = '#e8d8b0';
-    ctx.fillRect(-11, -46, 22, 8);
+    ctx.fillStyle = outfit.shirt;
+    ctx.beginPath(); ctx.roundRect(-11, -46, 22, this.game.clothes >= 2 ? 20 : 12, 6); ctx.fill();
     // Arm holding the rod.
     ctx.strokeStyle = '#f0c8a0';
     ctx.lineWidth = 5;

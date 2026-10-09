@@ -1,4 +1,4 @@
-import { RODS, TIERS } from './data';
+import { DEV_MULTIPLIER, RODS, SKILLS, TIERS, type GearKind, type SkillId } from './data';
 import { Game, fishById, type SaveData } from './game';
 import { Scene } from './scene';
 import { UI, type Action } from './ui';
@@ -15,6 +15,8 @@ function load(): Partial<SaveData> | undefined {
 }
 
 const game = new Game(load());
+// ?dev=1 switches dev mode on (fish sell for DEV_MULTIPLIER×); the journal has a toggle too.
+if (new URLSearchParams(location.search).get('dev') === '1') game.dev = true;
 const canvas = document.getElementById('scene') as HTMLCanvasElement;
 const scene = new Scene(canvas, game);
 const ui = new UI(onAction);
@@ -28,7 +30,7 @@ setInterval(save, 2000);
 addEventListener('pagehide', save);
 
 scene.onArrive = (p) => {
-  if (p === 'market') { ui.open = 'market'; ui.tab = game.bag.length ? 'sell' : 'rods'; }
+  if (p === 'market') { ui.open = 'market'; ui.tab = game.bag.length ? 'sell' : 'gear'; }
 };
 
 canvas.addEventListener('click', (e) => {
@@ -54,19 +56,27 @@ addEventListener('blur', () => held.clear());
 function onAction(a: Action): void {
   if (a === 'cast') game.cast();
   else if (a === 'reel') game.reel();
-  else if (a === 'market') { ui.open = 'market'; ui.tab = game.bag.length ? 'sell' : 'rods'; }
+  else if (a === 'market') { ui.open = 'market'; ui.tab = game.bag.length ? 'sell' : 'gear'; }
   else if (a === 'journal') ui.open = ui.open === 'journal' ? null : 'journal';
   else if (a === 'close') ui.open = null;
   else if (a.startsWith('tab:')) ui.tab = a.slice(4) as UI['tab'];
   else if (a === 'sellAll') { const n = game.sellAll(); if (n) ui.say(`Sold everything for <b>$${n.toLocaleString()}</b>`, 2, 'good'); }
   else if (a.startsWith('sell:')) game.sell(Number(a.slice(5)));
-  else if (a.startsWith('buyRod:')) {
-    const lvl = Number(a.slice(7));
-    if (game.buyRod(lvl)) ui.say(`Bought the <b>${RODS[lvl]!.name}</b>! ${TIERS[RODS[lvl]!.tier].name} fish can be landed now.`, 3, 'good');
-  } else if (a === 'upgradeSkill') {
-    if (game.upgradeSkill()) ui.say(`Fishing skill is now <b>${game.skill}</b>`, 2, 'good');
+  else if (a.startsWith('buy:')) {
+    const kind = a.slice(4) as GearKind;
+    const next = game.nextGear(kind);
+    if (next && game.buyGear(kind)) {
+      const extra = kind === 'rod' ? ` ${TIERS[RODS[next.level]!.tier].name} fish can be landed now.` : ` ${next.blurb}`;
+      ui.say(`Bought <b>${next.name}</b>!${extra}`, 3, 'good');
+    }
+  } else if (a.startsWith('train:')) {
+    const id = a.slice(6) as SkillId;
+    if (game.train(id)) ui.say(`${SKILLS[id].name} is now level <b>${game.level(id)}</b>`, 2, 'good');
+  } else if (a === 'toggleDev') {
+    game.dev = !game.dev;
+    ui.say(game.dev ? `Dev mode ON — fish sell for <b>${DEV_MULTIPLIER}×</b>` : 'Dev mode OFF', 2);
   } else if (a === 'reset') {
-    if (confirm('Start over? Your money, rods, skill and journal will be wiped.')) {
+    if (confirm('Start over? Your money, gear, skills and journal will be wiped.')) {
       localStorage.removeItem(SAVE_KEY);
       location.reload();
       return;
@@ -87,7 +97,8 @@ function announce(): void {
   const f = line.fish;
   if (line.outcome === 'caught' && f && line.caught) {
     const first = game.journal[f.id]!.count === 1;
-    ui.say(`${first ? '<span class="new">NEW!</span> ' : ''}<b>${f.name}</b> <span class="tier" style="--c:${TIERS[f.tier].color}">${TIERS[f.tier].name}</span> · ${line.caught.kg} kg · <b>$${line.caught.value}</b>`, 2.6, 'good');
+    const strong = line.strong ? '💪 Your strength held it! ' : '';
+    ui.say(`${strong}${first ? '<span class="new">NEW!</span> ' : ''}<b>${f.name}</b> <span class="tier" style="--c:${TIERS[f.tier].color}">${TIERS[f.tier].name}</span> · ${line.caught.kg} kg · <b>$${game.priceOf(line.caught).toLocaleString()}</b>`, 2.6, 'good');
   } else if (line.outcome === 'snapped' && f) {
     const need = RODS.find((r) => r.tier >= f.tier)!;
     ui.say(`Snap! A <b>${f.name}</b> <span class="tier" style="--c:${TIERS[f.tier].color}">${TIERS[f.tier].name}</span> broke your line — you need a <b>${need.name}</b>.`, 3.2, 'bad');
