@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ACHIEVEMENTS, AUTO, BAIT, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_MAX, VARIANTS,
-  STRENGTH_PER_LEVEL, TOO_STRONG_SHARE, skillCost,
+  ACHIEVEMENTS, AUTO, BAITS, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_MAX, VARIANTS,
+  MAX_GROUND_WORMS, START_WORMS, STRENGTH_PER_LEVEL, WORM_SPAWN_SECONDS, skillCost,
 } from './data';
 import { Game, fishById, type Line } from './game';
 
@@ -18,8 +18,9 @@ function rng(seed = 1) {
 }
 
 const tick = (g: Game, s: number) => { for (let t = 0; t < s; t += 0.02) g.tick(0.02); };
-/** Cast and wait until the bobber dips. */
+/** Cast and wait until the bobber dips (topping up worms so long tests never run dry). */
 const waitForBite = (g: Game) => {
+  if (g.baitCount('worm') < 10) g.baits.worm = 1e6;
   g.cast();
   for (let i = 0; i < 2000 && g.lines[0]!.type !== 'bite'; i++) g.tick(0.02);
 };
@@ -41,13 +42,21 @@ describe('data', () => {
 });
 
 describe('odds', () => {
-  it('a rod only lands fish up to its tier, and odds sum to the landable share', () => {
+  it('fish up to one tier above the rod can bite; the ones above it are too strong', () => {
     const g = new Game({ rod: 1 }, rng());
     const odds = g.odds();
-    expect(odds.every((o) => o.fish.tier <= 2)).toBe(true);
-    expect(odds.reduce((s, o) => s + o.p, 0)).toBeCloseTo(1 - TOO_STRONG_SHARE);
-    const legend = new Game({ rod: 4 }, rng());
-    expect(legend.odds().reduce((s, o) => s + o.p, 0)).toBeCloseTo(1);
+    expect(odds.every((o) => o.fish.tier <= 3)).toBe(true);
+    expect(odds.reduce((s, o) => s + o.p, 0)).toBeCloseTo(1);
+    expect(odds.filter((o) => o.tooStrong).every((o) => o.fish.tier === 3)).toBe(true);
+    const snap = odds.filter((o) => o.tooStrong).reduce((s, o) => s + o.p, 0);
+    expect(snap).toBeGreaterThan(0.01);
+    expect(snap).toBeLessThan(0.15);
+    expect(new Game({ rod: 4 }, rng()).odds().some((o) => o.tooStrong)).toBe(false);
+  });
+
+  it('fishing level does not make snaps more common', () => {
+    const snap = (skill: number) => new Game({ rod: 0, skill }).odds().filter((o) => o.tooStrong).reduce((s, o) => s + o.p, 0);
+    expect(snap(SKILL_MAX)).toBeCloseTo(snap(1), 5);
   });
 
   it('skill shifts the odds toward rarer tiers', () => {
@@ -67,7 +76,7 @@ describe('odds', () => {
       if (r.tooStrong) { tooStrong++; expect(r.fish.tier).toBe(4); continue; }
       tiers[r.fish.tier] = (tiers[r.fish.tier] ?? 0) + 1;
     }
-    expect(tooStrong / n).toBeCloseTo(TOO_STRONG_SHARE, 1);
+    expect(tooStrong / n).toBeCloseTo(g.odds().filter((o) => o.tooStrong).reduce((s, o) => s + o.p, 0), 1);
     const expected = g.tierOdds();
     for (const t of [1, 2, 3]) expect(tiers[t]! / n).toBeCloseTo(expected[t]!, 1);
   });
@@ -125,27 +134,11 @@ describe('gear', () => {
     expect(g.nextGear('rod')!.name).toBe('Fiberglass Rod');
     expect(g.buyGear('rod')).toBe(false); // can't afford
     const rich = new Game({ money: 1e9 });
-    for (const kind of ['rod', 'bait', 'clothes', 'boots'] as const) {
+    for (const kind of ['rod', 'holders', 'auto', 'clothes', 'boots'] as const) {
       while (rich.buyGear(kind));
       expect(rich.nextGear(kind)).toBeNull();
     }
     expect(rich.gearLevel('boots')).toBe(BOOTS.length - 1);
-  });
-
-  it('better bait makes bites come sooner', () => {
-    const avgWait = (bait: number) => {
-      const g = new Game({ bait }, rng(11));
-      let s = 0;
-      for (let i = 0; i < 500; i++) s += g.biteWait();
-      return s / 500;
-    };
-    expect(avgWait(BAIT.length - 1)).toBeLessThan(avgWait(0) * 0.5);
-  });
-
-  it('better bait also nudges the odds toward rare fish', () => {
-    const plain = new Game({ rod: 4, bait: 0 }).tierOdds();
-    const golden = new Game({ rod: 4, bait: BAIT.length - 1 }).tierOdds();
-    expect(golden[5]!).toBeGreaterThan(plain[5]!);
   });
 
   it('clothes make catches bigger and pricier', () => {
@@ -221,7 +214,8 @@ describe('market', () => {
 
   it('old saves without the new fields still load', () => {
     const g = new Game({ money: 50, rod: 1, skill: 3, bag: [], journal: {}, nextId: 4, earned: 50 });
-    expect(g.bait).toBe(0);
+    expect(g.baitCount('worm')).toBe(START_WORMS);
+    expect(g.baitSel).toBe('worm');
     expect(g.clothes).toBe(0);
     expect(g.boots).toBe(0);
     expect(g.reflexes).toBe(0);
@@ -232,7 +226,8 @@ describe('market', () => {
   it('round-trips through save data', () => {
     const g = new Game({ money: 5000 }, rng());
     g.buyGear('rod');
-    g.buyGear('bait');
+    g.buyBait('cricket', 5);
+    g.selectBait('cricket');
     g.train('haggling');
     waitForBite(g);
     g.reel();
@@ -330,7 +325,7 @@ describe('rare variants', () => {
 
 describe('autofisher', () => {
   /** Run the autofisher as if standing on the dock for `s` seconds. */
-  const autoRun = (g: Game, s: number) => { for (let t = 0; t < s; t += 0.02) { g.tick(0.02); g.autoFish(); } };
+  const autoRun = (g: Game, s: number) => { g.baits.worm = 1e6; for (let t = 0; t < s; t += 0.02) { g.tick(0.02); g.autoFish(); } };
 
   it('does nothing until bought', () => {
     const g = new Game({}, rng(3));
@@ -384,5 +379,74 @@ describe('achievements', () => {
     expect(g.stat('tier')).toBe(fishById('salmon').tier);
     expect(g.stat('golden')).toBe(2);
     expect(g.stat('catches')).toBe(1);
+  });
+});
+
+describe('bait', () => {
+  it('every cast uses one bait per line', () => {
+    const g = new Game({ holders: 2 }, rng(3));
+    expect(g.baitCount('worm')).toBe(START_WORMS);
+    g.cast();
+    expect(g.baitCount('worm')).toBe(START_WORMS - 3);
+    expect(g.lines.every((l) => l.type === 'casting' && l.bait === 'worm')).toBe(true);
+  });
+
+  it("you can't cast without bait; lines only go out while it lasts", () => {
+    const g = new Game({ holders: 3, baits: { worm: 2 } }, rng(4));
+    expect(g.cast()).toBe(true);
+    expect(g.lines.filter((l) => l.type === 'casting')).toHaveLength(2);
+    expect(g.activeBait).toBeNull();
+    g.stopFishing();
+    expect(g.cast()).toBe(false);
+  });
+
+  it('runs down to the next cheaper bait when the chosen one is gone', () => {
+    const g = new Game({ baits: { worm: 5, shiner: 1 }, baitSel: 'leech' }, rng(5));
+    expect(g.activeBait).toBe('shiner');
+    g.cast();
+    expect(g.lines[0]).toMatchObject({ bait: 'shiner' });
+    g.stopFishing();
+    expect(g.activeBait).toBe('worm');
+  });
+
+  it('is bought at the shop (worms are not for sale)', () => {
+    const g = new Game({ money: 100 });
+    const leech = BAITS.find((b) => b.id === 'leech')!;
+    expect(g.buyBait('leech', 3)).toBe(true);
+    expect(g.money).toBe(100 - 3 * leech.price);
+    expect(g.baitCount('leech')).toBe(3);
+    expect(g.buyBait('worm', 1)).toBe(false);
+    expect(g.buyBait('gold', 10)).toBe(false);
+  });
+
+  it('pricier bait brings rarer fish and quicker bites', () => {
+    const g = new Game({ rod: 4, skill: 5 }, rng(6));
+    expect(g.tierOdds(5, 'gold')[5]!).toBeGreaterThan(g.tierOdds(5, 'worm')[5]! * 10);
+    const avgWait = (bait: 'worm' | 'gold') => { let s = 0; for (let i = 0; i < 500; i++) s += g.biteWait(bait); return s / 500; };
+    expect(avgWait('gold')).toBeLessThan(avgWait('worm') * 0.5);
+  });
+
+  it('worms turn up on the bank over time and can be dug up', () => {
+    const g = new Game({ baits: {} }, rng(8));
+    tick(g, WORM_SPAWN_SECONDS * (MAX_GROUND_WORMS + 3));
+    expect(g.groundWorms).toHaveLength(MAX_GROUND_WORMS);
+    expect(new Set(g.groundWorms.map((w) => w.spot)).size).toBe(MAX_GROUND_WORMS);
+    const n = g.pickWorm(g.groundWorms[0]!.id);
+    expect(n).toBeGreaterThanOrEqual(2);
+    expect(g.baitCount('worm')).toBe(n);
+    expect(g.groundWorms).toHaveLength(MAX_GROUND_WORMS - 1);
+  });
+
+  it('the autofisher stops when the bait runs out', () => {
+    const g = new Game({ auto: 4, baits: { worm: 3 } }, rng(9));
+    for (let t = 0; t < 120; t += 0.02) { g.tick(0.02); g.autoFish(); }
+    expect(g.baitCount('worm')).toBe(0);
+    expect(g.lines[0]!.type).toBe('idle');
+  });
+
+  it('old saves: bait upgrades become a stock of bait; fishing goes to 25', () => {
+    const g = new Game({ bait: 3 } as never);
+    expect(g.baitCount(BAITS[3]!.id)).toBe(25);
+    expect(SKILLS.fishing.max).toBe(25);
   });
 });

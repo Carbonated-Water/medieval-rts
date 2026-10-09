@@ -4,6 +4,30 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Bait becomes a budget: Bait Shop, worms, pouch; Fishing to 25
+  WHAT: The permanent Bait gear line is gone. Bait is now consumable (one
+        per line per cast; casting with none is impossible, the autofisher
+        stops). New Bait Shop shack below the path (sells x1 / x10, shows the
+        odds each bait gives with your rod and level), Bait Pouch panel (choose
+        bait, see next cast's odds and snap chance) and a pouch slot beside
+        CAST with the count. Ground worms appear in holes in the dirt bank
+        (walk past or tap to dig). Bite rules: fish up to one tier above the
+        rod can bite at a steady 0.4x weight (snap unless Strength); bait's
+        lure adds to the per-tier step like Fishing levels. Fishing max 25.
+        Old saves: bait upgrade level becomes 25 of the matching bait.
+  WHY:  User: early game was linear; wanted a store with bait tiers, an
+        inventory of what's left, free ground worms to fall back on, and a
+        real gamble ("$100 bait might catch a $2 fish or a $1000 one,
+        depending on fishing level"); fishing level up to 25.
+  Balance: EV table per rod x level x bait: each rod has a sweet-spot bait
+        and a gamble one step up (e.g. Golden Lure loses money on Carbon at
+        Fishing 1, wins at 25; on Mythril it's 26% Legendary at Fishing 1).
+        Snap chance no longer rises with level. Fishing cost growth kept at
+        1.4. Sim (best-EV bait, dig worms when broke): Bamboo 4.2 min,
+        Mythril 42 min, all maxed 48.5 min. 44 tests.
+
+---
+
 2026-10-09  UI revamp: wood & parchment pixel style
   WHAT: All menus and feedback redone. New src/ui.css (index.html's inline
         CSS removed): Kenney Pixel UI Pack wood frame (CC0) for panels, flat

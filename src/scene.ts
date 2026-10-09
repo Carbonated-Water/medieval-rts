@@ -4,13 +4,15 @@ import tilesUrl from './assets/kenney/tiles.png';
 import { BOOTS, CLOTHES, RODS, TIERS, VARIANTS, type FishDef, type Variant } from './data';
 import type { Game } from './game';
 import {
-  HAND, PAL, alertCanvas, bobberCanvas, fishCanvas, fisherCanvas, holderCanvas, plankCanvas, schoolCanvas, stallCanvas, type Pose,
+  HAND, PAL, alertCanvas, baitShopCanvas, bobberCanvas, fishCanvas, fisherCanvas, holderCanvas, plankCanvas, schoolCanvas, stallCanvas, type Pose,
 } from './pixelart';
 
-export type Place = 'market' | 'school' | 'tackle' | 'dock';
+export type Place = 'market' | 'school' | 'bait' | 'tackle' | 'dock';
 
 /** Where each place sits along the path, as a fraction of the screen width. */
-const PLACE_X: Record<Place, number> = { market: 0.17, school: 0.335, dock: 0.5, tackle: 0.84 };
+const PLACE_X: Record<Place, number> = { market: 0.17, school: 0.335, dock: 0.5, bait: 0.665, tackle: 0.84 };
+/** Worm holes in the dirt bank, between the stalls and the dock (index = Game worm spot). */
+export const WORM_SPOT_X = [0.34, 0.39, 0.44, 0.56, 0.61, 0.66];
 
 /** Key positions. Internally in world pixels (the low-res pixel grid); `L` exposes them in CSS px. */
 interface Layout {
@@ -23,6 +25,7 @@ interface Layout {
   marketX: number;
   tackleX: number;
   schoolX: number;
+  baitX: number;
   dockX: number;
   dockEnd: number; // y of the dock's far end (where you fish)
   bobbers: { x: number; y: number }[]; // where each line's bobber lands
@@ -100,6 +103,7 @@ export class Scene {
   private waterTop?: TilingSprite;
   private fx = new Graphics(); // shadows, ripples, lines, rings
   private rodLine = new Graphics();
+  private wormFx = new Graphics();
   private bobbers: Sprite[] = [];
   private alerts: Sprite[] = [];
   private holders: Sprite[] = [];
@@ -141,6 +145,7 @@ export class Scene {
       marketX: Math.round(vw * PLACE_X.market),
       tackleX: Math.round(vw * PLACE_X.tackle),
       schoolX: Math.round(vw * PLACE_X.school),
+      baitX: Math.round(vw * PLACE_X.bait),
       dockX,
       dockEnd: Math.round(riverTop + (riverBottom - riverTop) * 0.42),
       // One spot per line: right, left, then further out right and left of the dock.
@@ -160,7 +165,7 @@ export class Scene {
     const k = (v: number) => v * s;
     return {
       w: k(V.w), h: k(V.h), skyBottom: k(V.skyBottom), riverTop: k(V.riverTop), riverBottom: k(V.riverBottom), path: k(V.path),
-      marketX: k(V.marketX), tackleX: k(V.tackleX), schoolX: k(V.schoolX), dockX: k(V.dockX), dockEnd: k(V.dockEnd),
+      marketX: k(V.marketX), tackleX: k(V.tackleX), schoolX: k(V.schoolX), baitX: k(V.baitX), dockX: k(V.dockX), dockEnd: k(V.dockEnd),
       bobbers: V.bobbers.map((b) => ({ x: k(b.x), y: k(b.y) })),
     };
   }
@@ -215,7 +220,7 @@ export class Scene {
     // Little grass tufts and flowers, kept clear of the school.
     for (let i = 0; i < Math.round(V.w / 9); i++) {
       const x = Math.round((i * 37 + 11) % V.w), y = Math.round(V.path + 20 + ((i * 53) % Math.max(1, V.h - V.path - 40)));
-      if (Math.abs(x - V.schoolX) < 26 && y < V.path + 56) continue;
+      if ((Math.abs(x - V.schoolX) < 26 || Math.abs(x - V.baitX) < 24) && y < V.path + 56) continue;
       if (i % 4 === 0) meadow.rect(x, y, 1, 1).fill([PAL.white, PAL.goldLight, PAL.redLight][i % 3]!).rect(x, y + 1, 1, 2).fill(PAL.greenDark);
       else meadow.rect(x, y, 1, 3).fill(PAL.greenLight).rect(x - 1, y + 1, 1, 2).fill(PAL.greenLight).rect(x + 1, y + 1, 1, 2).fill(PAL.greenDark);
     }
@@ -236,6 +241,9 @@ export class Scene {
     shop('market', () => stallCanvas('MARKET', [PAL.red, PAL.white], PAL.redDark, 'fish'), V.marketX, V.path - 2, 1);
     shop('tackle', () => stallCanvas('TACKLE', [PAL.waterDeep, PAL.sky], PAL.waterDeeper, 'tackle'), V.tackleX, V.path - 2, 1);
     shop('school', schoolCanvas, V.schoolX, V.path + 12, 0);
+    shop('baitshop', baitShopCanvas, V.baitX, V.path + 12, 0);
+    // Worms poke out of the dirt bank (redrawn every frame).
+    this.wormFx = add(new Graphics());
     this.world.addChild(layer);
 
     // Moving things on top: holder rods, bobbers, "!", the rod, the player, leaping fish.
@@ -257,12 +265,33 @@ export class Scene {
   get place(): Place | null {
     if (this.route.length) return null;
     if (this.onDock >= 1) return 'dock';
-    if (this.onDock === 0) for (const p of ['market', 'school', 'tackle'] as const) if (Math.abs(this.px - PLACE_X[p]) < 0.04) return p;
+    if (this.onDock === 0) for (const p of ['market', 'school', 'bait', 'tackle'] as const) if (Math.abs(this.px - PLACE_X[p]) < 0.04) return p;
     return null;
   }
 
   get walking(): boolean {
     return this.route.length > 0;
+  }
+
+  /** Where a worm hole is, in world pixels. */
+  private wormPos(spot: number): { x: number; y: number } {
+    const V = this.V;
+    return { x: Math.round(WORM_SPOT_X[spot]! * V.w), y: Math.min(V.riverBottom + 20 + (spot % 2) * 6, V.path - 8) };
+  }
+
+  /** The worm under a screen point (CSS px), or null. */
+  hitWorm(cx: number, cy: number): { id: number; x: number } | null {
+    const x = cx / this.scale, y = cy / this.scale;
+    for (const w of this.game.groundWorms) {
+      const p = this.wormPos(w.spot);
+      if (Math.abs(p.x - x) < 12 && Math.abs(p.y - y) < 12) return { id: w.id, x: p.x * this.scale };
+    }
+    return null;
+  }
+
+  /** The player's spot along the path (fraction of width) while on the path, else null. */
+  get pathX(): number | null {
+    return this.onDock === 0 ? this.px : null;
   }
 
   /** Just above the fisherman's head, in CSS pixels. */
@@ -313,6 +342,7 @@ export class Scene {
   hit(cx: number, cy: number): Place | 'ground' {
     const V = this.V, x = cx / this.scale, y = cy / this.scale;
     if (y > V.path + 10 && y < V.path + 54 && Math.abs(x - V.schoolX) < 24) return 'school';
+    if (y > V.path + 10 && y < V.path + 54 && Math.abs(x - V.baitX) < 22) return 'bait';
     const nearShop = y > V.path - 52 && y < V.path + 12;
     if (nearShop && Math.abs(x - V.marketX) < 26) return 'market';
     if (nearShop && Math.abs(x - V.tackleX) < 26) return 'tackle';
@@ -449,9 +479,21 @@ export class Scene {
       const rx = Math.round(3 + k * (r.big ? 14 : 8));
       g.ellipse(r.x, r.y + 1, rx, Math.max(1, Math.round(rx / 3))).stroke({ color: PAL.white, width: 1, alpha: 1 - k });
     }
+    this.drawWorms();
     this.drawLines(g);
     this.drawPlayer();
     this.drawFlyingFish(g);
+  }
+
+  /** A little dirt mound with a pink worm wiggling out of it, per worm hole. */
+  private drawWorms(): void {
+    const g = this.wormFx.clear();
+    for (const w of this.game.groundWorms) {
+      const { x, y } = this.wormPos(w.spot);
+      const up = Math.sin(this.time * 6 + w.id) > 0 ? 1 : 0;
+      g.rect(x - 4, y, 9, 2).fill(PAL.dirtDeep).rect(x - 3, y - 1, 7, 1).fill(PAL.dirtDark);
+      g.rect(x - 1, y - 4 - up, 2, 4 + up).fill('#fc8bb0').rect(x + 1, y - 4 - up, 1, 1).fill('#fc8bb0').rect(x - 1, y - 5 - up, 1, 1).fill(PAL.outline);
+    }
   }
 
   private drawPlayer(): void {

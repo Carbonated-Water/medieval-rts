@@ -1,7 +1,8 @@
 import {
-  ACHIEVEMENTS, AUTO, BAIT, BITE_WAIT, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, GEAR, HAGGLE_PER_LEVEL, HOLDERS, MIN_BITE_WAIT, REEL_WINDOW,
-  REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, STRENGTH_PER_LEVEL, TIERS, TOO_STRONG_SHARE,
-  VARIANTS, VARIANT_ORDER, type AchStat, type AchievementDef, type FishDef, type GearKind, type SkillId, type Tier, type Variant,
+  ACHIEVEMENTS, AUTO, BAITS, BITE_WAIT, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, GEAR, HAGGLE_PER_LEVEL, HOLDERS, MAX_GROUND_WORMS,
+  MIN_BITE_WAIT, REEL_WINDOW, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, START_WORMS, STRENGTH_PER_LEVEL, TIERS,
+  TOO_STRONG_WEIGHT, VARIANTS, VARIANT_ORDER, WORMS_PER_PICK, WORM_SPAWN_SECONDS, WORM_SPOTS, baitById,
+  type AchStat, type AchievementDef, type BaitId, type FishDef, type GearKind, type SkillId, type Tier, type Variant,
 } from './data';
 
 export interface Catch {
@@ -21,7 +22,12 @@ export interface SaveData {
   rod: number;
   holders: number;
   auto: number;
-  bait: number;
+  /** Bait in the pouch, by kind. */
+  baits: Partial<Record<BaitId, number>>;
+  /** Bait the next cast uses. */
+  baitSel: BaitId;
+  /** Old saves: the bait gear level from before bait was used up (converted to stock on load). */
+  bait?: number;
   clothes: number;
   boots: number;
   /** Fishing skill level (named `skill` since the first save format). */
@@ -49,8 +55,8 @@ const RESULT_SECONDS = 2.2;
  */
 export type Line =
   | { type: 'idle' }
-  | { type: 'casting'; t: number }
-  | { type: 'waiting'; t: number; biteAt: number }
+  | { type: 'casting'; t: number; bait: BaitId }
+  | { type: 'waiting'; t: number; biteAt: number; bait: BaitId }
   | { type: 'bite'; t: number; window: number; fish: FishDef; tooStrong: boolean }
   | { type: 'result'; t: number; outcome: 'caught' | 'escaped' | 'snapped' | 'scared'; fish?: FishDef; caught?: Catch; strong?: boolean };
 
@@ -63,7 +69,12 @@ export class Game {
   rod = 0;
   holders = 0;
   auto = 0;
-  bait = 0;
+  baits: Partial<Record<BaitId, number>> = { worm: START_WORMS };
+  baitSel: BaitId = 'worm';
+  /** Worms showing on the bank: which hole (0..WORM_SPOTS-1), with an id so the scene can track them. */
+  groundWorms: { id: number; spot: number }[] = [];
+  private wormClock = 0;
+  private nextWormId = 1;
   clothes = 0;
   boots = 0;
   skill = SKILLS.fishing.start;
@@ -84,12 +95,17 @@ export class Game {
   private autoReact: (number | undefined)[] = [];
 
   constructor(save?: Partial<SaveData>, private rng: () => number = Math.random) {
-    if (save) Object.assign(this, { ...save, nextId: save.nextId ?? 1 });
+    if (save) {
+      const { bait: oldBait, ...rest } = save;
+      Object.assign(this, { ...rest, nextId: save.nextId ?? 1, baits: { ...(save.baits ?? { worm: START_WORMS }) } });
+      // Bought bait upgrades from before bait was used up become a stock of the matching bait.
+      if (!save.baits && oldBait) this.baits[BAITS[Math.min(oldBait, BAITS.length - 1)]!.id] = 25;
+    }
+    if (!BAITS.some((b) => b.id === this.baitSel)) this.baitSel = 'worm';
     this.rod = clamp(this.rod, 0, RODS.length - 1);
     this.holders = clamp(this.holders, 0, HOLDERS.length - 1);
     this.syncLines();
     this.auto = clamp(this.auto, 0, AUTO.length - 1);
-    this.bait = clamp(this.bait, 0, BAIT.length - 1);
     this.clothes = clamp(this.clothes, 0, CLOTHES.length - 1);
     this.boots = clamp(this.boots, 0, BOOTS.length - 1);
     for (const id of Object.keys(SKILLS) as SkillId[]) this.setLevel(id, clamp(this.level(id), SKILLS[id].start, SKILLS[id].max));
@@ -115,34 +131,41 @@ export class Game {
 
   // ---------- odds & effects ----------
 
-  /** How likely each landable fish is per bite (at a given fishing level, default yours). */
-  odds(skill = this.skill): { fish: FishDef; p: number }[] {
-    const weights = FISH.filter((f) => f.tier <= this.rodTier).map((f) => ({ fish: f, w: this.weight(f, skill) }));
-    const total = weights.reduce((s, x) => s + x.w, 0);
-    const landable = this.rodTier < 5 ? 1 - TOO_STRONG_SHARE : 1;
-    return weights.map(({ fish, w }) => ({ fish, p: (w / total) * landable }));
+  /** Fish that can bite: everything your rod lands, plus one tier above it. */
+  private biters(): FishDef[] {
+    return FISH.filter((f) => f.tier <= this.rodTier + 1);
   }
 
-  /** Share of bites per tier (landable tiers only), for the UI. */
-  tierOdds(skill = this.skill): Record<number, number> {
+  /**
+   * How likely each fish is per bite, with a given fishing level and bait
+   * (default: yours). `tooStrong` fish snap the line unless Strength holds.
+   */
+  odds(skill = this.skill, bait: BaitId = this.activeBait ?? 'worm'): { fish: FishDef; p: number; tooStrong: boolean }[] {
+    const weights = this.biters().map((f) => ({ fish: f, w: this.weight(f, skill, bait) }));
+    const total = weights.reduce((s, x) => s + x.w, 0);
+    return weights.map(({ fish, w }) => ({ fish, p: w / total, tooStrong: fish.tier > this.rodTier }));
+  }
+
+  /** Share of bites per tier you can land (too-strong tiers left out), for the UI. */
+  tierOdds(skill = this.skill, bait?: BaitId): Record<number, number> {
     const out: Record<number, number> = {};
-    for (const { fish, p } of this.odds(skill)) out[fish.tier] = (out[fish.tier] ?? 0) + p;
+    for (const { fish, p, tooStrong } of this.odds(skill, bait)) if (!tooStrong) out[fish.tier] = (out[fish.tier] ?? 0) + p;
     return out;
   }
 
-  /** Bite weight: tier base × rarity, boosted per tier step by fishing skill and bait. */
-  private weight(f: FishDef, skill = this.skill): number {
-    const perStep = (1 + SKILL_TIER_BONUS * (skill - 1)) * (1 + BAIT[this.bait]!.lure);
-    return TIERS[f.tier].weight * f.rarity * Math.pow(perStep, f.tier - 1);
+  /** Bite weight: tier base × rarity × step^(tier-1); fishing level and bait both add to the step. */
+  private weight(f: FishDef, skill: number, bait: BaitId): number {
+    const step = 1 + SKILL_TIER_BONUS * (skill - 1) + baitById(bait).lure;
+    // Too-strong fish bite at a steady share of your rod's top tier: levels and bait don't make snaps more common.
+    if (f.tier > this.rodTier) return TIERS[f.tier].weight * f.rarity * Math.pow(step, this.rodTier - 1) * TOO_STRONG_WEIGHT;
+    return TIERS[f.tier].weight * f.rarity * Math.pow(step, f.tier - 1);
   }
 
-  /** Which fish bites. Sometimes one a tier above the rod. */
-  rollFish(): { fish: FishDef; tooStrong: boolean } {
-    if (this.rodTier < 5 && this.rng() < TOO_STRONG_SHARE) {
-      const strong = FISH.filter((f) => f.tier === this.rodTier + 1);
-      return { fish: this.pick(strong, (f) => f.rarity), tooStrong: true };
-    }
-    return { fish: this.pick(FISH.filter((f) => f.tier <= this.rodTier), (f) => this.weight(f)), tooStrong: false };
+  /** Which fish bites (bait as cast). */
+  rollFish(bait: BaitId = 'worm'): { fish: FishDef; tooStrong: boolean } {
+    const list = this.biters();
+    const fish = this.pick(list, (f) => this.weight(f, this.skill, bait));
+    return { fish, tooStrong: fish.tier > this.rodTier };
   }
 
   private pick(list: FishDef[], w: (f: FishDef) => number): FishDef {
@@ -153,10 +176,64 @@ export class Game {
   }
 
   /** Bites come sooner with better bait and rods. */
-  biteWait(): number {
+  biteWait(bait: BaitId = 'worm'): number {
     const [lo, hi] = BITE_WAIT;
-    const wait = (lo + this.rng() * (hi - lo)) * BAIT[this.bait]!.wait * (1 - 0.06 * this.rod);
+    const wait = (lo + this.rng() * (hi - lo)) * baitById(bait).wait * (1 - 0.06 * this.rod);
     return Math.max(MIN_BITE_WAIT, wait);
+  }
+
+  // ---------- bait ----------
+
+  baitCount(id: BaitId): number {
+    return this.baits[id] ?? 0;
+  }
+
+  /** The bait the next cast will use: the selected one, or the next cheaper one you have. Null = none left. */
+  get activeBait(): BaitId | null {
+    const sel = BAITS.findIndex((b) => b.id === this.baitSel);
+    for (let i = sel; i >= 0; i--) if (this.baitCount(BAITS[i]!.id) > 0) return BAITS[i]!.id;
+    for (const b of BAITS) if (this.baitCount(b.id) > 0) return b.id;
+    return null;
+  }
+
+  selectBait(id: BaitId): void {
+    this.baitSel = id;
+  }
+
+  buyBait(id: BaitId, n: number): boolean {
+    const cost = baitById(id).price * n;
+    if (id === 'worm' || n <= 0 || this.money < cost) return false;
+    this.money -= cost;
+    this.baits[id] = this.baitCount(id) + n;
+    return true;
+  }
+
+  /** Take one bait for a cast. */
+  private takeBait(): BaitId | null {
+    const id = this.activeBait;
+    if (id) this.baits[id] = this.baitCount(id) - 1;
+    return id;
+  }
+
+  /** Dig up the worms in one hole on the bank. Returns how many you got. */
+  pickWorm(wormId: number): number {
+    const i = this.groundWorms.findIndex((w) => w.id === wormId);
+    if (i < 0) return 0;
+    this.groundWorms.splice(i, 1);
+    const [lo, hi] = WORMS_PER_PICK;
+    const n = lo + Math.floor(this.rng() * (hi - lo + 1));
+    this.baits.worm = this.baitCount('worm') + n;
+    return n;
+  }
+
+  private spawnWorms(dt: number): void {
+    if (this.groundWorms.length >= MAX_GROUND_WORMS) { this.wormClock = 0; return; }
+    this.wormClock += dt;
+    if (this.wormClock < WORM_SPAWN_SECONDS) return;
+    this.wormClock = 0;
+    const free = Array.from({ length: WORM_SPOTS }, (_, i) => i).filter((s) => !this.groundWorms.some((w) => w.spot === s));
+    const spot = free[Math.floor(this.rng() * free.length)];
+    if (spot !== undefined) this.groundWorms.push({ id: this.nextWormId++, spot });
   }
 
   reelWindow(): number {
@@ -191,7 +268,7 @@ export class Game {
     this.lines.length = this.lineCount;
   }
 
-  /** Throw every line that's out of the water (idle or showing a result). Staggered a little. */
+  /** Throw every line that's out of the water (idle or showing a result), one bait each. Staggered a little. */
   cast(): boolean {
     return this.castWhere((line) => line.type === 'idle' || line.type === 'result');
   }
@@ -200,7 +277,9 @@ export class Game {
     let n = 0;
     this.lines.forEach((line, i) => {
       if (!ready(line)) return;
-      this.lines[i] = { type: 'casting', t: -0.18 * n++ };
+      const bait = this.takeBait();
+      if (!bait) return; // out of bait: this line stays out of the water
+      this.lines[i] = { type: 'casting', t: -0.18 * n++, bait };
     });
     return n > 0;
   }
@@ -245,13 +324,14 @@ export class Game {
   }
 
   tick(dt: number): void {
+    this.spawnWorms(dt);
     this.lines.forEach((line, i) => {
       if (line.type === 'idle') return;
       line.t += dt;
       if (line.type === 'casting' && line.t >= CAST_SECONDS) {
-        this.lines[i] = { type: 'waiting', t: 0, biteAt: this.biteWait() };
+        this.lines[i] = { type: 'waiting', t: 0, biteAt: this.biteWait(line.bait), bait: line.bait };
       } else if (line.type === 'waiting' && line.t >= line.biteAt) {
-        const { fish, tooStrong } = this.rollFish();
+        const { fish, tooStrong } = this.rollFish(line.bait);
         this.lines[i] = { type: 'bite', t: 0, window: this.reelWindow(), fish, tooStrong };
       } else if (line.type === 'bite' && line.t >= line.window) {
         this.lines[i] = { type: 'result', t: 0, outcome: 'escaped', fish: line.fish };
@@ -404,7 +484,8 @@ export class Game {
 
   save(): SaveData {
     return {
-      money: this.money, rod: this.rod, holders: this.holders, auto: this.auto, bait: this.bait, clothes: this.clothes, boots: this.boots,
+      money: this.money, rod: this.rod, holders: this.holders, auto: this.auto, baits: { ...this.baits }, baitSel: this.baitSel,
+      clothes: this.clothes, boots: this.boots,
       skill: this.skill, reflexes: this.reflexes, haggling: this.haggling, strength: this.strength, dev: this.dev,
       bag: this.bag, journal: this.journal, nextId: this.nextId, earned: this.earned, claimed: this.claimed,
     };

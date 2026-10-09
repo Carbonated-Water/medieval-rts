@@ -1,6 +1,6 @@
 import {
-  ACHIEVEMENTS, AUTO, DEV_MULTIPLIER, FISH, GEAR, REFLEX_PER_LEVEL, SKILLS, STRENGTH_PER_LEVEL, HAGGLE_PER_LEVEL,
-  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type GearKind, type SkillId, type Tier,
+  ACHIEVEMENTS, AUTO, BAITS, DEV_MULTIPLIER, FISH, GEAR, REFLEX_PER_LEVEL, SKILLS, STRENGTH_PER_LEVEL, HAGGLE_PER_LEVEL,
+  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type GearKind, type SkillId, type Tier,
 } from './data';
 import { type Game } from './game';
 import { Notices, lineHtml, timeAgo } from './notify';
@@ -8,14 +8,16 @@ import { pixelFishIcon as fishIcon, pixelIcon, type IconName } from './pixelart'
 import type { Place } from './scene';
 
 /** One panel per job: the market sells fish, the tackle shop sells gear, the school trains skills. */
-export type Panel = 'market' | 'tackle' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
+export type Panel = 'market' | 'tackle' | 'baitshop' | 'pouch' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
 
 export type Action =
   | 'cast' | 'reel' | 'close' | 'reset' | 'toggleDev' | Panel
-  | 'sellAll' | `sellFish:${string}` | `buy:${GearKind}` | `train:${SkillId}` | 'claimAll' | `trophy:${string}`;
+  | 'sellAll' | `sellFish:${string}` | `buy:${GearKind}` | `train:${SkillId}` | 'claimAll' | `trophy:${string}`
+  | `bait:${BaitId}` | `buyBait:${BaitId}:${number}`;
 
-const GEAR_ORDER: GearKind[] = ['rod', 'holders', 'auto', 'bait', 'clothes', 'boots'];
-export const GEAR_ICON: Record<GearKind, IconName> = { rod: 'rod', holders: 'holder', auto: 'auto', bait: 'bait', clothes: 'shirt', boots: 'boot' };
+const GEAR_ORDER: GearKind[] = ['rod', 'holders', 'auto', 'clothes', 'boots'];
+export const GEAR_ICON: Record<GearKind, IconName> = { rod: 'rod', holders: 'holder', auto: 'auto', clothes: 'shirt', boots: 'boot' };
+export const BAIT_ICON: Record<BaitId, IconName> = { worm: 'bait', cricket: 'cricket', shiner: 'shiner', leech: 'leech', glow: 'glow', gold: 'gold' };
 export const SKILL_ICON: Record<SkillId, IconName> = { fishing: 'hook', reflexes: 'bolt', haggling: 'bag', strength: 'fist' };
 export const ACH_ICON: Record<AchStat, IconName> = {
   catches: 'fish', species: 'book', tier: 'trophy', giant: 'star', golden: 'star', shiny: 'star', variants: 'star',
@@ -78,19 +80,26 @@ export class UI {
     if (place === 'market') return `${bag}<button class="btn big" data-act="market">SELL FISH</button>`;
     if (place === 'tackle') return `${bag}<button class="btn big" data-act="tackle">BUY GEAR</button>`;
     if (place === 'school') return `${bag}<button class="btn big" data-act="training">TRAIN</button>`;
+    if (place === 'bait') return `${bag}<button class="btn big" data-act="baitshop">BUY BAIT</button>`;
     if (place !== 'dock') return `${bag}<div class="plaque hint">Tap the river to fish</div>`;
+    const active = game.activeBait;
+    const pouch = `<button class="slot pouch" data-act="pouch" aria-label="bait">${icon(BAIT_ICON[active ?? game.baitSel])}<i class="badge count">${active ? game.baitCount(active) : 0}</i></button>`;
+    const row = (btn: string) => `${bag}<div class="dockrow">${pouch}${btn}</div>`;
     const biting = game.lines.filter((l) => l.type === 'bite').length;
     const out = game.lines.filter((l) => l.type === 'idle' || l.type === 'result').length;
-    if (biting) return `${bag}<button class="btn big red bite" data-act="reel">REEL!${biting > 1 ? ` x${biting}` : ''}</button>`;
-    if (game.auto) return `${bag}<button class="btn big plain" data-act="cast">${icon('auto')}${AUTO[game.auto]!.name.toUpperCase()}</button>`;
-    if (out) return `${bag}<button class="btn big" data-act="cast">CAST${out > 1 ? ` ${out}` : ''}</button>`;
-    return `${bag}<button class="btn big plain" data-act="reel">WAIT...</button>`;
+    if (biting) return row(`<button class="btn big red bite" data-act="reel">REEL!${biting > 1 ? ` x${biting}` : ''}</button>`);
+    if (!active && out === game.lineCount) return `${bag}<div class="plaque hint">Out of bait: dig worms on the bank</div>${pouch}`;
+    if (game.auto) return row(`<button class="btn big plain" data-act="cast">${icon('auto')}${AUTO[game.auto]!.name.toUpperCase()}</button>`);
+    if (out && active) return row(`<button class="btn big" data-act="cast">CAST${out > 1 ? ` ${out}` : ''}</button>`);
+    return row(`<button class="btn big plain" data-act="reel">WAIT...</button>`);
   }
 
   private panelHtml(panel: Panel, game: Game): string {
     const [title, body] =
       panel === 'market' ? ['Fish Market', this.marketHtml(game)]
         : panel === 'tackle' ? ['Tackle Shop', this.tackleHtml(game)]
+          : panel === 'baitshop' ? ['Bait Shop', this.baitShopHtml(game)]
+          : panel === 'pouch' ? ['Bait Pouch', this.pouchHtml(game)]
           : panel === 'training' ? ['Fishing School', this.schoolHtml(game)]
             : panel === 'journal' ? [`Journal ${Object.keys(game.journal).length}/${FISH.length}`, this.journalHtml(game)]
               : panel === 'trophies' ? [`Trophies ${game.claimed.length}/${ACHIEVEMENTS.length}`, this.trophiesHtml(game)]
@@ -130,6 +139,43 @@ export class UI {
         <b>${next ? next.name : GEAR[kind].levels[lvl]!.name}</b>
         <div class="sub">${level(lvl + 1, max)}<small>${next ? short(next.blurb) : 'Fully upgraded'}</small></div></div>${btn}</div>`;
     }).join('');
+  }
+
+  /** For a bait: chance the bite is your rod's best tier, and chance it's too strong (snaps). */
+  private baitOdds(game: Game, bait: BaitId): { top: number; snap: number } {
+    let top = 0, snap = 0;
+    for (const o of game.odds(game.skill, bait)) {
+      if (o.tooStrong) snap += o.p;
+      else if (o.fish.tier === game.rodTier) top += o.p;
+    }
+    return { top, snap };
+  }
+
+  /** Sells bait, nothing else. Each row: what you carry, the odds it gives with your rod and level, buy 1 or 10. */
+  private baitShopHtml(game: Game): string {
+    const best = TIERS[game.rodTier as Tier].name;
+    return BAITS.filter((b) => b.price > 0).map((b) => {
+      const { top } = this.baitOdds(game, b.id);
+      const buy = (n: number) => `<button class="btn" data-act="buyBait:${b.id}:${n}" ${game.money < b.price * n ? 'disabled' : ''}>+${n}</button>`;
+      return `<div class="row"><div class="slot">${icon(BAIT_ICON[b.id])}<i class="badge count">${game.baitCount(b.id)}</i></div><div class="meta">
+        <b>${b.name}</b><div class="sub">${coin(b.price, 1)}<small>${best} ${pct(top)}</small></div></div>${buy(1)}${buy(10)}</div>`;
+    }).join('') + '<p class="note">Bait is used up: one per line, every cast. Worms are free on the bank.</p>';
+  }
+
+  /** Choose the bait for the next casts, nothing else. */
+  private pouchHtml(game: Game): string {
+    const active = game.activeBait;
+    const cells = BAITS.map((b) => {
+      const n = game.baitCount(b.id);
+      return `<div class="cell"><button class="slot ${n ? '' : 'dim'} ${b.id === game.baitSel ? 'sel' : ''}" data-act="bait:${b.id}" title="${b.name}">
+        ${icon(BAIT_ICON[b.id])}<i class="n">x${n}</i></button><span class="small">${b.name}</span></div>`;
+    }).join('');
+    const use = active ?? game.baitSel;
+    const { top, snap } = this.baitOdds(game, use);
+    const name = BAITS.find((b) => b.id === use)!.name;
+    const status = active ? `${TIERS[game.rodTier as Tier].name} ${pct(top)} · snap ${pct(snap)}` : 'Out of bait';
+    return `<div class="grid three">${cells}</div>
+      <div class="row detail"><div class="slot">${icon(BAIT_ICON[use])}</div><div class="meta"><b>Next: ${name}</b><div class="sub"><small>${status}</small></div></div></div>`;
   }
 
   /** Raises the fisher's skills, nothing else. */

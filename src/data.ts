@@ -66,14 +66,32 @@ export const RODS: RodDef[] = [
 
 // ---------- gear: each line is bought in order, one level at a time ----------
 
-export interface BaitDef { name: string; price: number; blurb: string; /** multiplies bite wait */ wait: number; /** extra rare-fish weight per tier step */ lure: number }
-export const BAIT: BaitDef[] = [
-  { name: 'Bread Crumbs', price: 0, blurb: 'Basic bait', wait: 1, lure: 0 },
-  { name: 'Earthworms', price: 60, blurb: 'Bites +15%', wait: 0.85, lure: 0 },
-  { name: 'Crickets', price: 450, blurb: 'Bites +30%', wait: 0.7, lure: 0.05 },
-  { name: 'Shiny Lure', price: 3000, blurb: 'Bites +45%', wait: 0.55, lure: 0.12 },
-  { name: 'Golden Bait', price: 15000, blurb: 'Bites +60%', wait: 0.4, lure: 0.25 },
+// ---------- bait: used up, one per line per cast ----------
+
+export type BaitId = 'worm' | 'cricket' | 'shiner' | 'leech' | 'glow' | 'gold';
+/**
+ * Pricier bait pulls rarer fish (`lure` is added to every tier step, like
+ * Fishing levels) and bites sooner (`wait` multiplies the wait). Still a
+ * roll: a Glow Lure can bring up a Minnow. Worms are free but must be found.
+ */
+export interface BaitDef { id: BaitId; name: string; price: number; wait: number; lure: number }
+export const BAITS: BaitDef[] = [
+  { id: 'worm', name: 'Ground Worm', price: 0, wait: 1, lure: 0 },
+  { id: 'cricket', name: 'Cricket', price: 1, wait: 0.8, lure: 0.3 },
+  { id: 'shiner', name: 'Shiner', price: 5, wait: 0.7, lure: 0.7 },
+  { id: 'leech', name: 'Leech', price: 25, wait: 0.6, lure: 1.2 },
+  { id: 'glow', name: 'Glow Lure', price: 150, wait: 0.5, lure: 2 },
+  { id: 'gold', name: 'Golden Lure', price: 400, wait: 0.4, lure: 3.2 },
 ];
+export const baitById = (id: BaitId): BaitDef => BAITS.find((b) => b.id === id)!;
+/** Worms you start with. */
+export const START_WORMS = 10;
+/** Worm holes along the bank; at most MAX_GROUND_WORMS show at once, one more every WORM_SPAWN_SECONDS. */
+export const WORM_SPOTS = 6;
+export const MAX_GROUND_WORMS = 3;
+export const WORM_SPAWN_SECONDS = 9;
+/** Worms you get from one hole: random in [min, max]. */
+export const WORMS_PER_PICK: [number, number] = [2, 4];
 
 export interface ClothesDef { name: string; price: number; blurb: string; /** catches are this much heavier (and pricier) */ size: number; shirt: string; trousers: string }
 export const CLOTHES: ClothesDef[] = [
@@ -117,12 +135,11 @@ export const AUTO: AutoDef[] = [
   { name: 'Autofisher IV', price: 60000, blurb: 'Never sleeps', recast: 0.25, react: [0.25, 0.55] },
 ];
 
-export type GearKind = 'rod' | 'holders' | 'auto' | 'bait' | 'clothes' | 'boots';
+export type GearKind = 'rod' | 'holders' | 'auto' | 'clothes' | 'boots';
 export const GEAR: Record<GearKind, { title: string; levels: { name: string; price: number; blurb: string }[] }> = {
   rod: { title: 'Rod', levels: RODS },
   holders: { title: 'Rod Holders', levels: HOLDERS },
   auto: { title: 'Autofisher', levels: AUTO },
-  bait: { title: 'Bait', levels: BAIT },
   clothes: { title: 'Clothes', levels: CLOTHES },
   boots: { title: 'Boots', levels: BOOTS },
 };
@@ -145,7 +162,7 @@ export type SkillId = 'fishing' | 'reflexes' | 'haggling' | 'strength';
 export interface SkillDef { name: string; max: number; start: number; blurb: string; cost: (level: number) => number }
 const curve = (base: number, growth: number) => (level: number) => Math.round((base * Math.pow(growth, level)) / 5) * 5;
 export const SKILLS: Record<SkillId, SkillDef> = {
-  fishing: { name: 'Fishing', max: 20, start: 1, blurb: 'Rarer fish bite more often.', cost: (l) => Math.round((30 * Math.pow(1.4, l - 1)) / 5) * 5 },
+  fishing: { name: 'Fishing', max: 25, start: 1, blurb: 'Rarer fish bite more often.', cost: (l) => Math.round((30 * Math.pow(1.4, l - 1)) / 5) * 5 },
   reflexes: { name: 'Reflexes', max: 10, start: 0, blurb: 'More time to hit REEL!', cost: curve(40, 1.55) },
   haggling: { name: 'Haggling', max: 10, start: 0, blurb: 'Sell fish for 5% more per level.', cost: curve(60, 1.6) },
   strength: { name: 'Strength', max: 10, start: 0, blurb: 'Chance to land a fish too strong for your rod.', cost: curve(120, 1.6) },
@@ -154,7 +171,7 @@ export const SKILLS: Record<SkillId, SkillDef> = {
 export const SKILL_MAX = SKILLS.fishing.max;
 /** Cost to go from fishing level `level` to `level + 1`. */
 export const skillCost = SKILLS.fishing.cost;
-/** Per fishing level above 1, each tier above Common gets this much more likely (multiplicative per tier step). */
+/** Per fishing level above 1, added to every tier step (with bait's lure): step^(tier-1) scales each tier's bite weight. */
 export const SKILL_TIER_BONUS = 0.14;
 /** Seconds of extra reel window per Reflexes level. */
 export const REFLEX_PER_LEVEL = 0.06;
@@ -163,8 +180,8 @@ export const HAGGLE_PER_LEVEL = 0.05;
 /** Chance per Strength level to land a too-strong fish instead of snapping. */
 export const STRENGTH_PER_LEVEL = 0.04;
 
-/** Chance a fish one tier above your rod bites (and snaps the line unless Strength lands it). */
-export const TOO_STRONG_SHARE = 0.12;
+/** Fish can bite up to one tier above your rod; those bite at this fraction of their normal weight (and snap the line unless Strength lands them). */
+export const TOO_STRONG_WEIGHT = 0.4;
 
 /** Seconds to wait for a bite: random in [min, max], shortened by bait and rod. */
 export const BITE_WAIT: [number, number] = [2.2, 6.5];

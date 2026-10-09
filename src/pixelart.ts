@@ -61,7 +61,7 @@ export function shade(hex: string, k: number): string {
 // ---------- 3×5 pixel font (only the letters the signs use) ----------
 
 const GLYPHS: Record<string, string[]> = {
-  A: ['.#.', '#.#', '###', '#.#', '#.#'], C: ['.##', '#..', '#..', '#..', '.##'], E: ['###', '#..', '##.', '#..', '###'],
+  A: ['.#.', '#.#', '###', '#.#', '#.#'], B: ['##.', '#.#', '##.', '#.#', '##.'], C: ['.##', '#..', '#..', '#..', '.##'], E: ['###', '#..', '##.', '#..', '###'],
   F: ['###', '#..', '##.', '#..', '#..'], H: ['#.#', '#.#', '###', '#.#', '#.#'], I: ['###', '.#.', '.#.', '.#.', '###'],
   K: ['#.#', '#.#', '##.', '#.#', '#.#'], L: ['#..', '#..', '#..', '#..', '###'], M: ['#...#', '##.##', '#.#.#', '#...#', '#...#'],
   O: ['.#.', '#.#', '#.#', '#.#', '.#.'], R: ['##.', '#.#', '##.', '#.#', '#.#'], S: ['.##', '#..', '.#.', '..#', '##.'],
@@ -247,6 +247,29 @@ export function schoolCanvas(): HTMLCanvasElement {
   }));
 }
 
+/** The Bait Shop: a small shack with a red roof, a worm barrel and a sign. */
+export function baitShopCanvas(): HTMLCanvasElement {
+  const W = 38, H = 38;
+  return outline(makeCanvas(W, H, (ctx) => {
+    const wallTop = 16;
+    // Plank walls and a counter window.
+    rect(ctx, 5, wallTop, W - 10, H - wallTop - 1, PAL.sand);
+    for (let x = 8; x < W - 6; x += 4) rect(ctx, x, wallTop, 1, H - wallTop - 1, PAL.sandMid);
+    rect(ctx, 9, wallTop + 5, W - 18, 7, PAL.dirtDeep);
+    rect(ctx, 8, wallTop + 12, W - 16, 2, PAL.dirt);
+    // Flat red roof with a striped edge.
+    rect(ctx, 2, 10, W - 4, 6, PAL.red);
+    for (let x = 2; x < W - 2; x += 4) rect(ctx, x, 14, 2, 2, PAL.redLight);
+    rect(ctx, 2, 10, W - 4, 1, PAL.redLight);
+    sign(ctx, W / 2, 1, 'BAIT');
+    // A barrel of worms by the door.
+    rect(ctx, W - 12, H - 9, 8, 8, PAL.dirtDark);
+    rect(ctx, W - 12, H - 6, 8, 1, PAL.dirtDeep);
+    rect(ctx, W - 11, H - 10, 6, 1, '#fc8bb0');
+    px(ctx, W - 9, H - 11, '#fc8bb0');
+  }));
+}
+
 /** One stretch of dock planks (tiles vertically). */
 export function plankCanvas(w: number): HTMLCanvasElement {
   return makeCanvas(w, 4, (ctx) => {
@@ -304,7 +327,7 @@ export function pixelFishIcon(f: FishDef, silhouette = false, w = 96, h = 56, va
 
 const ICON_COLORS: Record<string, string> = {
   o: PAL.outline, y: PAL.gold, Y: PAL.goldLight, b: PAL.dirtDark, B: PAL.dirt, w: PAL.white, k: PAL.greyMid, K: PAL.greyDark,
-  r: PAL.red, p: '#fc8bb0', u: PAL.waterDeep, U: PAL.waterLight, s: PAL.skin, g: PAL.green, G: PAL.greenLight,
+  r: PAL.red, p: '#fc8bb0', v: '#7a4a8a', u: PAL.waterDeep, U: PAL.waterLight, s: PAL.skin, g: PAL.green, G: PAL.greenLight,
 };
 const ICON_ROWS = {
   coin: ['..oooo..', '.oYYYyo.', 'oYYyyyyo', 'oYyYyyyo', 'oYyYyyyo', 'oyyyyyyo', '.oyyyyo.', '..oooo..'],
@@ -325,6 +348,11 @@ const ICON_ROWS = {
   close: ['oo...oo', 'owo.owo', '.owowo.', '..owo..', '.owowo.', 'owo.owo', 'oo...oo'],
   check: ['......oo', '.....ogo', 'oo..ogo.', 'ogoogo..', '.oggo...', '..oo....'],
   star: ['....o....', '...oyo...', 'oooyYyooo', 'oyyYYYyyo', '.oyyyyyo.', '..oyyyo..', '.oyyoyyo.', '.oyo.oyo.', '.oo...oo.'],
+  cricket: ['..o....o..', '...o..o...', '.ooooooo..', 'oGGGgGGGoo', 'oggggggGGo', '.oooooooo.', '.o.o..o.o.'],
+  shiner: ['...ooo....', 'o.okkkoo..', 'ookkkkkwo.', 'okwwwwkkoo', 'oo.ooooo..'],
+  leech: ['.oo.......', 'ovvoo.oo..', 'ovvvvovvo.', '.oovvvvvvo', '...oooooo.'],
+  glow: ['...o.....', '..oUo....', '.oUUUo...', 'oUUwUUo..', 'oUUUUUo..', '.oUuUo...', '..ouo....', '...o.....', '..ooo....', '..o.o....'],
+  gold: ['...o.....', '..oYo....', '.oYYyo...', 'oYYwyyo..', 'oYyyyyo..', '.oyyyo...', '..oyo....', '...o.....', '..ooo....', '..o.o....'],
   fish: ['...ooo....', 'o.oUUUo...', 'oouUUUUo..', 'ouuuuuowo.', 'oouuuuuoo.', 'o.ouuuo...', '...ooo....'],
 };
 export type IconName = keyof typeof ICON_ROWS;

@@ -20,12 +20,20 @@ at, the upgrade system and an interface. Wanted 2D graphics.
   (Uncommon) → Fiberglass $900 (Rare) → Carbon $5,000 (Epic) → Mythril
   $25,000 (Legendary). A rod lands fish up to its tier. 12% of bites are a
   fish one tier above the rod, which snaps the line ("you need a …").
-- **More gear lines** (5 levels each, bought in order; the market only
-  shows what you have and the next level): **Bait** (bites up to 60%
-  sooner + a small rare-fish boost), **Clothes** (fish up to 55% bigger
-  and pricier; changes the fisher's outfit), **Boots** (walk up to 110%
-  faster; shown on the fisher).
-- **Skills**, trained with money: **Fishing 1–20** (each level multiplies
+- **More gear lines** (bought in order; the Tackle Shop only shows the next
+  level): **Clothes** (fish up to 55% bigger and pricier; changes the
+  fisher's outfit), **Boots** (walk up to 110% faster; shown on the fisher).
+- **Bait is used up** (Bait Shop, 2026-10-09): one bait per line per cast.
+  Ground Worm (free: worms poke out of holes in the dirt bank, max 3, one
+  every 9 s, 2-4 per hole; walk past or tap to dig), Cricket $1, Shiner $5,
+  Leech $25, Glow Lure $150, Golden Lure $400. Pricier bait adds to every
+  tier step (like Fishing levels) and bites sooner, but is still a roll.
+  Fish can bite up to one tier above your rod (at 0.4x weight, steady: not
+  raised by levels or bait) and snap the line unless Strength holds. Out of
+  bait = can't cast (autofisher stops). The pouch slot by CAST shows the
+  bait in use and how many are left; tap it to choose. Each rod has a
+  sweet-spot bait and a gamble one step above it.
+- **Skills**, trained with money: **Fishing 1–25** (each level multiplies
   every tier's bite weight by (1 + 0.14·(level−1))^(tier−1)), **Reflexes
   0–10** (+0.06 s reel window each), **Haggling 0–10** (+5% sale price
   each), **Strength 0–10** (+4% chance each to land a fish one tier above
