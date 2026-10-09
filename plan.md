@@ -171,6 +171,8 @@ arrows walk, Space casts / reels, E opens the building you stand at.
   mythril +110%; a Net Boat at the Coast x2.4 with tier 1, at Open Sea x5 with all five.
 - Rule (tested): every tree fish is worth more than every original fish of
   its tier on its side (river fish vs river; sea fish vs every boat).
+- Achievements: a FISH TREE trophy tab (20: unlocks, full tiers, new river
+  catches, new sea landings, retirements); boats keep a sea log (seaSeen).
 - Journal: a tab per tier (4 originals + 5 tree fish, locked until unlocked).
 - The town (seafood empire) was built and scrapped the same day: too linear.
 

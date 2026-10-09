@@ -161,6 +161,7 @@ function onAction(a: Action): void {
     if (game.buyBait(id, Number(n))) note.banner(pixelIcon(BAIT_ICON[id], 3), 'BOUGHT', `${n} x ${baitById(id).name}`, 'plain');
   }
   else if (a === 'claimAll') { const paid = game.claim(); if (paid) note.banner(pixelIcon('coin'), 'COLLECTED', `$${paid.toLocaleString()}`); }
+  else if (a.startsWith('achTab:')) { ui.achTab = a.slice(7) as 'base' | 'tree'; ui.pick = null; }
   else if (a.startsWith('trophy:')) {
     // Tap a trophy: show it; if it's ready, collect it too.
     ui.pick = a.slice(7);

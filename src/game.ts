@@ -60,6 +60,8 @@ export interface SaveData {
   pearls?: number;
   fishTree?: string[];
   retirements?: number;
+  /** Sea species your boats have ever landed (the sea's journal); survives retiring. */
+  seaSeen?: string[];
   money: number;
   rod: number;
   holders: number;
@@ -162,6 +164,7 @@ export class Game {
   pearls = 0;
   fishTree: string[] = [];
   retirements = 0;
+  seaSeen: string[] = [];
   /** Value made so far this session, by source (fish caught at their price, boat hauls). For the $/sec readout; not saved. */
   made = { you: 0, hands: 0, boats: 0 };
   /** One entry per line in the water (length = lineCount). */
@@ -300,7 +303,7 @@ export class Game {
     const gain = this.pearlsOnRetire();
     if (gain < 1) return null;
     return {
-      pearls: this.pearls + gain, fishTree: [...this.fishTree], retirements: this.retirements + 1,
+      pearls: this.pearls + gain, fishTree: [...this.fishTree], retirements: this.retirements + 1, seaSeen: [...this.seaSeen],
       journal: this.journal, claimed: [...this.claimed], dev: this.dev,
     };
   }
@@ -865,6 +868,7 @@ export class Game {
       b.event = 'sighting';
       add(pool[pool.length - 1]!, 3);
     }
+    for (const id of out.keys()) if ((out.get(id)?.n ?? 0) > 0 && !this.seaSeen.includes(id)) this.seaSeen.push(id);
     return pool.filter((x) => (out.get(x.id)?.n ?? 0) > 0).map((x) => out.get(x.id)!);
   }
 
@@ -1137,6 +1141,13 @@ export class Game {
       case 'lines': return this.lineCount;
       case 'auto': return this.auto;
       case 'fishing': return this.skill;
+      case 'treeUnlocked': return this.fishTree.length;
+      case 'treeTiers': return ([1, 2, 3, 4, 5] as Tier[]).filter((t) => TREE_FISH.filter((f) => f.tier === t).every((f) => this.fishTree.includes(f.id))).length;
+      case 'treeRiver': return TREE_FISH.filter((f) => f.side === 'river' && this.journal[f.id]).length;
+      case 'treeSea': return TREE_FISH.filter((f) => f.side === 'sea' && this.seaSeen.includes(f.id)).length;
+      case 'treeRiverTier': return Math.max(0, ...TREE_FISH.filter((f) => f.side === 'river' && this.journal[f.id]).map((f) => f.tier));
+      case 'treeSeaTier': return Math.max(0, ...TREE_FISH.filter((f) => f.side === 'sea' && this.seaSeen.includes(f.id)).map((f) => f.tier));
+      case 'retired': return this.retirements;
     }
   }
 
@@ -1170,7 +1181,7 @@ export class Game {
       company: this.company, letters: this.letters, boats: this.boats,
       berths: this.berths, harbor: { ...this.harbor }, warehouse: this.warehouse, savedAt: Date.now(),
       pierSections: this.pierSections, managerBudget: this.managerBudget,
-      pearls: this.pearls, fishTree: this.fishTree, retirements: this.retirements,
+      pearls: this.pearls, fishTree: this.fishTree, retirements: this.retirements, seaSeen: this.seaSeen,
       hands: this.hands.map((h) => ({ ...h, line: { type: 'idle' as const }, react: null })), crate: this.crate,
     };
   }

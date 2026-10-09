@@ -4,6 +4,14 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Fish Tree achievements
+  WHAT: 20 achievements on a second trophy tab (RIVER LIFE / FISH TREE):
+        unlocks (1/10/25/50), whole tiers (1/3/5), tree river species caught
+        (1/10/25, an Epic, the Legendary), tree sea species landed by boats
+        (1/10/25, an Epic, a Legendary), retirements (1/3/10). Boats now
+        record the sea species they land (seaSeen, kept on retire).
+  WHY:  The user asked for achievements for the new fish.
+
 2026-10-09  Prestige: Retire for Pearls, the Fish Tree
   WHAT: Retire once a run earns $1M: Pearls = sqrt(earned / 1M); keeps
         Pearls, Fish Tree, journal, achievements. Fish Tree: 50 new fish in

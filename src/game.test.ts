@@ -896,6 +896,24 @@ describe('prestige: Pearls and the Fish Tree', () => {
     }
   });
 
+  it('Fish Tree achievements track unlocks, full tiers, new catches, boat landings and retirements', () => {
+    const tier1 = TREE_FISH.filter((x) => x.tier === 1).map((x) => x.id);
+    const g = new Game({ fishTree: tier1, journal: { sunfish: { count: 1, bestKg: 0.3 }, mahseer: { count: 1, bestKg: 40 } }, retirements: 3 }, rng(10));
+    expect(g.stat('treeUnlocked')).toBe(10);
+    expect(g.stat('treeTiers')).toBe(1);
+    expect(g.stat('treeRiver')).toBe(2);
+    expect(g.stat('treeRiverTier')).toBe(5);
+    expect(g.stat('retired')).toBe(3);
+    expect(g.achieved(ACHIEVEMENTS.find((a) => a.id === 'riverLegend')!)).toBe(true);
+    expect(g.achieved(ACHIEVEMENTS.find((a) => a.id === 'retire10')!)).toBe(false);
+    // Boats landing tree sea fish fill the sea's journal.
+    const b = new Game({ money: 1e9, earned: 1e7, fishTree: ['sardine', 'sprat'] }, rng(11));
+    b.buyCompany(); b.buyBoat('net');
+    for (let k = 0; k < 20 && b.stat('treeSea') < 1; k++) { b.sendBoat(0); tick(b, b.boats[0]!.trip!.dur + 0.1); b.collectHaul(0); }
+    expect(b.stat('treeSea')).toBeGreaterThan(0);
+    expect(new Game(b.retire()!).seaSeen).toEqual(b.seaSeen);
+  });
+
   it('round-trips prestige through save data', () => {
     const g = new Game({ pearls: 7, fishTree: ['sunfish', 'sardine'], retirements: 2 });
     const again = new Game(JSON.parse(JSON.stringify(g.save())));

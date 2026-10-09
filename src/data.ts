@@ -438,8 +438,10 @@ export const handSkillCost = (l: number) => Math.round((60 * Math.pow(1.35, l - 
 // ---------- achievements (one-time cash reward, claimed in the trophy panel) ----------
 
 /** What an achievement measures; Game.stat() computes each from saved data. */
-export type AchStat = 'catches' | 'species' | 'tier' | 'giant' | 'golden' | 'shiny' | 'variants' | 'earned' | 'lines' | 'auto' | 'fishing';
-export interface AchievementDef { id: string; name: string; desc: string; stat: AchStat; goal: number; reward: number }
+export type AchStat = 'catches' | 'species' | 'tier' | 'giant' | 'golden' | 'shiny' | 'variants' | 'earned' | 'lines' | 'auto' | 'fishing'
+  | 'treeUnlocked' | 'treeTiers' | 'treeRiver' | 'treeSea' | 'treeRiverTier' | 'treeSeaTier' | 'retired';
+/** `page`: the trophy tab it sits on (the originals, or the Fish Tree's). */
+export interface AchievementDef { id: string; name: string; desc: string; stat: AchStat; goal: number; reward: number; page?: 'tree' }
 
 export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'catch1', name: 'First Catch', desc: 'Catch a fish', stat: 'catches', goal: 1, reward: 10 },
@@ -462,4 +464,25 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'lines4', name: 'Four Lines Out', desc: 'Fish with 4 lines', stat: 'lines', goal: 4, reward: 2000 },
   { id: 'auto', name: 'Hands Free', desc: 'Buy an Autofisher', stat: 'auto', goal: 1, reward: 150 },
   { id: 'fishing10', name: 'Graduate', desc: 'Reach Fishing 10', stat: 'fishing', goal: 10, reward: 1000 },
+  // The Fish Tree's own page.
+  { id: 'tree1', name: 'New Waters', desc: 'Unlock a tree fish', stat: 'treeUnlocked', goal: 1, reward: 5000, page: 'tree' },
+  { id: 'tree10', name: 'Pearl Diver', desc: 'Unlock 10 tree fish', stat: 'treeUnlocked', goal: 10, reward: 100000, page: 'tree' },
+  { id: 'tree25', name: 'Half the Map', desc: 'Unlock 25 tree fish', stat: 'treeUnlocked', goal: 25, reward: 2000000, page: 'tree' },
+  { id: 'tree50', name: 'Every Fish There Is', desc: 'Unlock all 50 tree fish', stat: 'treeUnlocked', goal: 50, reward: 50000000, page: 'tree' },
+  { id: 'tiers1', name: 'Tier Complete', desc: 'Unlock a whole tier', stat: 'treeTiers', goal: 1, reward: 50000, page: 'tree' },
+  { id: 'tiers3', name: 'Three Tiers Deep', desc: 'Unlock 3 whole tiers', stat: 'treeTiers', goal: 3, reward: 1000000, page: 'tree' },
+  { id: 'tiers5', name: 'The Whole Tree', desc: 'Unlock all 5 tiers', stat: 'treeTiers', goal: 5, reward: 25000000, page: 'tree' },
+  { id: 'river1', name: 'A New Kind', desc: 'Catch a tree river fish', stat: 'treeRiver', goal: 1, reward: 2000, page: 'tree' },
+  { id: 'river10', name: 'River Regular', desc: 'Catch 10 tree river fish', stat: 'treeRiver', goal: 10, reward: 200000, page: 'tree' },
+  { id: 'river25', name: 'River Scholar', desc: 'Catch all 25 tree river fish', stat: 'treeRiver', goal: 25, reward: 10000000, page: 'tree' },
+  { id: 'riverEpic', name: 'River Monster', desc: 'Catch an Epic tree river fish', stat: 'treeRiverTier', goal: 4, reward: 300000, page: 'tree' },
+  { id: 'riverLegend', name: 'River God', desc: 'Catch a Legendary tree river fish', stat: 'treeRiverTier', goal: 5, reward: 5000000, page: 'tree' },
+  { id: 'sea1', name: 'Strange Nets', desc: 'Boats land a tree sea fish', stat: 'treeSea', goal: 1, reward: 10000, page: 'tree' },
+  { id: 'sea10', name: 'Deep Catalogue', desc: 'Boats land 10 tree sea fish', stat: 'treeSea', goal: 10, reward: 500000, page: 'tree' },
+  { id: 'sea25', name: 'Ocean Scholar', desc: 'Boats land all 25 tree sea fish', stat: 'treeSea', goal: 25, reward: 20000000, page: 'tree' },
+  { id: 'seaEpic', name: 'Sea Monster', desc: 'Boats land an Epic tree sea fish', stat: 'treeSeaTier', goal: 4, reward: 500000, page: 'tree' },
+  { id: 'seaLegend', name: 'Kraken!', desc: 'Boats land a Legendary sea fish', stat: 'treeSeaTier', goal: 5, reward: 8000000, page: 'tree' },
+  { id: 'retire1', name: 'Passing the Rod', desc: 'Retire once', stat: 'retired', goal: 1, reward: 25000, page: 'tree' },
+  { id: 'retire3', name: 'Family Business', desc: 'Retire 3 times', stat: 'retired', goal: 3, reward: 500000, page: 'tree' },
+  { id: 'retire10', name: 'Dynasty', desc: 'Retire 10 times', stat: 'retired', goal: 10, reward: 10000000, page: 'tree' },
 ];

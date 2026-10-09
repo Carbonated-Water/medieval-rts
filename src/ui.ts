@@ -14,7 +14,7 @@ export type Panel = 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'led
 
 export type Action =
   | 'cast' | 'reel' | 'close' | 'reset' | 'toggleDev' | Panel
-  | `treeTier:${number}` | `treeSel:${string}` | `unlock:${string}` | 'doRetire' | `journalTier:${number}`
+  | `achTab:${'base' | 'tree'}` | `treeTier:${number}` | `treeSel:${string}` | `unlock:${string}` | 'doRetire' | `journalTier:${number}`
   | 'sellAll' | `sellFish:${string}` | `buy:${GearKind}` | `train:${SkillId}` | 'claimAll' | `trophy:${string}`
   | `bait:${BaitId}` | `buyBait:${BaitId}:${number}`
   | 'buyCompany' | `buyBoat:${BoatType}` | `boat:${number}` | `send:${number}` | `collect:${number}` | `crew:${number}` | `net:${number}`
@@ -34,6 +34,7 @@ export const SKILL_ICON: Record<SkillId, IconName> = { fishing: 'hook', reflexes
 export const ACH_ICON: Record<AchStat, IconName> = {
   catches: 'fish', species: 'book', tier: 'trophy', giant: 'star', golden: 'star', shiny: 'star', variants: 'star',
   earned: 'coin', lines: 'holder', auto: 'auto', fishing: 'hook',
+  treeUnlocked: 'pearl', treeTiers: 'star', treeRiver: 'rod', treeSea: 'boat', treeRiverTier: 'trophy', treeSeaTier: 'anchor', retired: 'letter',
 };
 
 const num = (n: number) => n.toLocaleString('en-US');
@@ -67,6 +68,8 @@ export class UI {
   open: Panel | null = null;
   /** Trophy shown in the detail strip. */
   pick: string | null = null;
+  /** Trophy page: the originals, or the Fish Tree's. */
+  achTab: 'base' | 'tree' = 'base';
   /** Boat / fisherman shown in their detail panels. */
   boatSel = 0;
   handSel = 0;
@@ -505,8 +508,12 @@ export class UI {
   /** Achievements, nothing else: a 4x5 trophy grid and a detail strip for the selected one. */
   private trophiesHtml(game: Game): string {
     const ready = game.claimable();
-    const pick = ACHIEVEMENTS.find((a) => a.id === this.pick) ?? ready[0] ?? ACHIEVEMENTS.find((a) => !game.claimed.includes(a.id)) ?? ACHIEVEMENTS[0]!;
-    const tiles = ACHIEVEMENTS.map((a) => {
+    const page = ACHIEVEMENTS.filter((a) => (a.page === 'tree') === (this.achTab === 'tree'));
+    const pick = page.find((a) => a.id === this.pick) ?? page.find((a) => ready.includes(a)) ?? page.find((a) => !game.claimed.includes(a.id)) ?? page[0]!;
+    const count = (tree: boolean) => ready.filter((a) => (a.page === 'tree') === tree).length;
+    const tabs = `<div class="tiers two"><button class="tab${this.achTab === 'base' ? ' on' : ''}" style="--c:#4fbf5a" data-act="achTab:base">RIVER LIFE${count(false) ? ` (${count(false)})` : ''}</button>`
+      + `<button class="tab${this.achTab === 'tree' ? ' on' : ''}" style="--c:#3f8fe0" data-act="achTab:tree">FISH TREE${count(true) ? ` (${count(true)})` : ''}</button></div>`;
+    const tiles = page.map((a) => {
       const claimed = game.claimed.includes(a.id);
       const state = claimed ? 'claimed' : game.achieved(a) ? 'ready' : 'locked';
       return `<div class="cell"><button class="slot trophy ${state} ${a === pick ? 'sel' : ''}" data-act="trophy:${a.id}" title="${a.name}">
@@ -516,7 +523,7 @@ export class UI {
     const state = game.claimed.includes(pick.id) ? 'Collected' : game.achieved(pick) ? 'Ready' : progress;
     const collect = ready.length
       ? `<button class="btn wide" data-act="claimAll">COLLECT ${coin(ready.reduce((s, a) => s + a.reward, 0), 3)}</button>` : '';
-    return `${collect}<div class="grid">${tiles}</div>
+    return `${collect}${tabs}<div class="grid">${tiles}</div>
       <div class="row detail"><div class="slot">${icon(ACH_ICON[pick.stat])}</div><div class="meta"><b>${pick.name}</b>
         <div class="sub"><small>${pick.desc} · ${state}</small></div></div>${coin(pick.reward)}</div>`;
   }
