@@ -472,6 +472,9 @@ const ICON_COLORS: Record<string, string> = {
   r: PAL.red, p: '#fc8bb0', v: '#7a4a8a', u: PAL.waterDeep, U: PAL.waterLight, s: PAL.skin, g: PAL.green, G: PAL.greenLight,
 };
 const ICON_ROWS = {
+  back: ['...oo...', '..oyo...', '.oyyoooo', 'oyyyyyyo', 'oyyyyyyo', '.oyyoooo', '..oyo...', '...oo...'],
+  prev: ['....oo', '...oyo', '..oyyo', '.oyyyo', '.oyyyo', '..oyyo', '...oyo', '....oo'],
+  next: ['oo....', 'oyo...', 'oyyo..', 'oyyyo.', 'oyyyo.', 'oyyo..', 'oyo...', 'oo....'],
   pearl: ['..oooo..', '.owwwwo.', 'owwUwwUo', 'owwwwwUo', 'owwwwwUo', 'oUwwwUUo', '.oUUUUo.', '..oooo..'],
   coin: ['..oooo..', '.oYYYyo.', 'oYYyyyyo', 'oYyYyyyo', 'oYyYyyyo', 'oyyyyyyo', '.oyyyyo.', '..oooo..'],
   trophy: ['oo.oooo.oo', 'oyoYyyyoyo', 'oyoYyyyoyo', '.ooYyyyoo.', '..oyyyyo..', '...oyyo...', '....oo....', '...oyyo...', '..oooooo..', '..oyyyyo..', '..oooooo..'],

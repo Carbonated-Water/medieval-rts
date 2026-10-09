@@ -50,6 +50,18 @@ button { font: inherit; color: inherit; cursor: pointer; padding: 0; border: 0; 
 #sheet .tiers .tab.shut { opacity: 0.6; }
 #sheet small.wrap { white-space: normal; }
 #sheet .tiers.two { grid-template-columns: 1fr 1fr; }
+#sheet .tiers.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#sheet .tiers.three .tab { height: 30px; font: 16px/1 'Kenney Mini'; }
+#sheet .ledger-total { display: flex; align-items: center; gap: 8px; padding: 2px 4px; }
+#sheet .ledger-total b { font: 32px/0.8 'Kenney Pixel'; font-weight: normal; color: var(--cream); text-shadow: 2px 2px 0 var(--shade); }
+#sheet .ledger-total small { flex: 1; min-width: 0; color: var(--parch); }
+#sheet .bbtn { width: 36px; height: 36px; flex: none; display: grid; place-items: center; padding: 0; border: 0; background: var(--parch); box-shadow: inset 0 2px 0 var(--parch-light), inset 0 -4px 0 var(--parch-dark), 0 0 0 2px var(--outline); }
+#sheet .bbtn img { width: 16px; height: 16px; image-rendering: pixelated; }
+#sheet .head .flip { display: flex; align-items: center; gap: 6px; }
+#sheet .head .flip small { color: var(--cream); text-shadow: 1px 1px 0 var(--shade); }
+/* Fishing Co. pages keep one height, so tabs and buttons don't jump. */
+#sheet .panel.co .body { min-height: min(480px, calc(100vh - 176px)); }
+#top.panel-open .rates { display: none; }
 #sheet .tiers.two .tab { font: 16px/1 'Kenney Mini'; }
 #sheet .tiers .tab img { width: 16px; height: 16px; image-rendering: pixelated; }
 #sheet .sky { position: relative; height: 236px; margin-bottom: 8px; background: radial-gradient(1px 1px at 12% 20%, #fff8, transparent), radial-gradient(1px 1px at 70% 35%, #fff6, transparent), radial-gradient(1px 1px at 40% 70%, #fff5, transparent), radial-gradient(1px 1px at 88% 80%, #fff7, transparent), #1f2a44; box-shadow: 0 0 0 2px var(--outline); overflow: hidden; }
@@ -89,11 +101,11 @@ button { font: inherit; color: inherit; cursor: pointer; padding: 0; border: 0; 
 #sheet { position: fixed; inset: 0; display: none; align-items: flex-end; justify-content: center; background: rgba(20, 14, 8, 0.55); z-index: 10; }
 #sheet.show { display: flex; }
 #sheet .panel {
-  width: min(calc(100% - 16px), 520px); max-height: 88vh; margin-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); box-sizing: border-box;
+  width: min(calc(100% - 16px), 520px); max-height: min(88vh, calc(100vh - 92px)); margin-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); box-sizing: border-box;
   display: flex; flex-direction: column; border: 32px solid transparent; border-image: url('./assets/ui/frame.png') 16 fill / 32px stretch;
 }
 #sheet .head { display: flex; align-items: center; gap: 8px; margin: -18px -20px 12px -20px; }
-#sheet h2 { margin: 0; flex: 1; font: 40px/1 'Kenney Pixel'; color: var(--cream); text-shadow: 2px 2px 0 var(--shade); white-space: nowrap; }
+#sheet h2 { margin: 0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 40px/1 'Kenney Pixel'; color: var(--cream); text-shadow: 2px 2px 0 var(--shade); white-space: nowrap; }
 #sheet .head .cash { font: 32px/1 'Kenney Pixel'; color: var(--cream); text-shadow: 2px 2px 0 var(--shade); }
 #sheet .xbtn { width: 36px; height: 36px; display: grid; place-items: center; background: var(--red); box-shadow: inset 0 2px 0 var(--red-light), inset 0 -4px 0 var(--red-dark), 0 0 0 2px var(--outline); }
 #sheet .body { display: flex; flex-direction: column; gap: 6px; margin: 0 -20px -18px -20px; overflow: hidden; }

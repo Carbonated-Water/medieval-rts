@@ -4,6 +4,18 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Fishing Co. navigation: tabs, boat arrows, back vs close
+  WHAT: FLEET / LEDGER / HARBOR tabs on the Fishing Co. (replacing the OPEN
+        rows; a summary line keeps fleet $/min, berths, staff, offline hours).
+        A boat page has prev/next arrows (3/8) and a back button to the tab
+        it came from. Everywhere: back goes to the parent panel, X always
+        closes (Escape: back if there is one). Fishing Co. pages share one
+        height; panels stop below the top bar, whose $/sec board hides while
+        a panel is open; long titles get an ellipsis. Ledger total is one line.
+  WHY:  The user asked to improve Fishing Co. navigation: X meant back on
+        some pages and close on others, no way to flip between boats, the
+        Ledger and Harbor hid behind OPEN rows, and pages jumped in height.
+
 2026-10-09  Fish Tree achievements
   WHAT: 20 achievements on a second trophy tab (RIVER LIFE / FISH TREE):
         unlocks (1/10/25/50), whole tiers (1/3/5), tree river species caught

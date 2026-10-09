@@ -94,7 +94,7 @@ addEventListener('keydown', (e) => {
   }
   const shop = scene.place === 'school' ? 'training' : scene.place === 'bait' ? 'baitshop' : scene.place === 'market' || scene.place === 'tackle' ? scene.place : null;
   if (e.code === 'KeyE' && shop) onAction(ui.open ? 'close' : shop);
-  if (e.code === 'Escape') onAction('close');
+  if (e.code === 'Escape') onAction(ui.parentOf(ui.open) ? 'back' : 'close');
 });
 addEventListener('keyup', (e) => held.delete(e.code));
 addEventListener('blur', () => held.clear());
@@ -168,7 +168,13 @@ function onAction(a: Action): void {
     const paid = game.claim(ui.pick);
     if (paid) note.banner(pixelIcon('coin'), 'COLLECTED', `$${paid.toLocaleString()}`);
   }
-  else if (a === 'close') ui.open = ui.open === 'boat' || ui.open === 'shipyard' || ui.open === 'harborup' || ui.open === 'ledger' ? 'harbor' : ui.open === 'hand' || ui.open === 'pierstaff' ? 'pier' : ui.open === 'tree' || ui.open === 'retire' ? 'settings' : null;
+  else if (a === 'close') ui.open = null;
+  else if (a === 'back') ui.open = ui.parentOf(ui.open);
+  else if (a.startsWith('coTab:')) ui.open = a.slice(6) as 'harbor' | 'ledger' | 'harborup';
+  else if (a === 'boatPrev' || a === 'boatNext') {
+    const n = game.boats.length;
+    if (n) { ui.boatSel = (ui.boatSel + (a === 'boatNext' ? 1 : n - 1)) % n; ui.trackSel = 'hull'; }
+  }
   else if (a === 'sellAll') { const n = game.sellAll(); if (n) note.banner(pixelIcon('coin'), 'SOLD', `$${n.toLocaleString()}`); }
   else if (a.startsWith('sellFish:')) {
     const f = fishById(a.slice(9));

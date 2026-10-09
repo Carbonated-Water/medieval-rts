@@ -13,7 +13,7 @@ import type { Place } from './scene';
 export type Panel = 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'ledger' | 'boat' | 'tree' | 'retire' | 'shipyard' | 'harborup' | 'pier' | 'pierstaff' | 'hand' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
 
 export type Action =
-  | 'cast' | 'reel' | 'close' | 'reset' | 'toggleDev' | Panel
+  | 'cast' | 'reel' | 'close' | 'back' | 'reset' | 'toggleDev' | Panel | 'boatPrev' | 'boatNext' | `coTab:${'harbor' | 'ledger' | 'harborup'}`
   | `achTab:${'base' | 'tree'}` | `treeTier:${number}` | `treeSel:${string}` | `unlock:${string}` | 'doRetire' | `journalTier:${number}`
   | 'sellAll' | `sellFish:${string}` | `buy:${GearKind}` | `train:${SkillId}` | 'claimAll' | `trophy:${string}`
   | `bait:${BaitId}` | `buyBait:${BaitId}:${number}`
@@ -68,6 +68,14 @@ export class UI {
   open: Panel | null = null;
   /** Trophy shown in the detail strip. */
   pick: string | null = null;
+  /** The Fishing Co. tab last shown (a boat or the shipyard goes back to it). */
+  coTab: 'harbor' | 'ledger' | 'harborup' = 'harbor';
+
+  /** Where ◄ goes from a panel (null: it has no parent, only X). */
+  parentOf(panel: Panel | null): Panel | null {
+    if (panel === 'boat' || panel === 'shipyard') return this.coTab;
+    return ({ hand: 'pier', pierstaff: 'pier', tree: 'settings', retire: 'settings' } as Partial<Record<Panel, Panel>>)[panel ?? 'market'] ?? null;
+  }
   /** Trophy page: the originals, or the Fish Tree's. */
   achTab: 'base' | 'tree' = 'base';
   /** Boat / fisherman shown in their detail panels. */
@@ -134,6 +142,7 @@ export class UI {
     this.notices.update();
     const ready = game.claimable().length, unread = this.notices.unread;
     const badge = (n: number) => (n ? `<i class="badge">${n}</i>` : '');
+    this.top.classList.toggle('panel-open', !!this.open);
     this.set('top', this.top,
       `<div class="wallet"><div class="plaque purse">${icon('coin')}${num(game.money)}</div>${this.ratesHtml(game)}</div>` +
       (game.dev ? `<span class="dev">DEV x${DEV_MULTIPLIER}</span>` : '') + '<span class="grow"></span>' +
@@ -188,8 +197,19 @@ export class UI {
               : panel === 'trophies' ? [`Trophies ${game.claimed.length}/${ACHIEVEMENTS.length}`, this.trophiesHtml(game)]
                 : panel === 'inbox' ? ['Log', this.inboxHtml()]
                   : ['Settings', this.settingsHtml(game)];
-    return `<div class="panel ${panel}"><div class="head"><h2>${title}</h2>${coin(game.money, 3)}
-      <button class="xbtn" data-act="close" aria-label="close">${icon('close', 2)}</button></div><div class="body">${body}</div></div>`;
+    // ◄ back to the parent (if any), X always closes. A boat flips to the previous/next boat instead of showing the money (it's in the corner anyway).
+    const tabbed = game.company && (panel === 'harbor' || panel === 'ledger' || panel === 'harborup');
+    if (tabbed) this.coTab = panel;
+    const back = this.parentOf(panel) ? `<button class="bbtn" data-act="back" aria-label="back">${icon('back', 2)}</button>` : '';
+    const n = game.boats.length;
+    const right = panel === 'boat' && n > 1
+      ? `<span class="flip"><button class="bbtn" data-act="boatPrev" aria-label="previous boat">${icon('prev', 2)}</button><small>${this.boatSel + 1}/${n}</small><button class="bbtn" data-act="boatNext" aria-label="next boat">${icon('next', 2)}</button></span>`
+      : panel === 'boat' ? '' : coin(game.money, 3);
+    const tabs = tabbed ? `<div class="tiers three">${([['harbor', 'FLEET'], ['ledger', 'LEDGER'], ['harborup', 'HARBOR']] as const)
+      .map(([p, label]) => `<button class="tab${panel === p ? ' on' : ''}" style="--c:#2f6fd6" data-act="coTab:${p}">${label}</button>`).join('')}</div>` : '';
+    const co = tabbed || panel === 'boat' || panel === 'shipyard' ? ' co' : '';
+    return `<div class="panel ${panel}${co}"><div class="head">${back}<h2>${title}</h2>${right}
+      <button class="xbtn" data-act="close" aria-label="close">${icon('close', 2)}</button></div><div class="body">${tabs}${body}</div></div>`;
   }
 
   /** Sells fish, nothing else: one slot per species in the bag; tap to sell that kind. */
@@ -284,7 +304,7 @@ export class UI {
         + row('lock', '???', 'Something with a sword')
         + `<button class="btn wide" data-act="buyCompany" ${game.money < COMPANY_PRICE ? 'disabled' : ''}>BUY THE COMPANY ${coin(COMPANY_PRICE, 3)}</button>`;
     }
-    // The company: a tile per berth (boat or empty), quick send / collect, then the harbor and the pier.
+    // The company: quick send / sell, a tile per berth (boat or empty), a summary line.
     const tiles = Array.from({ length: game.berthCount }, (_, i) => {
       const b = game.boats[i];
       if (!b) return `<div class="cell"><button class="slot berth" data-act="shipyard" aria-label="buy a boat">${icon('plus', 2)}</button><span class="small">Empty</span></div>`;
@@ -296,12 +316,10 @@ export class UI {
     const ready = game.boats.filter((b) => b.haul).length, idle = game.boats.filter((b) => !b.trip && !b.haul).length;
     const quick = ready ? `<button class="btn wide" data-act="collectAll">SELL ${ready} HAUL${ready > 1 ? 'S' : ''} ${coin(game.boats.reduce((s2, b) => s2 + (b.haul ? game.haulValue(b) : 0), 0), 3)}</button>`
       : idle ? `<button class="btn wide" data-act="sendAll">SEND ${idle} BOAT${idle > 1 ? 'S' : ''}</button>` : '';
-    const harbor = `<div class="row"><button class="slot" data-act="harborup" aria-label="harbor">${icon('anchor')}</button><div class="meta"><b>Harbor</b>
-      <div class="sub"><small>${game.berthCount} berths · ${game.harbor.master ? 'Harbor Master' : 'no staff'} · ${game.offlineHours}h away</small></div></div><button class="btn plain" data-act="harborup">OPEN</button></div>`;
+    // The Ledger and Harbor are tabs now; a one-line summary keeps their headline numbers here.
     const fleetRate = game.boats.reduce((s2, b) => s2 + game.boatRate(b), 0);
-    const ledger = game.boats.length ? `<div class="row"><button class="slot" data-act="ledger" aria-label="ledger">${icon('book')}</button><div class="meta"><b>Ledger</b>
-      <div class="sub"><small>Fleet $${kmb(fleetRate)}/min · what each boat earns</small></div></div><button class="btn plain" data-act="ledger">OPEN</button></div>` : '';
-    return `${quick}<div class="grid fleet">${tiles}</div>${harbor}${ledger}`;
+    const summary = `<p class="note">Fleet $${kmb(fleetRate)}/min · ${game.boats.length}/${game.berthCount} berths · ${game.harbor.master ? 'Harbor Master' : 'no staff'} · ${game.offlineHours}h away</p>`;
+    return `${quick}<div class="grid fleet">${tiles}</div>${summary}`;
   }
 
   private boatStatus(game: Game, b: Boat): string {
@@ -372,15 +390,15 @@ export class UI {
   private ledgerHtml(game: Game): string {
     const sum = (f: (b: Boat) => number) => game.boats.reduce((s, b) => s + f(b), 0);
     const profit = (n: number) => `<span class="cash ${n >= 0 ? 'gain' : 'loss'}">${n >= 0 ? '+' : '-'}$${kmb(Math.abs(n))}</span>`;
-    const total = `<div class="row tight total"><div class="meta"><b>Fleet $${kmb(sum((b) => game.boatRate(b)))}/min</b>
-      <div class="sub"><small>earned $${kmb(sum((b) => b.earned))} · cost $${kmb(sum((b) => b.invested))}</small></div></div>${profit(sum((b) => b.earned - b.invested))}</div>`;
+    // The fleet total as one line, so eight boats fit under the tabs on a small phone.
+    const total = `<div class="ledger-total"><b>Fleet $${kmb(sum((b) => game.boatRate(b)))}/min</b><small>earned $${kmb(sum((b) => b.earned))} · cost $${kmb(sum((b) => b.invested))}</small>${profit(sum((b) => b.earned - b.invested))}</div>`;
     const rows = game.boats.map((b, i) => {
       const rate = game.boatRate(b), left = b.invested - b.earned;
       const payback = left <= 0 ? 'paid off' : `pays off in ${mins(left / Math.max(1, rate))}`;
       return `<button class="row tight" data-act="boat:${i}"><div class="slot">${icon(b.type === 'lobster' ? 'trap' : b.type === 'sword' ? 'hook' : 'boat', 2)}</div>
         <div class="meta"><b>${game.boatName(i)} <span class="small">$${kmb(rate)}/min</span></b><div class="sub"><small>$${kmb(b.earned)} of $${kmb(b.invested)} · ${payback}</small></div></div>${profit(b.earned - b.invested)}</button>`;
     }).join('');
-    return total + rows + '<p class="note">$/min is the expected rate from each boat\'s upgrades and ground.</p>';
+    return total + rows;
   }
 
   /** Buy boats, nothing else. */
