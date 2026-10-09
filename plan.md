@@ -91,7 +91,7 @@ variants, achievements and purchases. The log panel keeps the last 8.
 DOM interface on top. Tap the river or a shop to walk there; A/D or
 arrows walk, Space casts / reels, E opens the building you stand at.
 
-## The Fishing Company (late game, phase 1 done 2026-10-09)
+## The Fishing Company (late game, phases 1 and 2 done 2026-10-09)
 
 - **Teaser** (before $25k lifetime earnings): a boarded-up harbor office
   ("?" sign, padlock) on the far bank with a pier; a dark ship silhouette
@@ -111,8 +111,21 @@ arrows walk, Space casts / reels, E opens the building you stand at.
   Crew 4 max ($4k/8k/14k/22k), nets Hand / Drift $15k / Trawl $40k. Sea
   fish: Herring, Mackerel, Cod, Sea Bass, Halibut, Bluefin Tuna (~$60/fish
   on average). Full kit ~= $2.9k/min with prompt resends.
-- **Phase 2 (next):** lobster traps and swordfish longline as new boat
-  types, more boats.
+- **Boats** (one of each; Fishing Co. panel lists them, tap one for crew
+  and gear): Net Boat $20k (90 s trips, nets), Lobster Boat $60k (150 s,
+  10/20/40 traps; Blue Crab, Lobster, Spiny Lobster, King Crab), Longliner
+  $150k (210 s, short/long/deep line; Mahi-Mahi, Sailfish, Swordfish, Blue
+  Marlin). Fully kitted ~= $3.1k / $3.9k / $4.1k per minute.
+- **Wide pier + hired fishermen** (opens with the first boat): the dock
+  becomes a T-pier. Hire up to 4 (Ada, Bo, Cy, Dee: $8k/16k/28k/45k). Each
+  has their own Rod (bought like yours) and Fishing level (to 25, $60 x
+  1.35^level), and an assigned bait drawn from YOUR pouch, one per cast; out
+  of it they stop (red "!" sign, banner). Slow hands at low levels miss
+  bites (reaction max 1.2 s minus 0.02 per level vs a 0.9 s window); they
+  rest 2.5 s between catches. Catches go to the crate on the pier (sell
+  from The Pier panel). Your role: keep them in bait and train them up.
+  A maxed fisherman on Glow Lures ~= $8.5k/min (Golden is slightly worse
+  for them: the bait choice still matters).
 
 ## Roadmap (agreed order, 2026-10-09)
 

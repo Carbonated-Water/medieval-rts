@@ -1,20 +1,21 @@
 import {
-  ACHIEVEMENTS, AUTO, BAITS, BOAT_PRICE, COMPANY_PRICE, COMPANY_UNLOCK_EARNED, CREW_MAX, DEV_MULTIPLIER, LETTERS, NETS, SEA_FISH, FISH, GEAR, REFLEX_PER_LEVEL, SKILLS, STRENGTH_PER_LEVEL, HAGGLE_PER_LEVEL,
-  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type GearKind, type SkillId, type Tier,
+  ACHIEVEMENTS, AUTO, BAITS, BOATS, BOAT_ORDER, COMPANY_PRICE, COMPANY_UNLOCK_EARNED, CREW_MAX, DEV_MULTIPLIER, HAND_NAMES, HAND_SKILL_MAX, LETTERS, RODS, FISH, GEAR, REFLEX_PER_LEVEL, SKILLS, STRENGTH_PER_LEVEL, HAGGLE_PER_LEVEL,
+  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier,
 } from './data';
-import { type Game } from './game';
+import { type Boat, type Game } from './game';
 import { Notices, lineHtml, timeAgo } from './notify';
 import { pixelFishIcon as fishIcon, pixelIcon, type IconName } from './pixelart';
 import type { Place } from './scene';
 
 /** One panel per job: the market sells fish, the tackle shop sells gear, the school trains skills. */
-export type Panel = 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
+export type Panel = 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'boat' | 'pier' | 'hand' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
 
 export type Action =
   | 'cast' | 'reel' | 'close' | 'reset' | 'toggleDev' | Panel
   | 'sellAll' | `sellFish:${string}` | `buy:${GearKind}` | `train:${SkillId}` | 'claimAll' | `trophy:${string}`
   | `bait:${BaitId}` | `buyBait:${BaitId}:${number}`
-  | 'buyCompany' | 'buyBoat' | `send:${number}` | `collect:${number}` | `crew:${number}` | `net:${number}`;
+  | 'buyCompany' | `buyBoat:${BoatType}` | `boat:${number}` | `send:${number}` | `collect:${number}` | `crew:${number}` | `net:${number}`
+  | 'hire' | 'sellCrate' | `hand:${number}` | `handRod:${number}` | `handTrain:${number}` | `handBait:${number}:${BaitId}`;
 
 const GEAR_ORDER: GearKind[] = ['rod', 'holders', 'auto', 'clothes', 'boots'];
 export const GEAR_ICON: Record<GearKind, IconName> = { rod: 'rod', holders: 'holder', auto: 'auto', clothes: 'shirt', boots: 'boot' };
@@ -49,6 +50,9 @@ export class UI {
   open: Panel | null = null;
   /** Trophy shown in the detail strip. */
   pick: string | null = null;
+  /** Boat / fisherman shown in their detail panels. */
+  boatSel = 0;
+  handSel = 0;
 
   constructor(onAction: (a: Action) => void) {
     document.body.addEventListener('click', (e) => {
@@ -102,6 +106,9 @@ export class UI {
           : panel === 'baitshop' ? ['Bait Shop', this.baitShopHtml(game)]
           : panel === 'pouch' ? ['Bait Pouch', this.pouchHtml(game)]
           : panel === 'harbor' ? [game.company ? 'Fishing Co.' : 'Old Harbor', this.harborHtml(game)]
+          : panel === 'boat' ? [BOATS[game.boats[this.boatSel]?.type ?? 'net'].name, this.boatHtml(game)]
+          : panel === 'pier' ? ['The Pier', this.pierHtml(game)]
+          : panel === 'hand' ? [HAND_NAMES[this.handSel] ?? 'Fisherman', this.handHtml(game)]
           : panel === 'training' ? ['Fishing School', this.schoolHtml(game)]
             : panel === 'journal' ? [`Journal ${Object.keys(game.journal).length}/${FISH.length}`, this.journalHtml(game)]
               : panel === 'trophies' ? [`Trophies ${game.claimed.length}/${ACHIEVEMENTS.length}`, this.trophiesHtml(game)]
@@ -203,24 +210,88 @@ export class UI {
         + row('lock', '???', 'Something with a sword')
         + `<button class="btn wide" data-act="buyCompany" ${game.money < COMPANY_PRICE ? 'disabled' : ''}>BUY THE COMPANY ${coin(COMPANY_PRICE, 3)}</button>`;
     }
-    if (!game.boats.length) {
-      return row('boat', 'Net Boat', 'Your first boat', `<button class="btn" data-act="buyBoat" ${game.money < BOAT_PRICE ? 'disabled' : ''}>${coin(BOAT_PRICE)}</button>`)
-        + row('lock', '???', 'Something with claws') + row('lock', '???', 'Something with a sword');
-    }
-    return game.boats.map((b, i) => {
-      const left = b.trip ? Math.ceil(b.trip.dur - b.trip.t) : 0;
-      const status = b.haul ? `Back with ${b.haul.reduce((s, h) => s + h.n, 0)} fish` : b.trip ? `At sea, back in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : 'At the pier';
-      const act = b.haul ? `<button class="btn" data-act="collect:${i}">${coin(game.haulValue(b))}</button>`
-        : b.trip ? '<span class="maxed">...</span>' : `<button class="btn" data-act="send:${i}">SEND</button>`;
-      const crewCost = game.nextCrewCost(i), net = game.nextNet(i);
-      const haul = b.haul ? `<div class="haul">${b.haul.map((h) => {
-        const f = SEA_FISH.find((x) => x.id === h.fish)!;
-        return `<span><img src="${fishIcon(f, false, 48, 28)}" alt="${f.name}">x${h.n}</span>`;
-      }).join('')}</div>` : '';
-      return row('boat', 'Net Boat', status, act) + haul
-        + `<div class="row"><div class="slot">${icon('crew')}</div><div class="meta"><b>Crew</b><div class="sub">${level(b.crew, CREW_MAX)}<small>+25% fish each</small></div></div>${crewCost === null ? '<span class="maxed">MAX</span>' : `<button class="btn" data-act="crew:${i}" ${game.money < crewCost ? 'disabled' : ''}>${coin(crewCost)}</button>`}</div>`
-        + `<div class="row"><div class="slot">${icon('net')}</div><div class="meta"><b>${NETS[b.net]!.name}</b><div class="sub">${level(b.net + 1, NETS.length)}<small>${game.haulSize(b)} fish a trip</small></div></div>${net ? `<button class="btn" data-act="net:${i}" ${game.money < net.price ? 'disabled' : ''}>${coin(net.price)}</button>` : '<span class="maxed">MAX</span>'}</div>`;
-    }).join('') + row('lock', '???', 'More boats are coming');
+    // The company: one row per kind of boat, then the pier.
+    const boats = BOAT_ORDER.map((type) => {
+      const i = game.boats.findIndex((b) => b.type === type);
+      const def = BOATS[type];
+      if (i < 0) {
+        const locked = type !== 'net' && !game.boats.length;
+        return row(locked ? 'lock' : 'boat', def.name, def.blurb, locked ? '' : `<button class="btn" data-act="buyBoat:${type}" ${game.money < def.price ? 'disabled' : ''}>${coin(def.price)}</button>`);
+      }
+      const b = game.boats[i]!;
+      return `<div class="row"><button class="slot" data-act="boat:${i}" aria-label="${def.name}">${icon('boat')}</button><div class="meta">
+        <b>${def.name}</b><div class="sub"><small>${this.boatStatus(game, b)}</small></div></div>${this.boatAction(game, b, i)}</div>`;
+    }).join('');
+    const pier = game.pierOpen
+      ? `<div class="row"><button class="slot" data-act="pier" aria-label="pier">${icon('crew')}</button><div class="meta"><b>The Pier</b>
+          <div class="sub"><small>${game.hands.length} fishermen · crate ${coin(game.crateValue(), 1)}</small></div></div><button class="btn" data-act="pier">OPEN</button></div>`
+      : row('lock', 'The Pier', 'Opens with your first boat');
+    return boats + pier + '<p class="note">Tap a boat for its crew and gear.</p>';
+  }
+
+  private boatStatus(game: Game, b: Boat): string {
+    const left = b.trip ? Math.ceil(b.trip.dur - b.trip.t) : 0;
+    return b.haul ? `Back with ${b.haul.reduce((s, h) => s + h.n, 0)} catches`
+      : b.trip ? `At sea, back in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : 'At the pier';
+  }
+
+  private boatAction(game: Game, b: Boat, i: number): string {
+    return b.haul ? `<button class="btn" data-act="collect:${i}">${coin(game.haulValue(b))}</button>`
+      : b.trip ? '<span class="maxed">...</span>' : `<button class="btn" data-act="send:${i}">SEND</button>`;
+  }
+
+  /** One boat: its haul, crew and gear. */
+  private boatHtml(game: Game): string {
+    const i = this.boatSel, b = game.boats[i];
+    if (!b) return '<p class="empty">No boat.</p>';
+    const def = BOATS[b.type];
+    const row = (ic: IconName, name: string, sub: string, right = '') =>
+      `<div class="row"><div class="slot">${icon(ic)}</div><div class="meta"><b>${name}</b><div class="sub">${sub}</div></div>${right}</div>`;
+    const haul = b.haul ? `<div class="haul">${b.haul.map((h) => {
+      const f = def.catch.find((x) => x.id === h.fish)!;
+      return `<span><img src="${fishIcon(f, false, 48, 28)}" alt="${f.name}">x${h.n}</span>`;
+    }).join('')}</div>` : '';
+    const crewCost = game.nextCrewCost(i), gear = game.nextNet(i);
+    return row('boat', def.name, `<small>${this.boatStatus(game, b)}</small>`, this.boatAction(game, b, i)) + haul
+      + row('crew', 'Crew', `${level(b.crew, CREW_MAX)}<small>+25% catch each</small>`,
+        crewCost === null ? '<span class="maxed">MAX</span>' : `<button class="btn" data-act="crew:${i}" ${game.money < crewCost ? 'disabled' : ''}>${coin(crewCost)}</button>`)
+      + row('net', def.gear[b.net]!.name, `${level(b.net + 1, def.gear.length)}<small>${game.haulSize(b)} a trip</small>`,
+        gear ? `<button class="btn" data-act="net:${i}" ${game.money < gear.price ? 'disabled' : ''}>${coin(gear.price)}</button>` : '<span class="maxed">MAX</span>');
+  }
+
+  /** The wide pier: the catch crate, your fishermen, hiring. */
+  private pierHtml(game: Game): string {
+    const crate = `<div class="row"><div class="slot">${icon('fish')}</div><div class="meta"><b>Catch crate</b><div class="sub"><small>${game.crate.length} fish</small></div></div>
+      <button class="btn" data-act="sellCrate" ${game.crate.length ? '' : 'disabled'}>${coin(game.crateValue())}</button></div>`;
+    const hands = game.hands.map((h, i) => {
+      const bait = BAITS.find((b) => b.id === h.bait)!;
+      const sub = game.handStarved(h) ? '<small class="warn">Needs bait</small>' : `<small>${bait.name} x${game.baitCount(h.bait)}</small>`;
+      return `<div class="row"><button class="slot" data-act="hand:${i}" aria-label="${HAND_NAMES[i]}">${icon(BAIT_ICON[h.bait])}</button><div class="meta">
+        <b>${HAND_NAMES[i]} <span class="small">${RODS[h.rod]!.name} · LV ${h.skill}</span></b><div class="sub">${sub}</div></div><button class="btn plain" data-act="hand:${i}">MANAGE</button></div>`;
+    }).join('');
+    const cost = game.nextHandCost();
+    const hire = cost === null ? '' : `<div class="row"><div class="slot">${icon('crew')}</div><div class="meta"><b>Hire a fisherman</b><div class="sub"><small>Fishes with your bait</small></div></div>
+      <button class="btn" data-act="hire" ${game.money < cost ? 'disabled' : ''}>${coin(cost)}</button></div>`;
+    return crate + hands + hire;
+  }
+
+  /** One fisherman: rod, training, and which bait they use from your pouch. */
+  private handHtml(game: Game): string {
+    const i = this.handSel, h = game.hands[i];
+    if (!h) return '<p class="empty">No one here.</p>';
+    const rod = game.handNextRod(i), train = game.handTrainCost(i);
+    const odds = game.handOdds(h);
+    const tier = RODS[h.rod]!.tier as Tier;
+    const top = odds.filter((o) => !o.tooStrong && o.fish.tier === tier).reduce((s, o) => s + o.p, 0);
+    const row = (ic: IconName, name: string, sub: string, right: string) =>
+      `<div class="row"><div class="slot">${icon(ic)}</div><div class="meta"><b>${name}</b><div class="sub">${sub}</div></div>${right}</div>`;
+    const baits = BAITS.map((b) => `<div class="cell"><button class="slot ${game.baitCount(b.id) ? '' : 'dim'} ${b.id === h.bait ? 'sel' : ''}" data-act="handBait:${i}:${b.id}" title="${b.name}">
+      ${icon(BAIT_ICON[b.id])}<i class="n">x${game.baitCount(b.id)}</i></button></div>`).join('');
+    return row('rod', RODS[h.rod]!.name, `${level(h.rod + 1, RODS.length)}<small>${TIERS[tier].name} ${pct(top)}</small>`,
+        rod ? `<button class="btn" data-act="handRod:${i}" ${game.money < rod.price ? 'disabled' : ''}>${coin(rod.price)}</button>` : '<span class="maxed">MAX</span>')
+      + row('hook', `Fishing LV ${h.skill}`, `${level(h.skill, HAND_SKILL_MAX)}<small>Quicker hands</small>`,
+        train === null ? '<span class="maxed">MAX</span>' : `<button class="btn" data-act="handTrain:${i}" ${game.money < train ? 'disabled' : ''}>${coin(train)}</button>`)
+      + `<div class="grid three">${baits}</div><p class="note">Tap a bait: they take it from your pouch, one per cast.</p>`;
   }
 
   /** Raises the fisher's skills, nothing else. */

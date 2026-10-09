@@ -217,7 +217,22 @@ export const SEA_FISH: FishDef[] = [
   { id: 'tuna', name: 'Bluefin Tuna', tier: 4, price: 1500, kg: 200, rarity: 0.7, colors: ['#2a3a6a', '#d8e0ea', '#f0c030'], shape: 3.4 },
 ];
 
-/** Boat trips: base length, and what each crew member adds. */
+/** Lobster boats bring up shellfish from their traps. */
+export const SHELLFISH: FishDef[] = [
+  { id: 'crab', name: 'Blue Crab', tier: 1, price: 90, kg: 0.5, rarity: 1.3, colors: ['#3a6ab0', '#e8eef8', '#2a4a80'], shape: 1.6 },
+  { id: 'lobster', name: 'Lobster', tier: 2, price: 300, kg: 1, rarity: 1, colors: ['#b03a2a', '#f0c0a0', '#701a10'], shape: 2.6 },
+  { id: 'spiny', name: 'Spiny Lobster', tier: 3, price: 650, kg: 2, rarity: 0.9, colors: ['#c07030', '#f0d090', '#803010'], shape: 2.6 },
+  { id: 'kingcrab', name: 'King Crab', tier: 4, price: 1800, kg: 5, rarity: 0.8, colors: ['#c03030', '#f0e0d0', '#801818'], shape: 1.6 },
+];
+/** Longliners hook the big ocean fish. */
+export const BILLFISH: FishDef[] = [
+  { id: 'mahi', name: 'Mahi-Mahi', tier: 1, price: 280, kg: 12, rarity: 1.2, colors: ['#40a050', '#f0e040', '#2a70c0'], shape: 3.2 },
+  { id: 'sailfish', name: 'Sailfish', tier: 2, price: 840, kg: 40, rarity: 1, colors: ['#2a4a8a', '#d8e0f0', '#3a6ad0'], shape: 4.6 },
+  { id: 'swordfish', name: 'Swordfish', tier: 3, price: 2200, kg: 150, rarity: 0.9, colors: ['#4a5a6a', '#d0d8e0', '#2a3a4a'], shape: 4.2 },
+  { id: 'marlin', name: 'Blue Marlin', tier: 4, price: 6400, kg: 400, rarity: 0.7, colors: ['#1a3a7a', '#e0e8f0', '#2a5ab0'], shape: 4.4 },
+];
+
+/** Boat trips: base length (net boat), and what each crew member adds. */
 export const TRIP_SECONDS = 90;
 export const CREW_MAX = 4;
 /** Each crew member: this many more fish per haul, and trips this much shorter. */
@@ -226,11 +241,48 @@ export const CREW_SPEED = 0.1;
 export const CREW_COST = [4000, 8000, 14000, 22000];
 export const BOAT_PRICE = 20000;
 /** Nets: fish per haul before crew. Bought in order. */
-export const NETS: { name: string; price: number; fish: number }[] = [
+export interface GearLevel { name: string; price: number; /** catches per trip before crew */ fish: number }
+export const NETS: GearLevel[] = [
   { name: 'Hand Net', price: 0, fish: 8 },
   { name: 'Drift Net', price: 15000, fish: 14 },
   { name: 'Trawl Net', price: 40000, fish: 22 },
 ];
+
+/** The three kinds of boat: one of each. Each has its own gear line, trip length and catch. */
+export type BoatType = 'net' | 'lobster' | 'sword';
+export interface BoatDef { name: string; price: number; trip: number; gear: GearLevel[]; catch: FishDef[]; blurb: string }
+export const BOATS: Record<BoatType, BoatDef> = {
+  net: { name: 'Net Boat', price: 20000, trip: TRIP_SECONDS, gear: NETS, catch: SEA_FISH, blurb: 'Herring to Bluefin Tuna' },
+  lobster: {
+    name: 'Lobster Boat', price: 60000, trip: 150, catch: SHELLFISH, blurb: 'Crabs and lobsters',
+    gear: [{ name: '10 Traps', price: 0, fish: 5 }, { name: '20 Traps', price: 35000, fish: 9 }, { name: '40 Traps', price: 90000, fish: 15 }],
+  },
+  sword: {
+    name: 'Longliner', price: 150000, trip: 210, catch: BILLFISH, blurb: 'Swordfish and marlin',
+    gear: [{ name: 'Short Line', price: 0, fish: 3 }, { name: 'Long Line', price: 70000, fish: 5 }, { name: 'Deep Line', price: 180000, fish: 8 }],
+  },
+};
+export const BOAT_ORDER: BoatType[] = ['net', 'lobster', 'sword'];
+
+// ---------- hired fishermen on the wide pier (open once you own a boat) ----------
+
+export const HANDS_MAX = 4;
+export const HAND_COST = [8000, 16000, 28000, 45000];
+export const HAND_NAMES = ['Ada', 'Bo', 'Cy', 'Dee'];
+export const HAND_OUTFITS: { shirt: string; trousers: string; boots: string }[] = [
+  { shirt: '#3f8fe0', trousers: '#3a4a6a', boots: '#6b4526' },
+  { shirt: '#5aa04a', trousers: '#5a4a30', boots: '#3a3a3a' },
+  { shirt: '#c060c0', trousers: '#3a3a5a', boots: '#7a3020' },
+  { shirt: '#e08a2a', trousers: '#2a4a3a', boots: '#4a2a1a' },
+];
+/** How fast hired fishermen react to a bite: random in [min, max], the max dropping per Fishing level (slow hands miss bites). */
+export const HAND_REACT: [number, number] = [0.5, 1.2];
+export const HAND_REACT_PER_LEVEL = 0.02;
+/** Seconds a fisherman rests after each catch before casting again. */
+export const HAND_REST = 2.5;
+export const HAND_SKILL_MAX = 25;
+/** Training a fisherman from level `l` to `l + 1`. */
+export const handSkillCost = (l: number) => Math.round((60 * Math.pow(1.35, l - 1)) / 5) * 5;
 
 // ---------- achievements (one-time cash reward, claimed in the trophy panel) ----------
 

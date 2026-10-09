@@ -4,6 +4,27 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  The Fishing Company, phase 2: hired fishermen, wide pier, more boats
+  WHAT: data: SHELLFISH, BILLFISH, BOATS (net / lobster / sword with their
+        own gear, trip and catch), HANDS tables. game: typed boats (one of
+        each), catch maths parameterised by rod tier / level so hired hands
+        share it; Hand (rod, skill, bait, line) fishing on their own from
+        your pouch into a crate; hire / rod / train / bait / sell crate.
+        pixelart: crab and lobster sprites, billed fish, three boat looks.
+        scene: T-pier once you own a boat, four fishermen with their own
+        lines (slots 4-7 share the bobber / splash / leaping-fish code), crate
+        and "needs bait" sign; fixed a return-in-loop that would have frozen
+        splashes. ui: Fishing Co. overview, Boat, The Pier and Fisherman
+        panels (close goes back to the overview). 57 tests.
+  WHY:  User: on unlocking the boat, a wider pier; hire fishermen whose
+        upkeep is your job (golden bait, upgrades "so they can be like me");
+        plus lobster and swordfish boats, all in phase 2.
+  Balance (simulated): a rookie only profits on worms; each rod / training
+        step unlocks the next bait; maxed ~$8.5k/min on Glow (Golden a bit
+        worse). Training cost set to $60 x 1.35^level (~$230k each to 25).
+
+---
+
 2026-10-09  The Fishing Company, phase 1: teaser, reveal, boats
   WHAT: data: COMPANY_UNLOCK_EARNED 25k, COMPANY_PRICE 100k, LETTERS (5k,
         10k, 20k, reveal at 25k), SEA_FISH (6), boat / crew / net tables.

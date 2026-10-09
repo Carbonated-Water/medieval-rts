@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ACHIEVEMENTS, AUTO, BAITS, BOAT_PRICE, BOOTS, COMPANY_PRICE, COMPANY_UNLOCK_EARNED, CREW_COST, LETTERS, NETS, SEA_FISH, TRIP_SECONDS, CLOTHES, DEV_MULTIPLIER, FISH, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_MAX, VARIANTS,
+  ACHIEVEMENTS, AUTO, BAITS, BOAT_PRICE, BOATS, BOOTS, COMPANY_PRICE, HANDS_MAX, HAND_COST, BILLFISH, SHELLFISH, COMPANY_UNLOCK_EARNED, CREW_COST, LETTERS, NETS, SEA_FISH, TRIP_SECONDS, CLOTHES, DEV_MULTIPLIER, FISH, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_MAX, VARIANTS,
   MAX_GROUND_WORMS, START_WORMS, STRENGTH_PER_LEVEL, WORM_SPAWN_SECONDS, skillCost,
 } from './data';
 import { Game, fishById, type Line } from './game';
@@ -484,7 +484,7 @@ describe('fishing company', () => {
     g.buyCompany();
     expect(g.buyBoat()).toBe(true);
     expect(g.money).toBe(1e7 - COMPANY_PRICE - BOAT_PRICE);
-    expect(g.buyBoat()).toBe(false); // phase 1: one boat
+    expect(g.buyBoat()).toBe(false); // one boat of each kind
     const b = g.boats[0]!;
     expect(g.haulSize(b)).toBe(NETS[0]!.fish);
     expect(g.tripSeconds(b)).toBe(TRIP_SECONDS);
@@ -525,5 +525,108 @@ describe('fishing company', () => {
     const old = new Game({ money: 5 });
     expect(old.company).toBe(false);
     expect(old.boats).toEqual([]);
+  });
+});
+
+describe('fishing company: more boats', () => {
+  it('one boat of each kind, each with its own gear, trip and catch', () => {
+    const g = new Game({ money: 1e7, earned: 30000 }, rng(21));
+    g.buyCompany();
+    for (const type of ['net', 'lobster', 'sword'] as const) expect(g.buyBoat(type)).toBe(true);
+    expect(g.buyBoat('lobster')).toBe(false);
+    const lobster = g.boats.findIndex((b) => b.type === 'lobster');
+    const sword = g.boats.findIndex((b) => b.type === 'sword');
+    expect(g.tripSeconds(g.boats[lobster]!)).toBe(BOATS.lobster.trip);
+    expect(g.nextNet(lobster)!.name).toBe(BOATS.lobster.gear[1]!.name);
+    g.sendBoat(lobster);
+    g.sendBoat(sword);
+    tick(g, BOATS.sword.trip + 1);
+    expect(g.boats[lobster]!.haul!.every((h) => SHELLFISH.some((f) => f.id === h.fish))).toBe(true);
+    expect(g.boats[sword]!.haul!.every((h) => BILLFISH.some((f) => f.id === h.fish))).toBe(true);
+  });
+});
+
+describe('hired fishermen', () => {
+  const owner = (extra = {}) => {
+    const g = new Game({ money: 1e7, earned: 30000, ...extra }, rng(31));
+    g.buyCompany();
+    return g;
+  };
+
+  it('can only be hired once you own a boat; up to four', () => {
+    const g = owner();
+    expect(g.pierOpen).toBe(false);
+    expect(g.hireHand()).toBe(false);
+    g.buyBoat();
+    expect(g.pierOpen).toBe(true);
+    const money = g.money;
+    expect(g.hireHand()).toBe(true);
+    expect(g.money).toBe(money - HAND_COST[0]!);
+    while (g.hireHand());
+    expect(g.hands).toHaveLength(HANDS_MAX);
+  });
+
+  it('fish on their own with bait from your pouch, into the crate', () => {
+    const g = owner({ baits: { worm: 50 } });
+    g.buyBoat();
+    g.hireHand();
+    tick(g, 120);
+    expect(g.baitCount('worm')).toBeLessThan(50);
+    expect(g.crate.length).toBeGreaterThan(3);
+    expect(g.bag).toHaveLength(0);
+    const value = g.crateValue();
+    expect(g.sellCrate()).toBe(value);
+    expect(g.crate).toHaveLength(0);
+  });
+
+  it('stop when their bait runs out', () => {
+    const g = owner({ baits: { worm: 2, gold: 0 } });
+    g.buyBoat();
+    g.hireHand();
+    g.setHandBait(0, 'gold');
+    tick(g, 30);
+    expect(g.handStarved(g.hands[0]!)).toBe(true);
+    expect(g.baitCount('worm')).toBe(2); // they don't touch other bait
+  });
+
+  it('upgrades: their own rod and level, like yours', () => {
+    const g = owner();
+    g.buyBoat();
+    g.hireHand();
+    expect(g.handNextRod(0)!.name).toBe('Bamboo Rod');
+    while (g.upgradeHandRod(0));
+    while (g.trainHand(0));
+    expect(g.hands[0]!.rod).toBe(4);
+    expect(g.hands[0]!.skill).toBe(25);
+    const legend = g.handOdds(g.hands[0]!).filter((o) => o.fish.tier === 5).reduce((s, o) => s + o.p, 0);
+    expect(legend).toBeGreaterThan(0.2);
+  });
+
+  it('trained hands miss fewer bites', () => {
+    const misses = (skill: number) => {
+      const g = owner({ baits: { worm: 1e6 } });
+      g.buyBoat(); g.hireHand();
+      g.hands[0]!.skill = skill;
+      let escaped = 0, prev = '';
+      for (let t = 0; t < 900; t += 0.05) {
+        g.tick(0.05);
+        const l = g.hands[0]!.line;
+        const key = l.type === 'result' ? `${l.outcome}${l.t > 0.06 ? '' : '!'}` : l.type;
+        if (key === 'escaped!' && prev !== key) escaped++;
+        prev = key;
+      }
+      return escaped;
+    };
+    expect(misses(25)).toBe(0);
+    expect(misses(1)).toBeGreaterThan(5);
+  });
+
+  it('save and reload keeps hands (lines reset) and the crate', () => {
+    const g = owner({ baits: { worm: 30 } });
+    g.buyBoat(); g.hireHand(); g.upgradeHandRod(0); g.setHandBait(0, 'worm');
+    tick(g, 30);
+    const copy = new Game(JSON.parse(JSON.stringify(g.save())));
+    expect(copy.hands[0]).toMatchObject({ rod: 1, bait: 'worm', line: { type: 'idle' } });
+    expect(copy.crate.length).toBe(g.crate.length);
   });
 });

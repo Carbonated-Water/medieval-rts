@@ -1,6 +1,6 @@
 import {
-  ACHIEVEMENTS, AUTO, BAITS, BOAT_PRICE, COMPANY_PRICE, COMPANY_UNLOCK_EARNED, CREW_COST, CREW_HAUL, CREW_MAX, CREW_SPEED,
-  LETTERS, NETS, SEA_FISH, TRIP_SECONDS, BITE_WAIT, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, GEAR, HAGGLE_PER_LEVEL, HOLDERS, MAX_GROUND_WORMS,
+  ACHIEVEMENTS, AUTO, BAITS, BOATS, COMPANY_PRICE, COMPANY_UNLOCK_EARNED, CREW_COST, CREW_HAUL, CREW_MAX, CREW_SPEED,
+  HANDS_MAX, HAND_COST, HAND_REACT, HAND_REACT_PER_LEVEL, HAND_REST, HAND_SKILL_MAX, LETTERS, handSkillCost, type BoatType, BITE_WAIT, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, GEAR, HAGGLE_PER_LEVEL, HOLDERS, MAX_GROUND_WORMS,
   MIN_BITE_WAIT, REEL_WINDOW, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, START_WORMS, STRENGTH_PER_LEVEL, TIERS,
   TOO_STRONG_WEIGHT, VARIANTS, VARIANT_ORDER, WORMS_PER_PICK, WORM_SPAWN_SECONDS, WORM_SPOTS, baitById,
   type AchStat, type AchievementDef, type BaitId, type FishDef, type GearKind, type SkillId, type Tier, type Variant,
@@ -17,10 +17,22 @@ export interface Catch {
 
 /** One company boat: its net, crew, the trip it's on, and the haul waiting at the pier. */
 export interface Boat {
+  type: BoatType;
+  /** Gear level (net / traps / longline). */
   net: number;
   crew: number;
   trip: { t: number; dur: number } | null;
   haul: { fish: string; n: number; value: number }[] | null;
+}
+
+/** A hired fisherman on the wide pier: their own rod and level, the bait you assigned, one line. */
+export interface Hand {
+  rod: number;
+  skill: number;
+  bait: BaitId;
+  line: Line;
+  /** Reaction time picked for the current bite. */
+  react: number | null;
 }
 
 export interface JournalEntry { count: number; bestKg: number; variants?: Partial<Record<Variant, number>> }
@@ -55,6 +67,9 @@ export interface SaveData {
   company: boolean;
   letters: number;
   boats: Boat[];
+  hands: Hand[];
+  /** Hired fishermen's catches, waiting to be sold. */
+  crate: Catch[];
 }
 
 const CAST_SECONDS = 0.6;
@@ -106,6 +121,8 @@ export class Game {
   company = false;
   letters = 0;
   boats: Boat[] = [];
+  hands: Hand[] = [];
+  crate: Catch[] = [];
   private nextId = 1;
   /** Autofisher reaction time picked for each line's current bite. */
   private autoReact: (number | undefined)[] = [];
@@ -118,6 +135,8 @@ export class Game {
       if (!save.baits && oldBait) this.baits[BAITS[Math.min(oldBait, BAITS.length - 1)]!.id] = 25;
     }
     if (!BAITS.some((b) => b.id === this.baitSel)) this.baitSel = 'worm';
+    for (const b of this.boats) b.type ??= 'net';
+    for (const h of this.hands) { h.line = { type: 'idle' }; h.react = null; }
     // Saves already past the reveal skip the earlier letters and get just the last one.
     if (!this.company && this.earned >= COMPANY_UNLOCK_EARNED) this.letters = Math.max(this.letters, LETTERS.length - 1);
     this.rod = clamp(this.rod, 0, RODS.length - 1);
@@ -149,9 +168,9 @@ export class Game {
 
   // ---------- odds & effects ----------
 
-  /** Fish that can bite: everything your rod lands, plus one tier above it. */
-  private biters(): FishDef[] {
-    return FISH.filter((f) => f.tier <= this.rodTier + 1);
+  /** Fish that can bite: everything a rod lands, plus one tier above it. */
+  private biters(rodTier: Tier = this.rodTier): FishDef[] {
+    return FISH.filter((f) => f.tier <= rodTier + 1);
   }
 
   /**
@@ -172,18 +191,26 @@ export class Game {
   }
 
   /** Bite weight: tier base × rarity × step^(tier-1); fishing level and bait both add to the step. */
-  private weight(f: FishDef, skill: number, bait: BaitId): number {
+  private weight(f: FishDef, skill: number, bait: BaitId, rodTier: Tier = this.rodTier): number {
     const step = 1 + SKILL_TIER_BONUS * (skill - 1) + baitById(bait).lure;
-    // Too-strong fish bite at a steady share of your rod's top tier: levels and bait don't make snaps more common.
-    if (f.tier > this.rodTier) return TIERS[f.tier].weight * f.rarity * Math.pow(step, this.rodTier - 1) * TOO_STRONG_WEIGHT;
+    // Too-strong fish bite at a steady share of the rod's top tier: levels and bait don't make snaps more common.
+    if (f.tier > rodTier) return TIERS[f.tier].weight * f.rarity * Math.pow(step, rodTier - 1) * TOO_STRONG_WEIGHT;
     return TIERS[f.tier].weight * f.rarity * Math.pow(step, f.tier - 1);
   }
 
   /** Which fish bites (bait as cast). */
-  rollFish(bait: BaitId = 'worm'): { fish: FishDef; tooStrong: boolean } {
-    const list = this.biters();
-    const fish = this.pick(list, (f) => this.weight(f, this.skill, bait));
-    return { fish, tooStrong: fish.tier > this.rodTier };
+  rollFish(bait: BaitId = 'worm', rodTier: Tier = this.rodTier, skill = this.skill): { fish: FishDef; tooStrong: boolean } {
+    const list = this.biters(rodTier);
+    const fish = this.pick(list, (f) => this.weight(f, skill, bait, rodTier));
+    return { fish, tooStrong: fish.tier > rodTier };
+  }
+
+  /** Odds for a hired fisherman (their rod and level, their bait). */
+  handOdds(h: Hand): { fish: FishDef; p: number; tooStrong: boolean }[] {
+    const tier = RODS[h.rod]!.tier;
+    const weights = this.biters(tier).map((f) => ({ fish: f, w: this.weight(f, h.skill, h.bait, tier) }));
+    const total = weights.reduce((s, x) => s + x.w, 0);
+    return weights.map(({ fish, w }) => ({ fish, p: w / total, tooStrong: fish.tier > tier }));
   }
 
   private pick(list: FishDef[], w: (f: FishDef) => number): FishDef {
@@ -194,9 +221,9 @@ export class Game {
   }
 
   /** Bites come sooner with better bait and rods. */
-  biteWait(bait: BaitId = 'worm'): number {
+  biteWait(bait: BaitId = 'worm', rod = this.rod): number {
     const [lo, hi] = BITE_WAIT;
-    const wait = (lo + this.rng() * (hi - lo)) * baitById(bait).wait * (1 - 0.06 * this.rod);
+    const wait = (lo + this.rng() * (hi - lo)) * baitById(bait).wait * (1 - 0.06 * rod);
     return Math.max(MIN_BITE_WAIT, wait);
   }
 
@@ -344,6 +371,7 @@ export class Game {
   tick(dt: number): void {
     this.spawnWorms(dt);
     this.tickBoats(dt);
+    this.tickHands(dt);
     this.lines.forEach((line, i) => {
       if (line.type === 'idle') return;
       line.t += dt;
@@ -382,14 +410,15 @@ export class Game {
   }
 
   /** A fish is landed: maybe a variant, weigh it (clothes make it bigger), price it, bag it, log it. */
-  private land(fish: FishDef): Catch {
+  /** A fish is landed (by you, or by a hired hand into the pier crate): variant, weight, price, journal. */
+  private land(fish: FishDef, byHand = false): Catch {
     const variant = this.rollVariant();
     const v = variant ? VARIANTS[variant] : { size: 1, value: 1 };
-    const ratio = (0.6 + this.rng() * 0.8) * (1 + CLOTHES[this.clothes]!.size) * v.size;
+    const ratio = (0.6 + this.rng() * 0.8) * (byHand ? 1 : 1 + CLOTHES[this.clothes]!.size) * v.size;
     const kg = Math.round(fish.kg * ratio * 100) / 100;
     const value = Math.max(1, Math.round(fish.price * ratio * v.value));
     const c: Catch = { id: this.nextId++, fish: fish.id, kg, value, ...(variant ? { variant } : {}) };
-    this.bag.push(c);
+    (byHand ? this.crate : this.bag).push(c);
     const j = this.journal[fish.id] ?? { count: 0, bestKg: 0 };
     const variants = { ...j.variants };
     if (variant) variants[variant] = (variants[variant] ?? 0) + 1;
@@ -483,15 +512,16 @@ export class Game {
     return true;
   }
 
-  /** Phase 1: one boat. */
-  get canBuyBoat(): boolean {
-    return this.company && this.boats.length < 1;
+  /** One boat of each kind. */
+  canBuyBoat(type: BoatType = 'net'): boolean {
+    return this.company && !this.boats.some((b) => b.type === type);
   }
 
-  buyBoat(): boolean {
-    if (!this.canBuyBoat || this.money < BOAT_PRICE) return false;
-    this.money -= BOAT_PRICE;
-    this.boats.push({ net: 0, crew: 0, trip: null, haul: null });
+  buyBoat(type: BoatType = 'net'): boolean {
+    const price = BOATS[type].price;
+    if (!this.canBuyBoat(type) || this.money < price) return false;
+    this.money -= price;
+    this.boats.push({ type, net: 0, crew: 0, trip: null, haul: null });
     return true;
   }
 
@@ -508,10 +538,12 @@ export class Game {
     return true;
   }
 
+  /** The next gear level for a boat (net, traps, longline). */
   nextNet(i: number): { level: number; name: string; price: number; fish: number } | null {
     const b = this.boats[i];
-    const level = (b?.net ?? 99) + 1;
-    return b && NETS[level] ? { level, ...NETS[level]! } : null;
+    if (!b) return null;
+    const level = b.net + 1, gear = BOATS[b.type].gear[level];
+    return gear ? { level, ...gear } : null;
   }
 
   upgradeNet(i: number): boolean {
@@ -523,11 +555,11 @@ export class Game {
   }
 
   tripSeconds(b: Boat): number {
-    return TRIP_SECONDS * (1 - CREW_SPEED * b.crew);
+    return BOATS[b.type].trip * (1 - CREW_SPEED * b.crew);
   }
 
   haulSize(b: Boat): number {
-    return Math.round(NETS[b.net]!.fish * (1 + CREW_HAUL * b.crew));
+    return Math.round(BOATS[b.type].gear[b.net]!.fish * (1 + CREW_HAUL * b.crew));
   }
 
   /** Send a boat out (only when it's at the pier with nothing to unload). */
@@ -560,13 +592,13 @@ export class Game {
   private rollHaul(b: Boat): { fish: string; n: number; value: number }[] {
     const out = new Map<string, { fish: string; n: number; value: number }>();
     for (let k = this.haulSize(b); k > 0; k--) {
-      const f = this.pick(SEA_FISH, (x) => TIERS[x.tier].weight * x.rarity);
+      const f = this.pick(BOATS[b.type].catch, (x) => TIERS[x.tier].weight * x.rarity);
       const e = out.get(f.id) ?? { fish: f.id, n: 0, value: 0 };
       e.n++;
       e.value += Math.round(f.price * (0.6 + this.rng() * 0.8));
       out.set(f.id, e);
     }
-    return SEA_FISH.filter((f) => out.has(f.id)).map((f) => out.get(f.id)!);
+    return BOATS[b.type].catch.filter((f) => out.has(f.id)).map((f) => out.get(f.id)!);
   }
 
   private tickBoats(dt: number): void {
@@ -574,6 +606,106 @@ export class Game {
       if (!b.trip) continue;
       b.trip.t += dt;
       if (b.trip.t >= b.trip.dur) { b.trip = null; b.haul = this.rollHaul(b); }
+    }
+  }
+
+  // ---------- hired fishermen on the wide pier ----------
+
+  /** The wide pier (and hiring) opens with your first boat. */
+  get pierOpen(): boolean {
+    return this.boats.length > 0;
+  }
+
+  nextHandCost(): number | null {
+    return this.pierOpen && this.hands.length < HANDS_MAX ? HAND_COST[this.hands.length]! : null;
+  }
+
+  hireHand(): boolean {
+    const cost = this.nextHandCost();
+    if (cost === null || this.money < cost) return false;
+    this.money -= cost;
+    this.hands.push({ rod: 0, skill: 1, bait: 'worm', line: { type: 'idle' }, react: null });
+    return true;
+  }
+
+  handNextRod(i: number): { level: number; name: string; price: number } | null {
+    const h = this.hands[i];
+    const r = h ? RODS[h.rod + 1] : undefined;
+    return h && r ? { level: h.rod + 1, name: r.name, price: r.price } : null;
+  }
+
+  upgradeHandRod(i: number): boolean {
+    const next = this.handNextRod(i);
+    if (!next || this.money < next.price) return false;
+    this.money -= next.price;
+    this.hands[i]!.rod = next.level;
+    return true;
+  }
+
+  handTrainCost(i: number): number | null {
+    const h = this.hands[i];
+    return h && h.skill < HAND_SKILL_MAX ? handSkillCost(h.skill) : null;
+  }
+
+  trainHand(i: number): boolean {
+    const cost = this.handTrainCost(i);
+    if (cost === null || this.money < cost) return false;
+    this.money -= cost;
+    this.hands[i]!.skill++;
+    return true;
+  }
+
+  setHandBait(i: number, bait: BaitId): void {
+    const h = this.hands[i];
+    if (h) h.bait = bait;
+  }
+
+  /** Is this fisherman stuck for want of their bait? */
+  handStarved(h: Hand): boolean {
+    return h.line.type === 'idle' && this.baitCount(h.bait) === 0;
+  }
+
+  crateValue(): number {
+    return this.crate.reduce((s, c) => s + this.priceOf(c), 0);
+  }
+
+  /** Sell everything the fishermen caught. */
+  sellCrate(): number {
+    const total = this.crateValue();
+    this.money += total;
+    this.earned += total;
+    this.crate = [];
+    return total;
+  }
+
+  /** Each fisherman runs their own line: bait from your pouch, cast, wait, reel after a reaction time, recast. */
+  private tickHands(dt: number): void {
+    for (const h of this.hands) {
+      const line = h.line;
+      const tier = RODS[h.rod]!.tier;
+      if (line.type === 'idle') {
+        if (this.baitCount(h.bait) > 0) {
+          this.baits[h.bait] = this.baitCount(h.bait) - 1;
+          h.line = { type: 'casting', t: 0, bait: h.bait };
+        }
+        continue;
+      }
+      line.t += dt;
+      if (line.type === 'casting' && line.t >= CAST_SECONDS) {
+        h.line = { type: 'waiting', t: 0, biteAt: this.biteWait(line.bait, h.rod), bait: line.bait };
+      } else if (line.type === 'waiting' && line.t >= line.biteAt) {
+        const { fish, tooStrong } = this.rollFish(line.bait, tier, h.skill);
+        h.line = { type: 'bite', t: 0, window: REEL_WINDOW, fish, tooStrong };
+        const slow = Math.max(HAND_REACT[0], HAND_REACT[1] - HAND_REACT_PER_LEVEL * (h.skill - 1));
+        h.react = HAND_REACT[0] + this.rng() * (slow - HAND_REACT[0]);
+      } else if (line.type === 'bite' && line.t >= (h.react ?? 0)) {
+        if (h.react! > line.window) h.line = { type: 'result', t: 0, outcome: 'escaped', fish: line.fish };
+        else if (line.tooStrong) h.line = { type: 'result', t: 0, outcome: 'snapped', fish: line.fish };
+        else h.line = { type: 'result', t: 0, outcome: 'caught', fish: line.fish, caught: this.land(line.fish, true) };
+        h.react = null;
+      } else if (line.type === 'result' && line.t >= HAND_REST) {
+        h.line = { type: 'idle' };
+      }
     }
   }
 
@@ -624,6 +756,7 @@ export class Game {
       skill: this.skill, reflexes: this.reflexes, haggling: this.haggling, strength: this.strength, dev: this.dev,
       bag: this.bag, journal: this.journal, nextId: this.nextId, earned: this.earned, claimed: this.claimed,
       company: this.company, letters: this.letters, boats: this.boats,
+      hands: this.hands.map((h) => ({ ...h, line: { type: 'idle' as const }, react: null })), crate: this.crate,
     };
   }
 }

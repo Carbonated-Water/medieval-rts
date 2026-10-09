@@ -1,4 +1,4 @@
-import { ACHIEVEMENTS, DEV_MULTIPLIER, LETTERS, RODS, SKILLS, VARIANTS, baitById, type BaitId, type GearKind, type SkillId } from './data';
+import { ACHIEVEMENTS, BOATS, DEV_MULTIPLIER, HAND_NAMES, LETTERS, RODS, SKILLS, VARIANTS, baitById, type BaitId, type BoatType, type GearKind, type SkillId } from './data';
 import { Game, fishById, type Line, type SaveData } from './game';
 import { Scene, WORM_SPOT_X } from './scene';
 import './ui.css';
@@ -46,6 +46,10 @@ canvas.addEventListener('click', (e) => {
   if (ui.open) return;
   // The harbor across the river opens its panel from anywhere.
   if (scene.hitHarbor(e.clientX, e.clientY)) { ui.open = 'harbor'; return; }
+  // Hired fishermen and the crate on the wide pier.
+  const hand = scene.hitHand(e.clientX, e.clientY);
+  if (hand >= 0) { ui.handSel = hand; ui.open = 'hand'; return; }
+  if (scene.hitCrate(e.clientX, e.clientY)) { ui.open = 'pier'; return; }
   // Tapping a worm walks over to dig it up (it's picked up on the way past).
   const worm = scene.hitWorm(e.clientX, e.clientY);
   if (worm) { scene.walkTo('ground', worm.x); return; }
@@ -82,11 +86,27 @@ function onAction(a: Action): void {
     if (!game.cast() && !game.activeBait) { const at = scene.fisherScreen(); note.float('NO BAIT', at.x, at.y, 'bad'); }
   }
   else if (a === 'reel') game.reel();
-  else if (a === 'market' || a === 'tackle' || a === 'baitshop' || a === 'pouch' || a === 'harbor' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'inbox' || a === 'settings') ui.open = ui.open === a ? null : a;
+  else if (a === 'market' || a === 'tackle' || a === 'baitshop' || a === 'pouch' || a === 'harbor' || a === 'pier' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'inbox' || a === 'settings') ui.open = ui.open === a ? null : a;
   else if (a.startsWith('bait:')) game.selectBait(a.slice(5) as BaitId);
   else if (a === 'buyCompany') {
     if (game.buyCompany()) { ui.open = null; note.clearBanners(); note.banner(pixelIcon('boat'), 'THE FISHING CO.', 'is yours', 'rare'); }
-  } else if (a === 'buyBoat') { if (game.buyBoat()) note.banner(pixelIcon('boat'), 'BOUGHT', 'Net Boat'); }
+  } else if (a.startsWith('buyBoat:')) {
+    const type = a.slice(8) as BoatType;
+    if (game.buyBoat(type)) note.banner(pixelIcon('boat'), 'BOUGHT', BOATS[type].name);
+  } else if (a.startsWith('boat:')) { ui.boatSel = Number(a.slice(5)); ui.open = 'boat'; }
+  else if (a === 'hire') { if (game.hireHand()) note.banner(pixelIcon('crew'), 'HIRED', HAND_NAMES[game.hands.length - 1]!); }
+  else if (a === 'sellCrate') { const n = game.sellCrate(); if (n) note.banner(pixelIcon('fish'), 'CRATE SOLD', `$${n.toLocaleString()}`); }
+  else if (a.startsWith('hand:')) { ui.handSel = Number(a.slice(5)); ui.open = 'hand'; }
+  else if (a.startsWith('handRod:')) {
+    const i = Number(a.slice(8)), next = game.handNextRod(i);
+    if (next && game.upgradeHandRod(i)) note.banner(pixelIcon('rod'), HAND_NAMES[i]!.toUpperCase(), next.name);
+  } else if (a.startsWith('handTrain:')) {
+    const i = Number(a.slice(10));
+    if (game.trainHand(i)) note.banner(pixelIcon('hook'), HAND_NAMES[i]!.toUpperCase(), `Fishing ${game.hands[i]!.skill}`);
+  } else if (a.startsWith('handBait:')) {
+    const [, i, bait] = a.split(':') as [string, string, BaitId];
+    game.setHandBait(Number(i), bait);
+  }
   else if (a.startsWith('send:')) game.sendBoat(Number(a.slice(5)));
   else if (a.startsWith('collect:')) {
     const paid = game.collectHaul(Number(a.slice(8)));
@@ -107,7 +127,7 @@ function onAction(a: Action): void {
     const paid = game.claim(ui.pick);
     if (paid) note.banner(pixelIcon('coin'), 'COLLECTED', `$${paid.toLocaleString()}`);
   }
-  else if (a === 'close') ui.open = null;
+  else if (a === 'close') ui.open = ui.open === 'boat' ? 'harbor' : ui.open === 'hand' ? 'pier' : null;
   else if (a === 'sellAll') { const n = game.sellAll(); if (n) note.banner(pixelIcon('coin'), 'SOLD', `$${n.toLocaleString()}`); }
   else if (a.startsWith('sellFish:')) {
     const f = fishById(a.slice(9));
@@ -186,8 +206,31 @@ function announceHarbor(): void {
     dirty = true;
   }
   game.boats.forEach((b, i) => {
-    if (b.haul && !hauls[i]) note.banner(pixelIcon('boat'), 'BOAT IS BACK', `$${game.haulValue(b).toLocaleString()}`, 'rare');
+    if (b.haul && !hauls[i]) note.banner(pixelIcon('boat'), `${BOATS[b.type].name.toUpperCase()} IS BACK`, `$${game.haulValue(b).toLocaleString()}`, 'rare');
     hauls[i] = !!b.haul;
+  });
+  game.hands.forEach((h, i) => {
+    const starved = game.handStarved(h);
+    if (starved && !handStarved[i]) note.banner(pixelIcon('bait'), `${HAND_NAMES[i]!.toUpperCase()} NEEDS BAIT`, 'Restock your pouch', 'plain');
+    handStarved[i] = starved;
+  });
+}
+const handStarved: boolean[] = [];
+
+/** Hired fishermen: only their notable catches float up (big fish, rare variants), and snaps. */
+const handKeys: string[] = [];
+function announceHands(): void {
+  game.hands.forEach((h, i) => {
+    const l = h.line;
+    const key = l.type === 'result' ? `${l.outcome}:${l.caught?.id ?? ''}` : l.type;
+    if (key === handKeys[i]) return;
+    handKeys[i] = key;
+    if (l.type !== 'result' || !l.fish) return;
+    const at = scene.handScreen(i);
+    if (l.outcome === 'caught' && l.caught && (l.fish.tier >= 3 || l.caught.variant)) {
+      note.float(`+$${game.priceOf(l.caught).toLocaleString()}`, at.x, at.y, l.caught.variant ? 'rare' : 'good');
+      dirty = true;
+    } else if (l.outcome === 'snapped') note.float('SNAP!', at.x, at.y, 'bad');
   });
 }
 
@@ -227,6 +270,7 @@ function frame(now: number): void {
   game.tick(dt);
   if (scene.place === 'dock') game.autoFish();
   digWorms();
+  announceHands();
   announce();
   announceAchievements();
   scene.update(dt);

@@ -97,20 +97,45 @@ function fishColors(f: FishDef, variant: Variant | undefined, silhouette: boolea
   return f.colors;
 }
 
+/** Crabs and lobsters aren't fish-shaped: drawn from little maps (b body, l belly, d claws/legs, w eye). */
+const SHELL_MAPS: Record<string, string[]> = {
+  crab: ['..d........d..', '.dd........dd.', '.d.d......d.d.', '...bb....bb...', '..bbbbbbbbbb..', '.bbbwbbbbwbbb.', '.bbbbbbbbbbbb.', '..llllllllll..', '.d.d.d..d.d.d.'],
+  lobster: ['..........dd.ddd..', '...........dddd...', 'd.d.......bb......', 'dddbbbbbbbbbbw....', 'ddbbbbbbbbbbbbb...', 'dddbbbbbbbbbbw....', 'd.d.......bb......', '...........dddd...', '..........dd.ddd..'],
+};
+SHELL_MAPS.kingcrab = SHELL_MAPS.crab!;
+SHELL_MAPS.spiny = SHELL_MAPS.lobster!;
+/** Fish with a long bill on the nose (and a sail, for the sailfish). */
+const BILLED = new Set(['sailfish', 'swordfish', 'marlin']);
+
+function shellCanvas(f: FishDef, variant: Variant | undefined, silhouette: boolean): HTMLCanvasElement {
+  const map = SHELL_MAPS[f.id]!;
+  const [body, belly, fin] = fishColors(f, variant, silhouette);
+  const k = f.id === 'kingcrab' ? 2 : 1; // the king crab is twice the size
+  return outline(makeCanvas(map[0]!.length * k + 2, map.length * k + 2, (ctx) => {
+    map.forEach((row, y) => [...row].forEach((ch, x) => {
+      if (ch === '.') return;
+      const c = ch === 'b' ? body : ch === 'l' ? belly : ch === 'd' ? fin : silhouette ? body : PAL.outline;
+      rect(ctx, 1 + x * k, 1 + y * k, k, k, c);
+    }));
+  }));
+}
+
 /** A side-on pixel fish facing right: tail, body with belly, fin, pattern, eye, outline. */
 export function fishCanvas(f: FishDef, variant?: Variant, silhouette = false): HTMLCanvasElement {
+  if (SHELL_MAPS[f.id]) return shellCanvas(f, variant, silhouette);
+  const bill = BILLED.has(f.id) ? 7 : 0;
   const W = 11 + f.tier * 3 + (f.shape > 5 ? 6 : 0);
   const H = Math.max(4, Math.round((W / f.shape) * 1.25));
   const [body, belly, fin] = fishColors(f, variant, silhouette);
   const top = 3; // room above for the fin + outline
-  return outline(makeCanvas(W + 2, H + top + 2, (ctx) => {
+  return outline(makeCanvas(W + 2 + bill, H + top + 2, (ctx) => {
     const tw = Math.max(3, Math.round(W * 0.22));
     const x0 = tw - 1, x1 = W - 1;
     const bx = (x0 + x1) / 2 + 0.5, rx = (x1 - x0) / 2 + 0.5;
     const cy = H / 2, ry = H / 2;
     const inBody = (x: number, y: number) => ((x + 0.5 - bx) / rx) ** 2 + ((y + 0.5 - cy) / ry) ** 2 <= 1;
     // Dorsal fin (two rows on bigger fish), then the forked tail.
-    const finRows = f.tier >= 3 ? 2 : 1;
+    const finRows = f.id === 'sailfish' ? 3 : f.tier >= 3 ? 2 : 1;
     for (let r = 1; r <= finRows; r++) rect(ctx, 1 + Math.round(bx - rx * 0.35), top - r, Math.max(2, Math.round(rx * (0.7 - r * 0.15))), 1, fin);
     for (let x = 0; x < tw; x++) {
       const half = 1 + ((tw - x) / tw) * H * 0.45;
@@ -138,6 +163,8 @@ export function fishCanvas(f: FishDef, variant?: Variant, silhouette = false): H
     const ex = x1 + 1 - Math.max(2, Math.round(rx * 0.3)), ey = top + Math.floor(cy) - 1;
     if (W >= 20) px(ctx, ex - 1, ey, PAL.white);
     px(ctx, ex, ey, silhouette ? '#3a4050' : PAL.outline);
+    // A long bill on the nose.
+    if (bill) rect(ctx, x1 + 2, top + Math.floor(cy), bill, 1, silhouette ? body : shade(body, -0.25));
     // Catfish whiskers.
     if (f.id === 'catfish' && !silhouette) { px(ctx, x1 + 1, top + Math.ceil(cy) + 1, fin); px(ctx, x1 + 2, top + Math.ceil(cy) + 2, fin); }
   }));
@@ -298,8 +325,10 @@ export function harborCanvas(state: HarborState): HTMLCanvasElement {
   }));
 }
 
-/** A company boat: hull, cabin, net boom, and one little head per crew member. */
-export function boatCanvas(crew: number, silhouette = false): HTMLCanvasElement {
+export type BoatKind = 'net' | 'lobster' | 'sword';
+
+/** A company boat: hull, cabin, its fishing gear (net boom / trap stack / outriggers), and one little head per crew member. */
+export function boatCanvas(crew: number, silhouette = false, kind: BoatKind = 'net'): HTMLCanvasElement {
   const W = 40, H = 24;
   const c = (col: string) => (silhouette ? '#2b3a4a' : col);
   const canvas = makeCanvas(W, H, (ctx) => {
@@ -310,10 +339,26 @@ export function boatCanvas(crew: number, silhouette = false): HTMLCanvasElement 
     rect(ctx, 22, 8, 11, 7, c(PAL.white));
     rect(ctx, 21, 7, 13, 2, c(PAL.waterDeep));
     rect(ctx, 25, 10, 5, 3, c(PAL.waterLight));
-    // Mast and net boom with a hanging net.
-    rect(ctx, 12, 1, 1, 14, c(PAL.dirtDeep));
-    for (let k = 0; k < 9; k++) px(ctx, 12 - k, 1 + k, c(PAL.dirtDark));
-    for (let y = 9; y < 15; y++) for (let x = 3; x < 7; x++) if ((x + y) % 2 === 0) px(ctx, x, y, c(PAL.sand));
+    if (kind === 'net') {
+      // Mast and net boom with a hanging net.
+      rect(ctx, 12, 1, 1, 14, c(PAL.dirtDeep));
+      for (let k = 0; k < 9; k++) px(ctx, 12 - k, 1 + k, c(PAL.dirtDark));
+      for (let y = 9; y < 15; y++) for (let x = 3; x < 7; x++) if ((x + y) % 2 === 0) px(ctx, x, y, c(PAL.sand));
+    } else if (kind === 'lobster') {
+      // A stack of wooden lobster traps and a buoy.
+      for (const [x, y] of [[3, 10], [9, 10], [6, 5]] as const) {
+        rect(ctx, x, y, 6, 5, c(PAL.dirt));
+        for (let k = 1; k < 6; k += 2) rect(ctx, x + k, y, 1, 5, c(PAL.dirtDeep));
+      }
+      rect(ctx, 16, 9, 3, 4, c(PAL.goldLight));
+      rect(ctx, 16, 11, 3, 1, c(PAL.red));
+    } else {
+      // Two tall outrigger poles and a big line reel.
+      for (let k = 0; k < 14; k++) { px(ctx, 14 - Math.floor(k / 3), 14 - k, c(PAL.greyDark)); px(ctx, 18 + Math.floor(k / 3), 14 - k, c(PAL.greyDark)); }
+      rect(ctx, 4, 10, 6, 5, c(PAL.greyMid));
+      rect(ctx, 5, 11, 4, 3, c(PAL.white));
+      rect(ctx, 6, 12, 2, 1, c(PAL.outline));
+    }
     // Crew: a straw hat and a face each, on deck.
     for (let k = 0; k < crew; k++) {
       const x = 15 + k * 3 - (k >= 2 ? 10 : 0);
