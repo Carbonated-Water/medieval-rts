@@ -100,7 +100,8 @@ function onAction(a: Action): void {
     if (game.buyBoat(type)) { note.banner(pixelIcon('boat'), 'BOUGHT', game.boatName(game.boats.length - 1)); ui.open = 'harbor'; }
   } else if (a.startsWith('sellBoat:')) {
     const i = Number(a.slice(9)), name = game.boatName(i);
-    if (confirm(`Sell ${name} for $${game.boatResale(i).toLocaleString()}? Its upgrades and crew go with it.`)) {
+    const atSea = game.boats[i]?.trip ? " It's at sea: this trip's catch is lost." : '';
+    if (confirm(`Sell ${name} for $${game.boatResale(i).toLocaleString()}? Its upgrades and crew go with it.${atSea}`)) {
       const paid = game.sellBoat(i);
       if (paid) { note.banner(pixelIcon('boat'), `SOLD ${name.toUpperCase()}`, `$${paid.toLocaleString()}`); ui.open = 'harbor'; }
     }

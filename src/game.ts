@@ -632,10 +632,10 @@ export class Game {
     return Math.round((spent * BOAT_RESALE) / 100) * 100;
   }
 
-  /** Sell a boat that's at the pier (its haul is sold first). Frees its berth. Returns the money. */
+  /** Sell a boat (any haul on board is sold first; a trip at sea is abandoned). Frees its berth. Returns the money. */
   sellBoat(i: number): number {
     const b = this.boats[i];
-    if (!b || b.trip) return 0;
+    if (!b) return 0;
     const haul = this.collectHaul(i);
     const refund = this.boatResale(i);
     this.boats.splice(i, 1);

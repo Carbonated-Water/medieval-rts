@@ -604,21 +604,33 @@ describe('the fleet', () => {
     expect(g.earned).toBeGreaterThan(30000);
   });
 
-  it('a boat can be sold (at the pier) for half of what went into it, freeing its berth', () => {
+  it('a boat can be sold for half of what went into it, freeing its berth', () => {
     const g = owner();
     for (const type of ['net', 'lobster', 'sword'] as const) g.buyBoat(type);
     expect(g.canBuyBoat('net')).toBe(false); // berths full
     const net = g.boats[0]!;
     g.upgradeTrack(0, 'hull'); g.hireCrew(0);
     expect(g.boatResale(0)).toBeGreaterThan(BOATS.net.price / 2);
+    tick(g, 0); // (at the pier)
     g.sendBoat(0);
-    expect(g.sellBoat(0)).toBe(0); // at sea: can't sell
     tick(g, net.trip!.dur + 0.1);
     const money = g.money, refund = g.boatResale(0), haul = g.haulValue(g.boats[0]!);
     expect(g.sellBoat(0)).toBe(refund + haul);
     expect(g.money).toBe(money + refund + haul);
     expect(g.boats.map((b) => b.type)).toEqual(['lobster', 'sword']);
     expect(g.canBuyBoat('sword')).toBe(true);
+  });
+
+  it('a boat can be sold even while at sea (that trip is lost), e.g. one with a captain', () => {
+    const g = owner();
+    g.buyBoat('net'); g.buyBoat('lobster');
+    g.upgradeTrack(0, 'captain');
+    tick(g, 1);
+    expect(g.boats[0]!.trip).not.toBeNull();
+    const money = g.money, refund = g.boatResale(0);
+    expect(g.sellBoat(0)).toBe(refund);
+    expect(g.money).toBe(money + refund);
+    expect(g.boats.map((b) => b.type)).toEqual(['lobster']);
   });
 
   it('the company keeps earning while the game is closed, up to the warehouse limit', () => {

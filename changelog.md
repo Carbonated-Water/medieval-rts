@@ -4,6 +4,15 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Fix: Sell boat did nothing for boats at sea
+  WHAT: Selling was only allowed at the pier, and a boat with a Captain sails
+        again the moment it returns, so its button stayed disabled. Boats can
+        now be sold any time; at sea, the confirm says that trip's catch is
+        lost. 70 tests.
+  WHY:  User: 'sell boat button not work'. Reproduced in Edge first.
+
+---
+
 2026-10-09  Bait Shop: +100
   WHAT: Every bait row gets a +100 button next to +1 / +10 (slimmer
         buttons in the Bait Shop so three fit a 360 px phone).
