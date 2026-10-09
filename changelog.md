@@ -4,6 +4,14 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Deployed
+  WHAT: Pushed 83775dc..10a67a5 (gear/skills/dev, lines + variants, shop
+        split, school/autofisher/achievements, notifications, pixel art)
+        to main; Pages deploy passed and the live site was checked.
+  WHY:  User: "push to prod".
+
+---
+
 2026-10-09  Pixel art on PixiJS (replaces hand-drawn Canvas 2D)
   WHAT: scene.ts rewritten on PixiJS 8: the world renders at screen ÷ 2–4
         (195×422 on a phone) and is upscaled nearest-neighbour. Kenney Pixel
