@@ -27,16 +27,30 @@
       .pill .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c); border: 1px solid rgba(0, 0, 0, 0.3); }
       .pill.btn { pointer-events: auto; cursor: pointer; margin-left: auto; }
 
-      #toast {
-        position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 64px); transform: translate(-50%, -8px);
-        max-width: min(92vw, 440px); padding: 9px 16px; text-align: center;
-        background: var(--paper); border: 2px solid var(--wood); border-radius: 14px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-        font: 15px/1.35 Georgia, serif; opacity: 0; transition: opacity 0.25s, transform 0.25s; pointer-events: none; z-index: 20;
+      /* Notification cards: a stack under the top bar (newest on top), and rows in the 🔔 panel. */
+      #notes { position: fixed; right: 8px; width: min(calc(100vw - 16px), 340px); display: flex; flex-direction: column; gap: 6px; z-index: 9; pointer-events: none; }
+      .note-card {
+        display: flex; align-items: center; gap: 10px; padding: 7px 10px; pointer-events: auto;
+        background: var(--paper); border: 2px solid var(--wood); border-left-width: 6px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+        font: 14px/1.3 Georgia, serif; color: var(--ink); animation: note-in 0.28s ease-out;
+        transition: opacity 0.3s, transform 0.3s;
       }
-      #toast.show { opacity: 1; transform: translate(-50%, 0); }
-      #toast.good { border-color: #3f9a4a; }
-      #toast.bad { border-color: #c0503a; }
-      #toast .new { color: #fff; background: #e0503a; border-radius: 6px; padding: 1px 6px; font-size: 12px; font-weight: 700; }
+      .note-card.out { opacity: 0; transform: translateX(30px); }
+      .note-card.good { border-left-color: #3f9a4a; }
+      .note-card.bad { border-left-color: #c0503a; }
+      .note-card.rare { border-left-color: #e0a820; background: #fff8de; }
+      .note-card .ic { flex: none; width: 52px; height: 32px; object-fit: contain; }
+      .note-card .ic.emoji { font-size: 24px; text-align: center; line-height: 32px; }
+      .note-card .txt { flex: 1; min-width: 0; }
+      .note-card .txt small { opacity: 0.75; }
+      .note-card .cash { color: #2f7a2f; }
+      .note-card .ago { flex: none; opacity: 0.55; font-size: 12px; }
+      .note-card .tier { display: inline-block; vertical-align: 1px; }
+      @keyframes note-in { from { opacity: 0; transform: translateX(40px); } }
+      #sheet .inbox { display: flex; flex-direction: column; gap: 5px; }
+      #sheet .note-card.row { box-shadow: none; animation: none; padding: 4px 8px; font-size: 13px; }
+      #sheet .note-card.row .ic { width: 44px; height: 26px; }
+      .note-card .new { color: #fff; background: #e0503a; border-radius: 6px; padding: 1px 6px; font-size: 12px; font-weight: 700; }
 
       #action {
         position: fixed; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
@@ -166,7 +180,7 @@
   <body>
     <canvas id="scene"></canvas>
     <div id="top"></div>
-    <div id="toast"></div>
+    <div id="notes"></div>
     <div id="action"></div>
     <div id="sheet"></div>
     <script type="module" src="/src/main.ts"></script>

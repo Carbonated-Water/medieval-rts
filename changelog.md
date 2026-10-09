@@ -4,6 +4,19 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Facebook-style notifications
+  WHAT: New src/notify.ts. Every event is its own card (fish picture,
+        name, tier, weight, $value; achievements with their icon) in a
+        stack under the top bar: newest on top, up to 4, each ~5 s (rare /
+        new fish 7 s), slide in, fade out, tap to dismiss. 🔔 in the top
+        bar with a red unread count opens the last 8 events (fits without
+        scrolling). Misses only show while fishing by hand and aren't kept.
+        Cards sit under open panels so they never cover a ✕. The single
+        toast is gone.
+  WHY:  User (everything maxed, 4 lines): catches came too fast, one toast
+        replaced the next before the fish and value could be read.
+---
+
 2026-10-09  Fishing School, Autofisher, achievements
   WHAT: Skills moved out of the top bar into a Fishing School: a log cabin
         on the grass between the market and the dock (walk there, it opens).

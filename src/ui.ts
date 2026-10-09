@@ -4,10 +4,11 @@ import {
 } from './data';
 import { fishIcon } from './fishart';
 import { fishById, type Game } from './game';
+import { HISTORY, Notices, cardHtml, timeAgo, type NoticeKind } from './notify';
 import type { Place } from './scene';
 
 /** One panel per job: the market sells fish, the tackle shop sells gear, the school trains skills. */
-export type Panel = 'market' | 'tackle' | 'training' | 'journal' | 'trophies' | 'settings';
+export type Panel = 'market' | 'tackle' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
 
 export type Action =
   | 'cast' | 'reel' | 'close' | 'reset' | 'toggleDev' | Panel
@@ -37,10 +38,9 @@ export class UI {
   private top = document.getElementById('top')!;
   private action = document.getElementById('action')!;
   private sheet = document.getElementById('sheet')!;
-  private toast = document.getElementById('toast')!;
+  readonly notices = new Notices(document.getElementById('notes')!);
   private last = { top: '', action: '', sheet: '' };
   open: Panel | null = null;
-  private toastUntil = 0;
   private time = 0;
 
   constructor(onAction: (a: Action) => void) {
@@ -50,15 +50,15 @@ export class UI {
     });
   }
 
-  say(text: string, seconds = 2.4, kind: 'info' | 'good' | 'bad' = 'info'): void {
-    this.toast.innerHTML = text;
-    this.toast.className = `show ${kind}`;
-    this.toastUntil = this.time + seconds;
+  /** Pop a notification card (and log it in 🔔 unless keep is false). */
+  say(text: string, seconds = 4, kind: NoticeKind = 'info', icon?: string, keep = true): void {
+    this.notices.push(text, { seconds, kind, icon, keep });
   }
 
   update(dt: number, game: Game, place: Place | null, walking: boolean): void {
     this.time += dt;
-    if (this.toastUntil && this.time > this.toastUntil) { this.toast.className = ''; this.toastUntil = 0; }
+    if (this.open === 'inbox') this.notices.markRead();
+    this.notices.update(this.top.getBoundingClientRect().bottom + 6);
 
     const rod = RODS[game.rod]!;
     const ready = game.claimable().length;
@@ -67,6 +67,7 @@ export class UI {
       `<span class="pill" style="--c:${TIERS[rod.tier].color}"><i class="dot"></i>${rod.name}</span>` +
       `<button class="pill btn" data-act="trophies" aria-label="achievements">🏆 ${game.claimed.length}/${ACHIEVEMENTS.length}${ready ? `<i class="badge">${ready}</i>` : ''}</button>` +
       (game.dev ? `<span class="pill dev">DEV ×${DEV_MULTIPLIER}</span>` : '') +
+      `<button class="pill btn" data-act="inbox" aria-label="notifications">🔔${this.notices.unread ? `<i class="badge">${this.notices.unread}</i>` : ''}</button>` +
       `<button class="pill btn" data-act="journal" aria-label="journal">📖 ${Object.keys(game.journal).length}/${FISH.length}</button>` +
       '<button class="pill btn" data-act="settings" aria-label="settings">⚙</button>');
 
@@ -105,6 +106,7 @@ export class UI {
       panel === 'market' ? ['Fish Market', this.marketHtml(game)]
         : panel === 'tackle' ? ['Tackle Shop', this.tackleHtml(game)]
           : panel === 'training' ? ['Fishing School', this.trainingHtml(game)]
+            : panel === 'inbox' ? ['Notifications', this.inboxHtml()]
             : panel === 'trophies' ? [`Achievements · ${game.claimed.length}/${ACHIEVEMENTS.length}`, this.trophiesHtml(game)]
             : panel === 'journal' ? [`Fish Journal · ${Object.keys(game.journal).length}/${FISH.length}`, this.journalHtml(game)]
               : ['Settings', this.settingsHtml(game)];
@@ -164,6 +166,13 @@ export class UI {
       ? `<button class="wide go" data-act="claimAll">Collect ${ready.length} reward${ready.length > 1 ? 's' : ''} · ${money(total)}</button>`
       : '<p class="note">Glowing trophies are ready to collect. Hold or hover one to see its goal.</p>';
     return `${claimAll}<div class="trophy-grid">${tiles}</div>`;
+  }
+
+  /** The last few notifications, newest first. */
+  private inboxHtml(): string {
+    const list = this.notices.history;
+    if (!list.length) return '<p class="empty">Nothing yet. Catches, snaps and achievements show up here.</p>';
+    return `<div class="inbox">${list.map((n) => `<div class="note-card row ${n.kind}">${cardHtml(n, timeAgo(n.at))}</div>`).join('')}</div>`;
   }
 
   /** Raises the fisher's skills, nothing else. */

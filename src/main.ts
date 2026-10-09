@@ -1,6 +1,7 @@
 import { ACHIEVEMENTS, DEV_MULTIPLIER, RODS, SKILLS, TIERS, type GearKind, type SkillId, type Tier } from './data';
 import { Game, fishById, type Line, type SaveData } from './game';
 import { Scene } from './scene';
+import { fishIcon } from './fishart';
 import { UI, variantTag, type Action } from './ui';
 
 const SAVE_KEY = 'riverside-fishing-v1';
@@ -69,7 +70,7 @@ addEventListener('blur', () => held.clear());
 function onAction(a: Action): void {
   if (a === 'cast') game.cast();
   else if (a === 'reel') game.reel();
-  else if (a === 'market' || a === 'tackle' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'settings') ui.open = ui.open === a ? null : a;
+  else if (a === 'market' || a === 'tackle' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'inbox' || a === 'settings') ui.open = ui.open === a ? null : a;
   else if (a === 'claimAll' || a.startsWith('claim:')) {
     const paid = game.claim(a === 'claimAll' ? undefined : a.slice(6));
     if (paid) ui.say(`🏆 Collected <b>$${paid.toLocaleString()}</b>`, 2, 'good');
@@ -105,43 +106,38 @@ function onAction(a: Action): void {
 }
 
 /**
- * Announce how casts ended. With several lines, several can finish in one
- * frame: show the most notable (rare variant > new species > catch > snap >
- * escape > scare), and count the rest.
+ * Announce how casts ended: one notification card per line, so with several
+ * lines every catch (fish, weight, value) stays readable in the stack.
+ * Misses only show while you fish by hand, and aren't kept in 🔔.
  */
 const lastKeys: string[] = [];
 function announce(): void {
-  const fresh: Extract<Line, { type: 'result' }>[] = [];
   game.lines.forEach((line, slot) => {
     const key = line.type === 'result' ? `result:${line.outcome}:${line.caught?.id ?? ''}` : line.type;
-    if (key !== lastKeys[slot] && line.type === 'result') fresh.push(line);
+    const fresh = key !== lastKeys[slot] && line.type === 'result';
     lastKeys[slot] = key;
+    if (fresh) { dirty = true; announceLine(line); }
   });
   lastKeys.length = game.lines.length;
-  if (!fresh.length) return;
-  dirty = true;
-  const rank = (l: Extract<Line, { type: 'result' }>) =>
-    l.caught?.variant ? 6 : l.outcome === 'caught' && l.fish && game.journal[l.fish.id]?.count === 1 ? 5
-      : l.outcome === 'caught' ? 4 : l.outcome === 'snapped' ? 3 : l.outcome === 'escaped' ? 2 : 1;
-  const line = fresh.sort((a, b) => rank(b) - rank(a))[0]!;
-  const more = fresh.filter((l) => l !== line && l.outcome === 'caught').length;
-  const plus = more ? ` <small>(+${more} more)</small>` : '';
+}
+
+function announceLine(line: Extract<Line, { type: 'result' }>): void {
   const f = line.fish;
   const tier = (t: Tier) => `<span class="tier" style="--c:${TIERS[t].color}">${TIERS[t].name}</span>`;
   if (line.outcome === 'caught' && f && line.caught) {
     const c = line.caught;
     const first = game.journal[f.id]!.count === 1;
-    const strong = line.strong ? '💪 Your strength held it! ' : '';
+    const strong = line.strong ? ' 💪' : '';
     const variant = c.variant ? `${variantTag(c.variant)} ` : '';
-    ui.say(`${strong}${variant}${first ? '<span class="new">NEW!</span> ' : ''}<b>${f.name}</b> ${tier(f.tier)} · ${c.kg} kg · <b>$${game.priceOf(c).toLocaleString()}</b>${plus}`,
-      c.variant ? 3.4 : 2.6, 'good');
+    ui.say(`${variant}${first ? '<span class="new">NEW!</span> ' : ''}<b>${f.name}</b>${strong} ${tier(f.tier)}<br><small>${c.kg} kg</small> · <b class="cash">$${game.priceOf(c).toLocaleString()}</b>`,
+      c.variant || first ? 7 : 5, c.variant ? 'rare' : 'good', fishIcon(f, false, 96, 56, c.variant));
   } else if (line.outcome === 'snapped' && f) {
     const need = RODS.find((r) => r.tier >= f.tier)!;
-    ui.say(`Snap! A <b>${f.name}</b> ${tier(f.tier)} broke your line — you need a <b>${need.name}</b>.${plus}`, 3.2, 'bad');
-  } else if (line.outcome === 'escaped') {
-    ui.say(`Too slow — it got away…${plus}`, 2, 'bad');
-  } else if (line.outcome === 'scared') {
-    ui.say(`Too early! You scared ${game.lineCount > 1 ? 'one' : 'it'} off.${plus}`, 2, 'bad');
+    ui.say(`Snap! A <b>${f.name}</b> ${tier(f.tier)} broke your line<br><small>you need a <b>${need.name}</b></small>`, 5, 'bad', fishIcon(f, true));
+  } else if (!game.auto && line.outcome === 'escaped') {
+    ui.say('Too slow — it got away…', 2.5, 'bad', '💨', false);
+  } else if (!game.auto && line.outcome === 'scared') {
+    ui.say(`Too early! You scared ${game.lineCount > 1 ? 'one' : 'it'} off.`, 2.5, 'bad', '🙀', false);
   }
 }
 
@@ -154,7 +150,7 @@ function announceAchievements(): void {
     if (done.has(a.id) || !game.achieved(a)) continue;
     done.add(a.id);
     dirty = true;
-    ui.say(`🏆 <b>${a.name}</b> — ${a.desc}. Collect <b>$${a.reward.toLocaleString()}</b> in 🏆`, 3.2, 'good');
+    ui.say(`Achievement: <b>${a.name}</b><br><small>${a.desc} · collect <b>$${a.reward.toLocaleString()}</b> in 🏆</small>`, 7, 'rare', a.icon);
   }
 }
 
