@@ -66,9 +66,14 @@ rods): Bamboo ≈ 5.5 min, Fiberglass ≈ 35 min, Carbon ≈ 75 min, Mythril
 
 ## Look & input
 
-Plain Canvas 2D, everything drawn in code (sky, hills, river with fish
-shadows, dock in the middle, red-striped fish market and blue-striped
-tackle shop, straw-hat fisher, 20 fish drawings).
+Pixel art rendered with PixiJS at low resolution and scaled up crisp:
+Kenney Pixel Platformer tiles (CC0) for the sky, clouds, forest backdrop,
+water and bank; code-drawn pixel sprites in the same palette for the
+straw-hat fisher (walk / cast poses, outfit and boots by gear), all 20 fish
+(+ Golden / Shiny / silhouette), the red Fish Market, blue Tackle Shop,
+log-cabin School, dock, bobbers and "!" alerts. The HUD uses the same pixel
+fish. Catches, snaps and achievements pop up as stacking notification cards
+(🔔 keeps the last 8).
 DOM interface on top. Tap the river or a shop to walk there; A/D or
 arrows walk, Space casts / reels, E opens the building you stand at.
 

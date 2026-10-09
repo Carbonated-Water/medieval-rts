@@ -2,8 +2,8 @@
 
 A cozy mobile-first 2D fishing game: catch 20 kinds of fish, sell them at
 the market, buy better rods (each lands a higher tier) and train fishing
-skill (shifts the odds toward rarer fish). Vite + TypeScript + Canvas 2D,
-no runtime dependencies.
+skill (shifts the odds toward rarer fish). Vite + TypeScript + PixiJS 8,
+pixel art (Kenney Pixel Platformer tiles, CC0, in `src/assets/kenney/`).
 
 **Read `plan.md` (scope) and `changelog.md` (latest state) before
 changing anything.** Earlier games are git tags `rts-v1` and `hex-v1`.
@@ -28,8 +28,15 @@ changing anything.** Earlier games are git tags `rts-v1` and `hex-v1`.
   the user's go-ahead first.
 - All fish, rods and balance numbers live in `src/data.ts`.
 - `game.ts` is pure logic (no DOM) and takes an RNG, so it is testable;
-  `scene.ts` draws the world, `fishart.ts` draws fish, `ui.ts` is the DOM
-  interface, `main.ts` wires them up and saves.
+  `scene.ts` draws the world with Pixi, `pixelart.ts` draws the pixel
+  sprites (fisherman, fish, buildings) in Kenney's palette, `ui.ts` is the
+  DOM interface, `notify.ts` the notification cards, `main.ts` wires them
+  up and saves.
+- **Pixel art rules:** the world renders at low resolution (screen ÷ 2–4)
+  and is scaled up with nearest-neighbour. Use whole world pixels, the
+  `PAL` colours and the dark outline; only use Kenney *middle* tiles in
+  tiling strips (end caps draw seams). Only CC0 art goes in the repo (it is
+  public; many "free" packs forbid redistribution).
 - After balance changes, re-run a progression sim (see changelog) so the
   first rod still arrives in a few minutes.
 - Append a short WHAT + WHY entry to `changelog.md` after each change.

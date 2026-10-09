@@ -1,13 +1,18 @@
+import { Application, Container, Graphics, Sprite, Texture, TextureStyle, TilingSprite } from 'pixi.js';
+import bgUrl from './assets/kenney/backgrounds.png';
+import tilesUrl from './assets/kenney/tiles.png';
 import { BOOTS, CLOTHES, RODS, TIERS, VARIANTS, type FishDef, type Variant } from './data';
-import { drawFish } from './fishart';
 import type { Game } from './game';
+import {
+  HAND, PAL, alertCanvas, bobberCanvas, fishCanvas, fisherCanvas, holderCanvas, plankCanvas, schoolCanvas, stallCanvas, type Pose,
+} from './pixelart';
 
 export type Place = 'market' | 'school' | 'tackle' | 'dock';
 
 /** Where each place sits along the path, as a fraction of the screen width. */
 const PLACE_X: Record<Place, number> = { market: 0.17, school: 0.335, dock: 0.5, tackle: 0.84 };
 
-/** Key positions, recomputed from the canvas size every frame (CSS px). */
+/** Key positions. Internally in world pixels (the low-res pixel grid); `L` exposes them in CSS px. */
 interface Layout {
   w: number;
   h: number;
@@ -23,42 +28,230 @@ interface Layout {
   bobbers: { x: number; y: number }[]; // where each line's bobber lands
 }
 
-interface Shadow { x: number; y: number; speed: number; size: number; phase: number }
+interface Shadow { x: number; y: number; speed: number; size: number }
 interface Ripple { x: number; y: number; t: number; big: boolean }
 
 const WALK_SPEED = 0.42; // screen widths per second, before boots
-const SKY = ['#8fd0f0', '#cdeefa'];
+const TILE = 18; // Kenney tile size
+TextureStyle.defaultOptions.scaleMode = 'nearest';
+
+/** Cut 18×18 tiles (or 24×24 backgrounds) out of a Kenney sheet into canvases. */
+function cutter(img: HTMLImageElement, size: number) {
+  const cols = Math.floor(img.width / size);
+  return (i: number): HTMLCanvasElement => {
+    const c = document.createElement('canvas');
+    c.width = c.height = size;
+    c.getContext('2d')!.drawImage(img, (i % cols) * size, Math.floor(i / cols) * size, size, size, 0, 0, size, size);
+    return c;
+  };
+}
+/** Several tiles side by side in one canvas (for tiling strips). */
+function strip(parts: HTMLCanvasElement[]): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = parts.reduce((w, p) => w + p.width, 0);
+  c.height = parts[0]!.height;
+  let x = 0;
+  for (const p of parts) { c.getContext('2d')!.drawImage(p, x, 0); x += p.width; }
+  return c;
+}
+/** Make every pixel of the top-left pixel's colour transparent (to lift a backdrop off its own sky). */
+function colorKey(c: HTMLCanvasElement): HTMLCanvasElement {
+  const ctx = c.getContext('2d')!;
+  const img = ctx.getImageData(0, 0, c.width, c.height);
+  const [r, g, b] = img.data;
+  for (let i = 0; i < img.data.length; i += 4) if (img.data[i] === r && img.data[i + 1] === g && img.data[i + 2] === b) img.data[i + 3] = 0;
+  ctx.putImageData(img, 0, 0);
+  return c;
+}
+const loadImage = (src: string) => new Promise<HTMLImageElement>((ok, fail) => { const i = new Image(); i.onload = () => ok(i); i.onerror = fail; i.src = src; });
+const tex = (c: HTMLCanvasElement) => Texture.from(c);
 
 /**
- * The riverbank, drawn with Canvas 2D. Owns the player's position and walking;
- * reads the fishing line state from Game to draw the cast, bobber and catches.
+ * The riverbank in pixel art, rendered with PixiJS: the world is drawn at a
+ * low resolution (2–4× smaller than the screen) and scaled up with
+ * nearest-neighbour so every pixel stays crisp. Kenney Pixel Platformer tiles
+ * for the land and water; the fisherman, fish and buildings come from
+ * pixelart.ts. Owns the player's position and walking; reads the line state
+ * from Game.
  */
 export class Scene {
-  private ctx: CanvasRenderingContext2D;
-  private dpr = Math.min(devicePixelRatio || 1, 2);
+  private app = new Application();
+  private ready = false;
+  private scale = 2;
+  private V!: Layout; // world pixels
   private time = 0;
-  private L!: Layout;
-  /** Player position as fractions of the layout: x along the path, then up the dock. */
+  /** Player position: x along the path (fraction of width), then up the dock (0..1). */
   private px = 0.42;
-  private onDock = 0; // 0 = on the path, 1 = at the dock's end
+  private onDock = 0;
   private route: { x?: number; dock?: number }[] = [];
   private arrival: Place | null = null;
   private facing = 1;
   private walkPhase = 0;
-  private stepping = 0; // seconds of keyboard walking left to animate
+  private stepping = 0;
   private shadows: Shadow[] = [];
   private ripples: Ripple[] = [];
-  private flying: { fish: FishDef; variant?: Variant; t: number; slot: number }[] = [];
+  private flying: { fish: FishDef; variant?: Variant; t: number; slot: number; sprite: Sprite }[] = [];
   private lastLines: string[] = [];
-  private clouds = Array.from({ length: 5 }, (_, i) => ({ x: i * 0.25 + Math.random() * 0.1, y: 0.05 + Math.random() * 0.14, s: 0.6 + Math.random() * 0.6 }));
   onArrive: (p: Place) => void = () => {};
 
+  // Pixi objects.
+  private world = new Container();
+  private clouds?: TilingSprite;
+  private waterTop?: TilingSprite;
+  private fx = new Graphics(); // shadows, ripples, lines, rings
+  private rodLine = new Graphics();
+  private bobbers: Sprite[] = [];
+  private alerts: Sprite[] = [];
+  private holders: Sprite[] = [];
+  private player = new Sprite();
+  private flyLayer = new Container();
+  private textures = new Map<string, Texture>();
+  private tile!: (i: number) => HTMLCanvasElement;
+  private bg!: (i: number) => HTMLCanvasElement;
+
   constructor(private canvas: HTMLCanvasElement, private game: Game) {
-    this.ctx = canvas.getContext('2d')!;
     for (let i = 0; i < 9; i++) this.shadows.push(this.newShadow(Math.random()));
-    this.resize();
-    addEventListener('resize', () => this.resize());
+    this.measure();
+    addEventListener('resize', () => { this.measure(); if (this.ready) this.resize(); });
+    void this.init();
   }
+
+  private async init(): Promise<void> {
+    const [tiles, bgs] = await Promise.all([loadImage(tilesUrl), loadImage(bgUrl)]);
+    this.tile = cutter(tiles, TILE);
+    this.bg = cutter(bgs, 24);
+    await this.app.init({ canvas: this.canvas, width: this.V.w, height: this.V.h, antialias: false, resolution: 1, autoStart: false, background: '#dff6f5' });
+    this.app.stage.addChild(this.world);
+    this.ready = true;
+    this.resize();
+  }
+
+  /** Pick the pixel scale and world size for this screen. */
+  private measure(): void {
+    const w = innerWidth, h = innerHeight;
+    this.scale = Math.max(2, Math.round(Math.min(w, h) / 240));
+    const vw = Math.ceil(w / this.scale), vh = Math.ceil(h / this.scale);
+    const riverTop = Math.round(vh * 0.36), riverBottom = Math.round(vh * 0.66);
+    const dockX = Math.round(vw * PLACE_X.dock);
+    this.V = {
+      w: vw, h: vh,
+      skyBottom: Math.round(vh * 0.24),
+      riverTop, riverBottom,
+      path: Math.round(vh * 0.76),
+      marketX: Math.round(vw * PLACE_X.market),
+      tackleX: Math.round(vw * PLACE_X.tackle),
+      schoolX: Math.round(vw * PLACE_X.school),
+      dockX,
+      dockEnd: Math.round(riverTop + (riverBottom - riverTop) * 0.42),
+      // One spot per line: right, left, then further out right and left of the dock.
+      bobbers: [
+        [Math.max(28, vw * 0.2), 0.3], [-Math.max(28, vw * 0.2), 0.3],
+        [Math.max(17, vw * 0.11), 0.1], [-Math.max(17, vw * 0.11), 0.1],
+      ].map(([dx, f]) => ({
+        x: Math.round(Math.max(8, Math.min(vw - 8, dockX + dx!))),
+        y: Math.round(riverTop + (riverBottom - riverTop) * f!),
+      })),
+    };
+  }
+
+  /** Layout in CSS pixels (for debugging and tests). */
+  get L(): Layout {
+    const s = this.scale, V = this.V;
+    const k = (v: number) => v * s;
+    return {
+      w: k(V.w), h: k(V.h), skyBottom: k(V.skyBottom), riverTop: k(V.riverTop), riverBottom: k(V.riverBottom), path: k(V.path),
+      marketX: k(V.marketX), tackleX: k(V.tackleX), schoolX: k(V.schoolX), dockX: k(V.dockX), dockEnd: k(V.dockEnd),
+      bobbers: V.bobbers.map((b) => ({ x: k(b.x), y: k(b.y) })),
+    };
+  }
+
+  private resize(): void {
+    const { w, h } = this.V;
+    this.app.renderer.resize(w, h);
+    this.canvas.style.width = `${w * this.scale}px`;
+    this.canvas.style.height = `${h * this.scale}px`;
+    this.canvas.style.imageRendering = 'pixelated';
+    this.build();
+  }
+
+  // ---------- building the world ----------
+
+  private cached(key: string, make: () => HTMLCanvasElement): Texture {
+    let t = this.textures.get(key);
+    if (!t) { t = tex(make()); this.textures.set(key, t); }
+    return t;
+  }
+
+  private build(): void {
+    const V = this.V;
+    this.world.removeChildren();
+    const layer = new Container();
+    const add = <T extends Container>(o: T, parent: Container = layer): T => { parent.addChild(o); return o; };
+    const tiling = (canvas: HTMLCanvasElement, x: number, y: number, w: number, h: number) =>
+      add(new TilingSprite({ texture: tex(canvas), width: w, height: Math.max(0, h), x, y }));
+
+    // Sky, sun, drifting clouds.
+    tiling(this.bg(0), 0, 0, V.w, V.skyBottom);
+    add(new Graphics()).circle(V.w - 22, 16, 8).fill(PAL.goldLight).circle(V.w - 22, 16, 6).fill('#fff3b0');
+    this.clouds = tiling(strip([8, 9, 10, 11].map((i) => this.bg(i))), 0, V.skyBottom - 22, V.w, 24);
+    // Far bank: forest silhouette lifted off its own sky, dark green below it.
+    tiling(this.bg(16), 0, V.skyBottom + 2, V.w, V.riverTop - V.skyBottom);
+    tiling(colorKey(strip([14, 15].map((i) => this.bg(i)))), 0, V.skyBottom - 6, V.w, 24);
+    tiling(this.bg(22), 0, V.skyBottom + 18, V.w, V.riverTop - V.skyBottom - 18);
+    // River: a wavy surface row over open water, a little darker toward the near bank.
+    tiling(this.tile(73), 0, V.riverTop, V.w, V.riverBottom - V.riverTop);
+    this.waterTop = tiling(this.tile(33), 0, V.riverTop - 6, V.w, TILE);
+    add(new Graphics()).rect(0, V.riverBottom - 14, V.w, 14).fill({ color: PAL.waterDeep, alpha: 0.35 });
+    // Shadows, ripples and lines are redrawn every frame on top of the water.
+    add(this.fx);
+    // Near bank: grass-topped dirt, the sandy path, then a meadow with tufts.
+    // (Middle tiles only: Kenney's end caps would draw a seam every few tiles.)
+    tiling(this.tile(2), 0, V.riverBottom - 3, V.w, TILE);
+    tiling(this.tile(122), 0, V.riverBottom - 3 + TILE, V.w, V.path - 5 - (V.riverBottom - 3 + TILE));
+    tiling(this.tile(42), 0, V.path - 5, V.w, TILE);
+    const meadow = add(new Graphics());
+    meadow.rect(0, V.path + 13, V.w, V.h - V.path - 13).fill(PAL.green);
+    meadow.rect(0, V.path + 13, V.w, 2).fill(PAL.greenLight);
+    // Little grass tufts and flowers, kept clear of the school.
+    for (let i = 0; i < Math.round(V.w / 9); i++) {
+      const x = Math.round((i * 37 + 11) % V.w), y = Math.round(V.path + 20 + ((i * 53) % Math.max(1, V.h - V.path - 40)));
+      if (Math.abs(x - V.schoolX) < 26 && y < V.path + 56) continue;
+      if (i % 4 === 0) meadow.rect(x, y, 1, 1).fill([PAL.white, PAL.goldLight, PAL.redLight][i % 3]!).rect(x, y + 1, 1, 2).fill(PAL.greenDark);
+      else meadow.rect(x, y, 1, 3).fill(PAL.greenLight).rect(x - 1, y + 1, 1, 2).fill(PAL.greenLight).rect(x + 1, y + 1, 1, 2).fill(PAL.greenDark);
+    }
+    // Dock: planks from the bank out to the fishing spot, posts down into the water.
+    const dockW = 14;
+    tiling(plankCanvas(dockW), V.dockX - dockW / 2, V.dockEnd - 4, dockW, V.riverBottom - V.dockEnd + 2);
+    const posts = add(new Graphics());
+    for (let y = V.dockEnd; y < V.riverBottom - 4; y += 14) {
+      posts.rect(V.dockX - dockW / 2 - 1, y, 2, 6).fill(PAL.dirtDeep);
+      posts.rect(V.dockX + dockW / 2 - 1, y, 2, 6).fill(PAL.dirtDeep);
+    }
+    // Shops on the path, the school cabin on the meadow below it.
+    const shop = (key: string, make: () => HTMLCanvasElement, x: number, y: number, ay: number) => {
+      const s = add(new Sprite(this.cached(key, make)));
+      s.anchor.set(0.5, ay);
+      s.position.set(Math.round(x), Math.round(y));
+    };
+    shop('market', () => stallCanvas('MARKET', [PAL.red, PAL.white], PAL.redDark, 'fish'), V.marketX, V.path - 2, 1);
+    shop('tackle', () => stallCanvas('TACKLE', [PAL.waterDeep, PAL.sky], PAL.waterDeeper, 'tackle'), V.tackleX, V.path - 2, 1);
+    shop('school', schoolCanvas, V.schoolX, V.path + 12, 0);
+    this.world.addChild(layer);
+
+    // Moving things on top: holder rods, bobbers, "!", the rod, the player, leaping fish.
+    this.holders = [1, 2, 3].map(() => add(new Sprite(this.cached('holder', holderCanvas)), this.world));
+    this.bobbers = [0, 1, 2, 3].map(() => add(new Sprite(this.cached('bobber', bobberCanvas)), this.world));
+    this.alerts = [0, 1, 2, 3].map(() => add(new Sprite(this.cached('alert', alertCanvas)), this.world));
+    for (const s of [...this.bobbers, ...this.alerts, ...this.holders]) s.anchor.set(0.5, 1);
+    this.world.addChild(this.rodLine);
+    this.player.anchor.set(0.5, 1);
+    this.world.addChild(this.player);
+    for (const f of this.flying) f.sprite.destroy();
+    this.flying = [];
+    this.flyLayer = add(new Container(), this.world);
+  }
+
+  // ---------- where things are ----------
 
   /** Where the player is standing, if at a named place. */
   get place(): Place | null {
@@ -72,22 +265,57 @@ export class Scene {
     return this.route.length > 0;
   }
 
-  // ---------- input ----------
+  /** Player's feet, in world pixels. */
+  private feet(): { x: number; y: number } {
+    const V = this.V;
+    const x = this.onDock > 0 ? V.dockX : this.px * V.w;
+    return { x: Math.round(x), y: Math.round(V.path + 2 - (V.path + 2 - V.dockEnd) * this.onDock) };
+  }
 
-  /** What's at a screen point. */
-  hit(x: number, y: number): Place | 'ground' {
-    const L = this.L;
-    // The school cabin sits on the grass just below the path.
-    if (y > L.path + 8 && y < L.path + 12 + this.schoolSize().h && Math.abs(x - L.schoolX) < this.schoolSize().w * 0.65) return 'school';
-    const nearShop = y > L.path - L.h * 0.22 && y < L.path + 30;
-    if (nearShop && Math.abs(x - L.marketX) < L.w * 0.14) return 'market';
-    if (nearShop && Math.abs(x - L.tackleX) < L.w * 0.14) return 'tackle';
-    if (y < L.riverBottom + 10 && y > L.skyBottom) return 'dock';
+  /** Holder base for line `slot` (1..3) at the dock's end; slot 0 is the player's own rod. */
+  private holderBase(slot: number): { x: number; y: number } {
+    const side = slot % 2 === 1 ? -1 : 1;
+    return { x: this.V.dockX + side * 5, y: this.V.dockEnd + 2 + (slot >= 2 ? 5 : 0) };
+  }
+
+  /** Where line `slot` leaves its rod, in world pixels. */
+  private rodTip(slot = 0): { x: number; y: number } {
+    const line = this.game.lines[slot];
+    const pull = line?.type === 'bite' ? Math.round(Math.sin(this.time * 30)) : 0;
+    if (slot === 0) {
+      const hand = this.handPos(this.feet());
+      return { x: hand.x + this.facing * 11, y: hand.y - 13 + pull };
+    }
+    const base = this.holderBase(slot);
+    const dir = Math.sign(this.V.bobbers[slot]!.x - base.x) || 1;
+    return { x: base.x + dir * 8, y: base.y - 15 + pull };
+  }
+
+  private handPos(f: { x: number; y: number }): { x: number; y: number } {
+    const h = HAND[this.pose()];
+    // The sprite is 15×24, anchored bottom-centre, mirrored when facing left.
+    return { x: f.x + this.facing * (h.x - 7), y: f.y - 24 + h.y };
+  }
+
+  private pose(): Pose {
+    if (this.route.length > 0 || this.stepping > 0) return Math.sin(this.walkPhase) > 0 ? 'walk1' : 'walk2';
+    return this.game.lines[0]?.type === 'casting' ? 'cast' : 'idle';
+  }
+
+  // ---------- input (CSS pixel coordinates in, world pixels inside) ----------
+
+  hit(cx: number, cy: number): Place | 'ground' {
+    const V = this.V, x = cx / this.scale, y = cy / this.scale;
+    if (y > V.path + 10 && y < V.path + 54 && Math.abs(x - V.schoolX) < 24) return 'school';
+    const nearShop = y > V.path - 52 && y < V.path + 12;
+    if (nearShop && Math.abs(x - V.marketX) < 26) return 'market';
+    if (nearShop && Math.abs(x - V.tackleX) < 26) return 'tackle';
+    if (y < V.riverBottom + 4 && y > V.skyBottom) return 'dock';
     return 'ground';
   }
 
   walkTo(place: Place | 'ground', groundX?: number): void {
-    const target = place === 'ground' ? Math.max(0.06, Math.min(0.94, (groundX ?? 0) / this.L.w)) : PLACE_X[place];
+    const target = place === 'ground' ? Math.max(0.06, Math.min(0.94, (groundX ?? 0) / this.scale / this.V.w)) : PLACE_X[place];
     this.route = [];
     if (this.onDock > 0) this.route.push({ dock: 0 });
     this.route.push({ x: target });
@@ -109,25 +337,38 @@ export class Scene {
     this.walkPhase += dt * 10;
   }
 
+  /** The line whose bobber is under a screen point (only lines in the water). */
+  hitBobber(cx: number, cy: number): number {
+    if (this.place !== 'dock') return -1;
+    const x = cx / this.scale, y = cy / this.scale;
+    let best = -1, bestD = 40 / this.scale;
+    this.game.lines.forEach((line, slot) => {
+      if (line.type !== 'waiting' && line.type !== 'bite') return;
+      const b = this.V.bobbers[slot]!;
+      const d = Math.hypot(b.x - x, b.y - y);
+      if (d < bestD) { bestD = d; best = slot; }
+    });
+    return best;
+  }
+
   // ---------- frame ----------
 
   update(dt: number): void {
     this.time += dt;
     this.stepping = Math.max(0, this.stepping - dt);
     this.walk(dt);
-    this.trackLines();
     for (const s of this.shadows) {
       s.x += s.speed * dt;
       if (s.x < -0.1 || s.x > 1.1) Object.assign(s, this.newShadow(s.speed > 0 ? -0.05 : 1.05));
     }
     this.ripples = this.ripples.filter((r) => (r.t += dt) < (r.big ? 1.2 : 0.9));
+    if (!this.ready) return;
+    this.trackLines();
     for (const f of this.flying) f.t += dt;
+    for (const f of this.flying.filter((f) => f.t > 1.6)) f.sprite.destroy();
     this.flying = this.flying.filter((f) => f.t <= 1.6);
-    for (const c of this.clouds) {
-      c.x += dt * 0.006 * c.s;
-      if (c.x > 1.2) c.x = -0.2;
-    }
     this.draw();
+    this.app.render();
   }
 
   private walk(dt: number): void {
@@ -157,524 +398,135 @@ export class Scene {
       const key = line.type + (line.type === 'result' ? line.outcome : '');
       if (key === this.lastLines[slot]) return;
       this.lastLines[slot] = key;
-      const b = this.L.bobbers[slot]!;
+      const b = this.V.bobbers[slot]!;
       if (line.type === 'waiting') this.ripples.push({ x: b.x, y: b.y, t: 0, big: false });
-      if (line.type === 'bite') this.ripples.push({ x: b.x, y: b.y, t: 0, big: true });
+      if (line.type === 'bite' || (line.type === 'result' && line.outcome === 'snapped')) this.ripples.push({ x: b.x, y: b.y, t: 0, big: true });
       if (line.type === 'result' && line.outcome === 'caught' && line.fish) {
-        this.flying.push({ fish: line.fish, variant: line.caught?.variant, t: 0, slot });
+        const fish = line.fish, variant = line.caught?.variant;
+        const sprite = new Sprite(this.cached(`fish:${fish.id}:${variant ?? ''}`, () => fishCanvas(fish, variant)));
+        sprite.anchor.set(0.5);
+        if (variant === 'giant') sprite.scale.set(2);
+        this.flyLayer.addChild(sprite);
+        this.flying.push({ fish, variant, t: 0, slot, sprite });
         this.ripples.push({ x: b.x, y: b.y, t: 0, big: true });
       }
-      if (line.type === 'result' && line.outcome === 'snapped') this.ripples.push({ x: b.x, y: b.y, t: 0, big: true });
     });
     this.lastLines.length = this.game.lines.length;
   }
 
-  /** The line whose bobber is under a screen point (only lines in the water). */
-  hitBobber(x: number, y: number): number {
-    if (this.place !== 'dock') return -1;
-    let best = -1, bestD = 38;
-    this.game.lines.forEach((line, slot) => {
-      if (line.type !== 'waiting' && line.type !== 'bite') return;
-      const b = this.L.bobbers[slot]!;
-      const d = Math.hypot(b.x - x, b.y - y);
-      if (d < bestD) { bestD = d; best = slot; }
-    });
-    return best;
-  }
-
   private newShadow(x: number): Shadow {
-    return {
-      x,
-      y: 0.12 + Math.random() * 0.76, // fraction down the river band
-      speed: (Math.random() < 0.5 ? -1 : 1) * (0.02 + Math.random() * 0.05),
-      size: 0.6 + Math.random() * 0.9,
-      phase: Math.random() * 10,
-    };
-  }
-
-  private resize(): void {
-    const w = innerWidth, h = innerHeight;
-    this.canvas.width = Math.round(w * this.dpr);
-    this.canvas.height = Math.round(h * this.dpr);
-    this.canvas.style.width = `${w}px`;
-    this.canvas.style.height = `${h}px`;
-    const riverTop = h * 0.36, riverBottom = h * 0.66;
-    const dockX = w * PLACE_X.dock;
-    this.L = {
-      w, h,
-      skyBottom: h * 0.24,
-      riverTop,
-      riverBottom,
-      path: h * 0.76,
-      marketX: w * PLACE_X.market,
-      tackleX: w * PLACE_X.tackle,
-      schoolX: w * PLACE_X.school,
-      dockX,
-      dockEnd: riverTop + (riverBottom - riverTop) * 0.42,
-      // One spot per line: right, left, then further out right and left of the dock.
-      bobbers: [
-        [Math.max(90, w * 0.2), 0.3], [-Math.max(90, w * 0.2), 0.3],
-        [Math.max(55, w * 0.11), 0.1], [-Math.max(55, w * 0.11), 0.1],
-      ].map(([dx, f]) => ({
-        x: Math.max(24, Math.min(w - 24, dockX + dx!)),
-        y: riverTop + (riverBottom - riverTop) * f!,
-      })),
-    };
+    return { x, y: 0.15 + Math.random() * 0.7, speed: (Math.random() < 0.5 ? -1 : 1) * (0.02 + Math.random() * 0.05), size: 0.6 + Math.random() * 0.9 };
   }
 
   // ---------- drawing ----------
 
   private draw(): void {
-    const { ctx, L } = this;
-    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    ctx.clearRect(0, 0, L.w, L.h);
-    this.drawSky();
-    this.drawFarBank();
-    this.drawRiver();
-    this.drawNearBank();
-    this.drawDock();
-    this.drawShop(this.L.marketX, 'FISH MARKET', ['#e0503a', '#fff4e0'], '#c0402c', 'fish');
-    this.drawShop(this.L.tackleX, 'TACKLE SHOP', ['#2f6fd6', '#f0f6ff'], '#1f4f9c', 'tackle');
-    this.drawSchool();
-    this.drawHolders();
-    this.drawLines();
-    this.drawPlayer();
-    this.drawFlyingFish();
-  }
-
-  private drawSky(): void {
-    const { ctx, L } = this;
-    const g = ctx.createLinearGradient(0, 0, 0, L.riverTop);
-    g.addColorStop(0, SKY[0]!);
-    g.addColorStop(1, SKY[1]!);
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, L.w, L.riverTop);
-    ctx.fillStyle = '#fff6c8';
-    ctx.beginPath();
-    ctx.arc(L.w * 0.84, L.h * 0.08, Math.min(L.w, L.h) * 0.055, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.92)';
-    for (const c of this.clouds) {
-      const x = c.x * L.w, y = c.y * L.h, s = c.s * Math.min(L.w, L.h) * 0.05;
-      ctx.beginPath();
-      ctx.arc(x, y, s, 0, Math.PI * 2);
-      ctx.arc(x + s * 1.1, y + s * 0.2, s * 0.8, 0, Math.PI * 2);
-      ctx.arc(x - s * 1.0, y + s * 0.25, s * 0.7, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  private drawFarBank(): void {
-    const { ctx, L } = this;
-    // Hills.
-    ctx.fillStyle = '#9cc98a';
-    ctx.beginPath();
-    ctx.moveTo(0, L.skyBottom + 10);
-    for (let x = 0; x <= L.w; x += L.w / 6) ctx.quadraticCurveTo(x + L.w / 12, L.skyBottom - L.h * 0.06, x + L.w / 6, L.skyBottom + 6);
-    ctx.lineTo(L.w, L.riverTop);
-    ctx.lineTo(0, L.riverTop);
-    ctx.fill();
-    // Far grass strip.
-    ctx.fillStyle = '#6fb34f';
-    ctx.fillRect(0, L.riverTop - L.h * 0.035, L.w, L.h * 0.035);
-    // Trees along the far bank.
-    for (let i = 0; i < 14; i++) {
-      const x = ((i * 0.083 + 0.02) % 1) * L.w;
-      const s = L.h * (0.028 + ((i * 37) % 10) / 400);
-      const y = L.riverTop - L.h * 0.03;
-      ctx.fillStyle = '#6b4a2c';
-      ctx.fillRect(x - s * 0.12, y - s * 0.6, s * 0.24, s * 0.7);
-      ctx.fillStyle = i % 3 ? '#3f8a3a' : '#4f9e44';
-      ctx.beginPath();
-      ctx.arc(x, y - s * 1.1, s * 0.75, 0, Math.PI * 2);
-      ctx.arc(x - s * 0.45, y - s * 0.75, s * 0.5, 0, Math.PI * 2);
-      ctx.arc(x + s * 0.45, y - s * 0.75, s * 0.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  private drawRiver(): void {
-    const { ctx, L } = this;
-    const g = ctx.createLinearGradient(0, L.riverTop, 0, L.riverBottom);
-    g.addColorStop(0, '#5fb3e0');
-    g.addColorStop(1, '#2f7fbf');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, L.riverTop, L.w, L.riverBottom - L.riverTop);
-    const band = L.riverBottom - L.riverTop;
-
+    const V = this.V, g = this.fx;
+    // Clouds drift, the water surface rolls.
+    if (this.clouds) this.clouds.tilePosition.x = Math.round(this.time * 3);
+    if (this.waterTop) this.waterTop.tilePosition.x = Math.round(Math.sin(this.time * 0.8) * 4);
+    g.clear();
     // Fish shadows under the surface.
     for (const s of this.shadows) {
-      const x = s.x * L.w, y = L.riverTop + s.y * band + Math.sin(this.time * 1.5 + s.phase) * 3;
-      const len = L.w * 0.045 * s.size + 14;
-      ctx.fillStyle = 'rgba(15,45,80,0.28)';
-      ctx.beginPath();
-      ctx.ellipse(x, y, len / 2, len / 6, 0, 0, Math.PI * 2);
-      ctx.fill();
-      const tail = s.speed > 0 ? -1 : 1;
-      ctx.beginPath();
-      ctx.moveTo(x + (tail * len) / 2, y);
-      ctx.lineTo(x + tail * len * 0.75, y - len / 6);
-      ctx.lineTo(x + tail * len * 0.75, y + len / 6);
-      ctx.fill();
+      const x = Math.round(s.x * V.w), y = Math.round(V.riverTop + 10 + s.y * (V.riverBottom - V.riverTop - 20));
+      const w = Math.round(5 + s.size * 5), dir = Math.sign(s.speed);
+      g.ellipse(x, y, w, Math.max(2, Math.round(w / 3))).fill({ color: PAL.waterDeeper, alpha: 0.45 });
+      g.poly([x - dir * w, y, x - dir * (w + 4), y - 2, x - dir * (w + 4), y + 2]).fill({ color: PAL.waterDeeper, alpha: 0.45 });
     }
-
-    // Flowing current lines.
-    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-    ctx.lineWidth = 2;
-    for (let i = 0; i < 16; i++) {
-      const y = L.riverTop + ((i * 0.37) % 1) * band;
-      const x = ((i * 0.61 + this.time * (0.03 + (i % 3) * 0.012)) % 1.2 - 0.1) * L.w;
-      const len = L.w * (0.04 + (i % 4) * 0.015);
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.quadraticCurveTo(x + len / 2, y - 3, x + len, y);
-      ctx.stroke();
+    // A few twinkling glints.
+    for (let i = 0; i < 6; i++) {
+      if (Math.sin(this.time * 2 + i * 1.7) < 0.6) continue;
+      g.rect(Math.round((i * 47 + 13) % V.w), Math.round(V.riverTop + 12 + ((i * 29) % Math.max(1, V.riverBottom - V.riverTop - 20))), 2, 1).fill(PAL.white);
     }
-
-    // Ripples (casts, bites, catches).
     for (const r of this.ripples) {
       const k = r.t / (r.big ? 1.2 : 0.9);
-      ctx.strokeStyle = `rgba(255,255,255,${0.85 * (1 - k)})`;
-      ctx.lineWidth = 2;
-      for (const m of r.big ? [1, 0.6] : [1]) {
-        ctx.beginPath();
-        ctx.ellipse(r.x, r.y, (8 + k * 34) * m, (3 + k * 12) * m, 0, 0, Math.PI * 2);
-        ctx.stroke();
-      }
+      const rx = Math.round(3 + k * (r.big ? 14 : 8));
+      g.ellipse(r.x, r.y + 1, rx, Math.max(1, Math.round(rx / 3))).stroke({ color: PAL.white, width: 1, alpha: 1 - k });
     }
-  }
-
-  private drawNearBank(): void {
-    const { ctx, L } = this;
-    ctx.fillStyle = '#c9b07a'; // muddy edge
-    ctx.fillRect(0, L.riverBottom, L.w, L.h * 0.025);
-    const g = ctx.createLinearGradient(0, L.riverBottom, 0, L.h);
-    g.addColorStop(0, '#7cc25a');
-    g.addColorStop(1, '#5aa043');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, L.riverBottom + L.h * 0.02, L.w, L.h);
-    // Dirt path.
-    ctx.fillStyle = '#d8c08a';
-    ctx.beginPath();
-    ctx.ellipse(L.w / 2, L.path + 8, L.w * 0.62, 16, 0, 0, Math.PI * 2);
-    ctx.fill();
-    // Grass tufts and flowers.
-    for (let i = 0; i < 40; i++) {
-      const x = ((i * 0.137) % 1) * L.w;
-      const y = L.riverBottom + L.h * 0.04 + ((i * 0.293) % 1) * (L.h - L.riverBottom - L.h * 0.06);
-      if (Math.abs(y - L.path - 8) < 20) continue;
-      ctx.strokeStyle = '#4a8a36';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(x - 4, y); ctx.lineTo(x - 6, y - 7);
-      ctx.moveTo(x, y); ctx.lineTo(x, y - 9);
-      ctx.moveTo(x + 4, y); ctx.lineTo(x + 6, y - 7);
-      ctx.stroke();
-      if (i % 5 === 0) {
-        ctx.fillStyle = i % 2 ? '#fff' : '#ffd84a';
-        ctx.beginPath(); ctx.arc(x + 8, y - 4, 3, 0, Math.PI * 2); ctx.fill();
-      }
-    }
-  }
-
-  private drawDock(): void {
-    const { ctx, L } = this;
-    const w = Math.max(46, L.w * 0.07);
-    const x = L.dockX - w / 2;
-    const top = L.dockEnd - 14;
-    // Posts.
-    ctx.fillStyle = '#5a3e24';
-    for (const px of [x + 3, x + w - 9]) ctx.fillRect(px, top + 10, 6, L.riverBottom - top + 4);
-    // Planks.
-    for (let y = top; y < L.riverBottom + L.h * 0.03; y += 9) {
-      ctx.fillStyle = (Math.round((y - top) / 9) % 2) ? '#a8784a' : '#b98a58';
-      ctx.fillRect(x, y, w, 8);
-    }
-    ctx.strokeStyle = 'rgba(60,40,20,0.35)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x, top, w, L.riverBottom + L.h * 0.03 - top);
-  }
-
-  private schoolSize(): { w: number; h: number } {
-    return { w: Math.max(84, this.L.w * 0.15), h: Math.min(82, this.L.h * 0.11) };
-  }
-
-  /** The Fishing School: a little log cabin on the grass below the path. */
-  private drawSchool(): void {
-    const { ctx, L } = this;
-    const { w, h } = this.schoolSize();
-    const cx = L.schoolX, top = L.path + 12, base = top + h;
-    const x = cx - w / 2, wallTop = top + h * 0.42;
-    // Shadow, log walls.
-    ctx.fillStyle = 'rgba(0,0,0,0.15)';
-    ctx.beginPath(); ctx.ellipse(cx, base, w * 0.6, 6, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#9a6a3c';
-    ctx.fillRect(x, wallTop, w, base - wallTop);
-    ctx.strokeStyle = '#7a4e28';
-    ctx.lineWidth = 2;
-    for (let y = wallTop + 7; y < base; y += 8) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + w, y); ctx.stroke(); }
-    // Door (facing the path) and a window.
-    ctx.fillStyle = '#5a3a1e';
-    ctx.fillRect(cx - w * 0.1, base - (base - wallTop) * 0.75, w * 0.2, (base - wallTop) * 0.75);
-    ctx.fillStyle = '#bfe4f4';
-    ctx.fillRect(x + w * 0.12, wallTop + 7, w * 0.2, (base - wallTop) * 0.35);
-    // Green roof.
-    ctx.fillStyle = '#3f7a3a';
-    ctx.beginPath(); ctx.moveTo(x - 8, wallTop + 2); ctx.lineTo(cx, top); ctx.lineTo(x + w + 8, wallTop + 2); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#2f5f2a';
-    ctx.fillRect(x - 8, wallTop - 1, w + 16, 4);
-    // Sign on the roof.
-    ctx.font = '700 11px Georgia, serif';
-    const label = 'SCHOOL', sw = ctx.measureText(label).width + 12;
-    ctx.fillStyle = '#f7e7c2';
-    ctx.strokeStyle = '#5a3e24';
-    ctx.lineWidth = 1.5;
-    ctx.fillRect(cx - sw / 2, top + h * 0.2, sw, 15);
-    ctx.strokeRect(cx - sw / 2, top + h * 0.2, sw, 15);
-    ctx.fillStyle = '#5a3e24';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(label, cx, top + h * 0.2 + 8);
-  }
-
-  /** A market stall: counter, goods, striped awning, sign. One per shop. */
-  private drawShop(cx: number, sign: string, stripe: [string, string], trim: string, goods: 'fish' | 'tackle'): void {
-    const { ctx, L } = this;
-    const w = Math.max(116, L.w * 0.2), h = Math.max(106, L.h * 0.16);
-    const x = cx - w / 2, base = L.path - 6;
-    // Counter.
-    ctx.fillStyle = '#8a5a32';
-    ctx.fillRect(x, base - h * 0.42, w, h * 0.42);
-    ctx.fillStyle = '#a8703e';
-    ctx.fillRect(x - 4, base - h * 0.46, w + 8, h * 0.07);
-    if (goods === 'fish') {
-      // Crates of fish.
-      for (let i = 0; i < 3; i++) {
-        const gx = x + w * (0.2 + i * 0.3);
-        ctx.fillStyle = '#c89a62';
-        ctx.fillRect(gx - w * 0.11, base - h * 0.56, w * 0.22, h * 0.12);
-        ctx.fillStyle = ['#9fc3d8', '#f0a868', '#c8d0a0'][i]!;
-        ctx.beginPath(); ctx.ellipse(gx, base - h * 0.57, w * 0.08, h * 0.03, 0, 0, Math.PI * 2); ctx.fill();
-      }
-    } else {
-      // Rods leaning on the counter, and a tackle box.
-      ['#c8b060', '#e0e0e0', '#303438', '#70d8e8'].forEach((c, i) => {
-        ctx.strokeStyle = c;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(x + w * (0.12 + i * 0.09), base - h * 0.46);
-        ctx.lineTo(x + w * (0.2 + i * 0.09), base - h * 0.95);
-        ctx.stroke();
-      });
-      ctx.fillStyle = '#2f6fd6';
-      ctx.fillRect(x + w * 0.58, base - h * 0.6, w * 0.3, h * 0.14);
-      ctx.fillStyle = '#f0c020';
-      ctx.fillRect(x + w * 0.7, base - h * 0.62, w * 0.06, h * 0.04);
-    }
-    // Posts.
-    ctx.fillStyle = '#5a3e24';
-    ctx.fillRect(x + 2, base - h, 7, h);
-    ctx.fillRect(x + w - 9, base - h, 7, h);
-    // Striped awning.
-    const stripes = 6;
-    for (let i = 0; i < stripes; i++) {
-      ctx.fillStyle = stripe[i % 2]!;
-      ctx.beginPath();
-      ctx.moveTo(x - 10 + (i * (w + 20)) / stripes, base - h);
-      ctx.lineTo(x - 10 + ((i + 1) * (w + 20)) / stripes, base - h);
-      ctx.lineTo(x - 10 + ((i + 1) * (w + 20)) / stripes, base - h + 14);
-      ctx.quadraticCurveTo(x - 10 + ((i + 0.5) * (w + 20)) / stripes, base - h + 22, x - 10 + (i * (w + 20)) / stripes, base - h + 14);
-      ctx.fill();
-    }
-    ctx.fillStyle = trim;
-    ctx.fillRect(x - 10, base - h - 8, w + 20, 9);
-    // Sign, sized to its text.
-    ctx.font = '700 13px Georgia, serif';
-    const sw = ctx.measureText(sign).width + 18, sh = 20;
-    ctx.fillStyle = '#f7e7c2';
-    ctx.strokeStyle = '#5a3e24';
-    ctx.lineWidth = 2;
-    ctx.fillRect(cx - sw / 2, base - h - 32, sw, sh);
-    ctx.strokeRect(cx - sw / 2, base - h - 32, sw, sh);
-    ctx.fillStyle = '#5a3e24';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(sign, cx, base - h - 22);
-  }
-
-  /** Player's feet position. */
-  private feet(): { x: number; y: number } {
-    const L = this.L;
-    const x = this.px * L.w;
-    const pathX = x, dockX = L.dockX;
-    // Walking onto the dock: slide over to its centre line, then up it.
-    const fx = this.onDock > 0 ? dockX : pathX;
-    return { x: fx, y: L.path - (L.path - L.dockEnd) * this.onDock };
-  }
-
-  /** Holder base for line `slot` (1..3) at the dock's end; slot 0 is the player's own rod. */
-  private holderBase(slot: number): { x: number; y: number } {
-    const L = this.L;
-    const half = Math.max(46, L.w * 0.07) / 2;
-    const side = slot % 2 === 1 ? -1 : 1;
-    return { x: L.dockX + side * (half - 4), y: L.dockEnd - 6 + (slot >= 2 ? 10 : 0) };
-  }
-
-  /** Where line `slot`'s fishing line leaves the rod. */
-  private rodTip(slot = 0): { x: number; y: number } {
-    const line = this.game.lines[slot];
-    const pull = line?.type === 'bite' ? Math.sin(this.time * 30) * 4 : 0;
-    if (slot === 0) {
-      const f = this.feet();
-      const s = this.scale();
-      return { x: f.x + this.facing * 44 * s, y: f.y - 64 * s + pull };
-    }
-    const base = this.holderBase(slot);
-    const b = this.L.bobbers[slot]!;
-    const dir = Math.sign(b.x - base.x) || 1;
-    return { x: base.x + dir * 30, y: base.y - 40 + pull };
-  }
-
-  private scale(): number {
-    return Math.max(0.8, Math.min(1.3, this.L.h / 760)) * (1 - this.onDock * 0.12);
+    this.drawLines(g);
+    this.drawPlayer();
+    this.drawFlyingFish(g);
   }
 
   private drawPlayer(): void {
-    const { ctx } = this;
     const f = this.feet();
-    const s = this.scale();
-    const walking = this.route.length > 0 || this.stepping > 0;
-    const swing = walking ? Math.sin(this.walkPhase) * 5 : 0;
-    ctx.save();
-    ctx.translate(f.x, f.y);
-    ctx.scale(s, s);
-    // Shadow.
-    ctx.fillStyle = 'rgba(0,0,0,0.2)';
-    ctx.beginPath(); ctx.ellipse(0, 2, 16, 5, 0, 0, Math.PI * 2); ctx.fill();
-    const outfit = CLOTHES[this.game.clothes]!;
-    const boots = BOOTS[this.game.boots]!.color;
-    // Legs (trousers), then boots over the feet if any.
-    ctx.strokeStyle = outfit.trousers;
-    ctx.lineWidth = 6;
-    ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(-4, -22); ctx.lineTo(-4 + swing, 0); ctx.moveTo(4, -22); ctx.lineTo(4 - swing, 0); ctx.stroke();
-    ctx.fillStyle = boots ?? '#f0c8a0';
-    for (const [x, dx] of [[-4 + swing, -1], [4 - swing, 1]] as const) {
-      ctx.beginPath(); ctx.roundRect(x - 4 + dx, boots ? -8 : -3, 8, boots ? 10 : 5, 2); ctx.fill();
-    }
-    // Body: shirt on top, trousers below.
-    ctx.fillStyle = outfit.trousers;
-    ctx.beginPath(); ctx.roundRect(-11, -46, 22, 28, 6); ctx.fill();
-    ctx.fillStyle = outfit.shirt;
-    ctx.beginPath(); ctx.roundRect(-11, -46, 22, this.game.clothes >= 2 ? 20 : 12, 6); ctx.fill();
-    // Arm holding the rod.
-    ctx.strokeStyle = '#f0c8a0';
-    ctx.lineWidth = 5;
-    ctx.beginPath(); ctx.moveTo(this.facing * 6, -40); ctx.lineTo(this.facing * 16, -34); ctx.stroke();
-    // Head and straw hat.
-    ctx.fillStyle = '#f0c8a0';
-    ctx.beginPath(); ctx.arc(0, -55, 9, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#222';
-    ctx.beginPath(); ctx.arc(this.facing * 4, -56, 1.5, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#e8c860';
-    ctx.beginPath(); ctx.ellipse(0, -61, 15, 4, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(0, -65, 8, 6, 0, Math.PI, 0); ctx.fill();
-    ctx.restore();
-
+    const o = CLOTHES[this.game.clothes]!, boots = BOOTS[this.game.boots]!.color;
+    const pose = this.pose();
+    this.player.texture = this.cached(`fisher:${o.shirt}:${o.trousers}:${boots ?? ''}:${pose}`,
+      () => fisherCanvas({ shirt: o.shirt, trousers: o.trousers, boots: boots ?? undefined }, pose));
+    this.player.position.set(f.x, f.y);
+    this.player.scale.x = this.facing;
     // The rod in hand.
-    const tip = this.rodTip(0);
-    ctx.strokeStyle = RODS[this.game.rod]!.color;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(f.x + this.facing * 15 * s, f.y - 34 * s);
-    ctx.lineTo(tip.x, tip.y);
-    ctx.stroke();
+    const hand = this.handPos(f), tip = this.rodTip(0);
+    this.rodLine.clear().moveTo(hand.x, hand.y).lineTo(tip.x, tip.y).stroke({ color: RODS[this.game.rod]!.color, width: 1 });
   }
 
-  /** Extra rods standing in holders at the dock's end (one per extra line). */
-  private drawHolders(): void {
-    const { ctx } = this;
-    for (let slot = 1; slot < this.game.lineCount; slot++) {
-      const base = this.holderBase(slot);
-      const tip = this.rodTip(slot);
-      ctx.fillStyle = '#5a3e24';
-      ctx.fillRect(base.x - 3, base.y - 10, 6, 14);
-      ctx.strokeStyle = RODS[this.game.rod]!.color;
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.moveTo(base.x, base.y - 6);
-      ctx.lineTo(tip.x, tip.y);
-      ctx.stroke();
-    }
-  }
-
-  /** Every line in the water: the line, its bobber, and a "!" over it when it bites. */
-  private drawLines(): void {
-    const { ctx, L } = this;
-    this.game.lines.forEach((line, slot) => {
+  /** Every line in the water: its rod (holders), the line, the bobber, and a "!" when it bites. */
+  private drawLines(g: Graphics): void {
+    const V = this.V, lines = this.game.lines;
+    this.holders.forEach((h, i) => {
+      const slot = i + 1;
+      h.visible = slot < this.game.lineCount;
+      if (!h.visible) return;
+      const base = this.holderBase(slot), tip = this.rodTip(slot);
+      h.position.set(base.x, base.y + 2);
+      g.moveTo(base.x, base.y - 4).lineTo(tip.x, tip.y).stroke({ color: RODS[this.game.rod]!.color, width: 1 });
+    });
+    this.bobbers.forEach((b, slot) => { b.visible = false; this.alerts[slot]!.visible = false; });
+    lines.forEach((line, slot) => {
       if (line.type === 'idle' || (line.type === 'result' && line.outcome !== 'caught' && line.t > 0.4)) return;
-      const tip = this.rodTip(slot);
-      const home = L.bobbers[slot]!;
+      const tip = this.rodTip(slot), home = V.bobbers[slot]!;
       let bx = home.x, by = home.y;
       if (line.type === 'casting') {
-        // Arc from the rod tip out to the water (t < 0 = still waiting its turn).
         const k = Math.max(0, Math.min(1, line.t / 0.6));
         bx = tip.x + (home.x - tip.x) * k;
-        by = tip.y + (home.y - tip.y) * k - Math.sin(k * Math.PI) * L.h * 0.12;
+        by = tip.y + (home.y - tip.y) * k - Math.sin(k * Math.PI) * V.h * 0.12;
       } else if (line.type === 'waiting') {
-        by += Math.sin(this.time * 3 + slot) * 2;
+        by += Math.round(Math.sin(this.time * 3 + slot));
       } else if (line.type === 'bite') {
-        by += 6 + Math.sin(this.time * 25) * 4; // dipping hard
+        by += 2 + Math.round(Math.sin(this.time * 25));
       } else if (line.type === 'result') {
         const k = Math.min(1, line.t / 0.5);
         bx = home.x + (tip.x - home.x) * k;
         by = home.y + (tip.y - home.y) * k;
       }
-      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.moveTo(tip.x, tip.y);
-      ctx.quadraticCurveTo((tip.x + bx) / 2, Math.max(tip.y, by) + 18, bx, by);
-      ctx.stroke();
+      bx = Math.round(bx); by = Math.round(by);
+      g.moveTo(tip.x, tip.y).quadraticCurveTo((tip.x + bx) / 2, Math.max(tip.y, by) + 6, bx, by).stroke({ color: PAL.white, width: 1, alpha: 0.85 });
       if (line.type === 'result') return;
-      ctx.fillStyle = '#fff';
-      ctx.beginPath(); ctx.arc(bx, by, 5, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#e8402a';
-      ctx.beginPath(); ctx.arc(bx, by, 5, Math.PI, 0); ctx.fill();
+      const b = this.bobbers[slot]!;
+      b.visible = true;
+      b.position.set(bx, by + 3);
       if (line.type === 'bite') {
-        ctx.fillStyle = '#ffdf3a';
-        ctx.strokeStyle = '#7a4a00';
-        ctx.lineWidth = 3;
-        ctx.font = '900 30px Georgia, serif';
-        ctx.textAlign = 'center';
-        const y = home.y - 22 + Math.sin(this.time * 18 + slot) * 3;
-        ctx.strokeText('!', home.x, y);
-        ctx.fillText('!', home.x, y);
+        const a = this.alerts[slot]!;
+        a.visible = true;
+        a.position.set(home.x, home.y - 6 + Math.round(Math.sin(this.time * 18 + slot)));
       }
     });
   }
 
-  private drawFlyingFish(): void {
-    const { ctx, L } = this;
-    for (const { fish, variant, t, slot } of this.flying) {
-      const tip = this.rodTip(slot);
-      const from = L.bobbers[slot]!;
+  private drawFlyingFish(g: Graphics): void {
+    const V = this.V;
+    for (const { fish, variant, t, slot, sprite } of this.flying) {
+      const tip = this.rodTip(slot), from = V.bobbers[slot]!;
       const k = Math.min(1, t / 0.7);
-      const x = from.x + (tip.x - from.x) * k;
-      const y = from.y + (tip.y + 30 - from.y) * k - Math.sin(k * Math.PI) * L.h * 0.12;
-      const len = (Math.min(L.w, L.h) * 0.12 + fish.tier * 6) * (variant === 'giant' ? 1.5 : 1);
-      ctx.save();
-      ctx.globalAlpha = t > 1.3 ? Math.max(0, 1 - (t - 1.3) / 0.3) : 1;
-      // Ring in the tier colour, or the variant's colour (doubled) for rare variants.
-      ctx.strokeStyle = variant ? VARIANTS[variant].color : TIERS[fish.tier].color;
-      ctx.lineWidth = 3;
-      for (const r of variant ? [0.6, 0.78] : [0.6]) {
-        ctx.beginPath(); ctx.arc(x, y, len * r + Math.sin(t * 12) * 3, 0, Math.PI * 2); ctx.stroke();
+      const x = Math.round(from.x + (tip.x - from.x) * k);
+      const y = Math.round(from.y + (tip.y + 8 - from.y) * k - Math.sin(k * Math.PI) * V.h * 0.12);
+      const alpha = t > 1.3 ? Math.max(0, 1 - (t - 1.3) / 0.3) : 1;
+      sprite.position.set(x, y);
+      sprite.alpha = alpha;
+      sprite.scale.x = -Math.abs(sprite.scale.x); // leaps toward the fisher
+      sprite.rotation = Math.round(Math.sin(t * 14) * 2) * 0.15;
+      // Pixel ring in the tier colour (a second ring for rare variants and Legendaries).
+      const r = Math.round(Math.abs(sprite.width) * 0.6 + Math.sin(t * 12) * 1.5);
+      const color = variant ? VARIANTS[variant].color : TIERS[fish.tier].color;
+      g.circle(x, y, r).stroke({ color, width: 1, alpha });
+      if (variant || fish.tier === 5) g.circle(x, y, r + 3).stroke({ color, width: 1, alpha: alpha * 0.6 });
+      if (variant === 'golden' || variant === 'shiny') {
+        for (let i = 0; i < 5; i++) {
+          const a = i * 1.26 + t * 3;
+          g.rect(Math.round(x + Math.cos(a) * (r + 1)), Math.round(y + Math.sin(a) * (r + 1) * 0.7), 1, 1).fill({ color: PAL.white, alpha });
+        }
       }
-      ctx.translate(x, y);
-      ctx.rotate(Math.sin(t * 14) * 0.3);
-      drawFish(ctx, fish, 0, 0, len, -1, false, variant, this.time);
-      ctx.restore();
     }
   }
 }

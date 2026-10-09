@@ -2,7 +2,7 @@ import {
   ACHIEVEMENTS, AUTO, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, GEAR, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, STRENGTH_PER_LEVEL,
   TIERS, VARIANTS, VARIANT_ORDER, type GearKind, type SkillId, type Tier, type Variant,
 } from './data';
-import { fishIcon } from './fishart';
+import { pixelFishIcon as fishIcon } from './pixelart';
 import { fishById, type Game } from './game';
 import { HISTORY, Notices, cardHtml, timeAgo, type NoticeKind } from './notify';
 import type { Place } from './scene';

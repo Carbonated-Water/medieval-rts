@@ -1,7 +1,7 @@
 import { ACHIEVEMENTS, DEV_MULTIPLIER, RODS, SKILLS, TIERS, type GearKind, type SkillId, type Tier } from './data';
 import { Game, fishById, type Line, type SaveData } from './game';
 import { Scene } from './scene';
-import { fishIcon } from './fishart';
+import { pixelFishIcon as fishIcon } from './pixelart';
 import { UI, variantTag, type Action } from './ui';
 
 const SAVE_KEY = 'riverside-fishing-v1';

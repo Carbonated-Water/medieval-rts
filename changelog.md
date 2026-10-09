@@ -4,6 +4,24 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Pixel art on PixiJS (replaces hand-drawn Canvas 2D)
+  WHAT: scene.ts rewritten on PixiJS 8: the world renders at screen ÷ 2–4
+        (195×422 on a phone) and is upscaled nearest-neighbour. Kenney Pixel
+        Platformer (CC0) tiles/backdrops for sky, clouds, forest, water and
+        bank (src/assets/kenney + License.txt). New pixelart.ts draws the
+        rest as pixel sprites in Kenney's palette with its dark outline: the
+        fisherman (idle / walk / cast, outfit + boots by gear), 20 fish with
+        species patterns (+ Golden, Shiny, silhouette), market / tackle
+        stalls with a 3×5 pixel-font sign, the school cabin, dock, bobbers,
+        "!" alerts. HUD icons use the same pixel fish; fishart.ts removed.
+        Scene API unchanged (L is now a getter in CSS px). Production
+        build checked in vite preview.
+  WHY:  User: "it's 2D but it's ugly 2D", asked for a different 2D library.
+        Chose pixel art + PixiJS. Only CC0 art: CraftPix's fishing pack was
+        rejected because its licence forbids redistribution in a public repo.
+
+---
+
 2026-10-09  Facebook-style notifications
   WHAT: New src/notify.ts. Every event is its own card (fish picture,
         name, tier, weight, $value; achievements with their icon) in a
