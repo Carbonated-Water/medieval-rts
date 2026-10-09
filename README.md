@@ -1,9 +1,10 @@
-# Hex Conquest
+# Riverside Fishing
 
-A mobile-first real-time hex conquest game: territorial.io meets Hex
-Empire. Your cities raise armies; march them across the map to paint it
-in your colour, take towns and capitals, and be the last nation standing
-against eight bots.
+A cozy 2D fishing game. Walk to the river, cast your rod, reel in fish
+when the bobber dips, and sell your catch at the market. Spend the money
+on better rods (each one lands a rarer tier of fish) and fishing skill
+(rarer fish bite more often). Twenty species to collect, from Minnows to
+the Ancient Leviathan.
 
 Play: https://carbonated-water.github.io/medieval-rts/
 
@@ -16,11 +17,6 @@ npm install
 npm run dev
 ```
 
-Then open http://localhost:5175. Tap one of your armies, then tap a hex
-to march (choose *Send half* to split). Drag / WASD to pan, scroll or
-pinch to zoom.
-
-## Credits
-
-3D models by [Kay Lousberg](https://www.kaylousberg.com) (KayKit Medieval
-Hexagon Pack and Adventurers Character Pack), CC0.
+Then open http://localhost:5175. Tap the river to fish and the market to
+sell. On a keyboard: A/D to walk, Space to cast and reel, E for the
+market.

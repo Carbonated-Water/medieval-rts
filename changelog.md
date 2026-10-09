@@ -4,6 +4,28 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-08  Rebuilt as Riverside Fishing (2D)
+  WHAT: Hex Conquest is tagged hex-v1 and removed, along with Three.js,
+        the KayKit models and the model pipeline (no runtime deps now).
+        New: data.ts (20 fish in 5 tiers, 5 rods, skill cost curve and
+        odds tuning), game.ts (cast → wait → bite → reel line state,
+        weighted catch rolls with skill bonus, too-strong fish snap the
+        line, weight-scaled prices, bag, journal, sell / buy rod / train
+        skill, save data), fishart.ts (all fish drawn in code), scene.ts
+        (Canvas 2D riverbank: sky, hills, river with fish shadows, dock,
+        market stall, walking fisher, cast arc, bobber, splashes, caught
+        fish leaping out), ui.ts (top bar, context action button, market
+        with Sell / Rods / Skill tabs and odds preview, journal),
+        main.ts (input, toasts, localStorage autosave).
+  WHY:  User: "scratch this whole game" — wanted a fishing game: river,
+        rod, ~20 fish, rod tiers, a fishing skill bought with money that
+        changes catch odds, a market, upgrades and an interface; and 2D.
+  Pacing: simulated a decent player (perfect reels, sells every 8 fish,
+        buys the next rod when affordable). Bamboo was 6 min; lowered to
+        $100 and cheaper early skill → Bamboo ≈ 4 min, all maxed ≈ 1h40.
+
+---
+
 2026-10-08  Rebuilt as Hex Conquest (territorial.io × Hex Empire)
   WHAT: The medieval base-builder (tagged rts-v1) is replaced. New sim:
         hex.ts (odd-r hex maths + A*), world.ts (seeded island map:

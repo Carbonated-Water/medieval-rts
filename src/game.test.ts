@@ -1,161 +1,163 @@
 import { describe, expect, it } from 'vitest';
-import {
-  ARMY_MAX, CAPITAL_SPAWN, CITY_DEFENSE, NATIONS, NEUTRAL, NEUTRAL_TOWNS, PLAYER, SPAWN_EVERY, START_ARMY,
-} from './config';
-import { Game, type Army } from './game';
-import { hexDistance } from './hex';
+import { FISH, RODS, SKILL_MAX, TOO_STRONG_SHARE, skillCost } from './data';
+import { Game, fishById } from './game';
 
-const run = (g: Game, seconds: number) => { for (let t = 0; t < seconds; t += 0.05) g.tick(0.05); };
-const capitalOf = (g: Game, n: number) => g.cities.find((c) => c.id === g.nations[n]!.capitalId)!;
-const armyOn = (g: Game, n: number, col: number, row: number) => g.armiesAt(col, row).find((a) => a.owner === n);
-/** Put an army somewhere for a test (bypasses the rules). */
-const place = (g: Game, owner: number, col: number, row: number, count: number): Army => {
-  const a: Army = { id: 10_000 + g.armies.length, owner, count, col, row, path: [], step: 0 };
-  g.armies.push(a);
-  return a;
+/** Deterministic RNG for tests. */
+function rng(seed = 1) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const tick = (g: Game, s: number) => { for (let t = 0; t < s; t += 0.02) g.tick(0.02); };
+/** Cast and wait until the bobber dips. */
+const waitForBite = (g: Game) => {
+  g.cast();
+  for (let i = 0; i < 2000 && g.line.type !== 'bite'; i++) g.tick(0.02);
 };
 
-describe('world setup', () => {
-  it('gives every nation a capital, starting land and an army; towns are neutral', () => {
-    const g = new Game(42);
-    expect(g.nations).toHaveLength(NATIONS.length);
-    for (const n of g.nations) {
-      const cap = capitalOf(g, n.id);
-      expect(cap.capital).toBe(true);
-      expect(cap.owner).toBe(n.id);
-      expect(n.territory).toBeGreaterThanOrEqual(4);
-      expect(armyOn(g, n.id, cap.col, cap.row)?.count).toBe(START_ARMY);
+describe('data', () => {
+  it('has 20 fish, four per tier, and five rods in tier order', () => {
+    expect(FISH).toHaveLength(20);
+    for (const t of [1, 2, 3, 4, 5]) expect(FISH.filter((f) => f.tier === t)).toHaveLength(4);
+    expect(RODS.map((r) => r.tier)).toEqual([1, 2, 3, 4, 5]);
+    expect(new Set(FISH.map((f) => f.id)).size).toBe(20);
+  });
+
+  it('higher tiers are worth more and skill gets pricier', () => {
+    const best = (t: number) => Math.max(...FISH.filter((f) => f.tier === t).map((f) => f.price));
+    const worst = (t: number) => Math.min(...FISH.filter((f) => f.tier === t).map((f) => f.price));
+    for (const t of [1, 2, 3, 4]) expect(worst(t + 1)).toBeGreaterThan(best(t));
+    for (let l = 1; l < SKILL_MAX; l++) expect(skillCost(l + 1)).toBeGreaterThan(skillCost(l));
+  });
+});
+
+describe('odds', () => {
+  it('a rod only lands fish up to its tier, and odds sum to the landable share', () => {
+    const g = new Game({ rod: 1 }, rng());
+    const odds = g.odds();
+    expect(odds.every((o) => o.fish.tier <= 2)).toBe(true);
+    expect(odds.reduce((s, o) => s + o.p, 0)).toBeCloseTo(1 - TOO_STRONG_SHARE);
+    const legend = new Game({ rod: 4 }, rng());
+    expect(legend.odds().reduce((s, o) => s + o.p, 0)).toBeCloseTo(1);
+  });
+
+  it('skill shifts the odds toward rarer tiers', () => {
+    const low = new Game({ rod: 4, skill: 1 }).tierOdds();
+    const high = new Game({ rod: 4, skill: SKILL_MAX }).tierOdds();
+    expect(high[5]!).toBeGreaterThan(low[5]! * 5);
+    expect(high[1]!).toBeLessThan(low[1]!);
+  });
+
+  it('rolls match the odds over many casts', () => {
+    const g = new Game({ rod: 2, skill: 5 }, rng(7));
+    const n = 20000;
+    let tooStrong = 0;
+    const tiers: Record<number, number> = {};
+    for (let i = 0; i < n; i++) {
+      const r = g.rollFish();
+      if (r.tooStrong) { tooStrong++; expect(r.fish.tier).toBe(4); continue; }
+      tiers[r.fish.tier] = (tiers[r.fish.tier] ?? 0) + 1;
     }
-    const towns = g.cities.filter((c) => !c.capital);
-    expect(towns.length).toBeGreaterThanOrEqual(NEUTRAL_TOWNS - 4);
-    expect(towns.every((t) => t.owner === NEUTRAL && armyOn(g, NEUTRAL, t.col, t.row))).toBe(true);
-  });
-
-  it('spreads capitals apart and keeps every city reachable', () => {
-    const g = new Game(7);
-    const caps = g.cities.filter((c) => c.capital);
-    for (const a of caps) for (const b of caps) if (a !== b) expect(hexDistance(a, b)).toBeGreaterThanOrEqual(3);
-    const player = capitalOf(g, PLAYER);
-    for (const c of g.cities) {
-      const army = place(g, PLAYER, player.col, player.row, 1);
-      expect(g.move(army.id, c.col, c.row)).not.toBeNull();
-    }
-  });
-
-  it('is deterministic for a seed', () => {
-    const a = new Game(99), b = new Game(99);
-    expect(Array.from(a.world.terrain)).toEqual(Array.from(b.world.terrain));
-    expect(a.cities.map((c) => [c.col, c.row])).toEqual(b.cities.map((c) => [c.col, c.row]));
+    expect(tooStrong / n).toBeCloseTo(TOO_STRONG_SHARE, 1);
+    const expected = g.tierOdds();
+    for (const t of [1, 2, 3]) expect(tiers[t]! / n).toBeCloseTo(expected[t]!, 1);
   });
 });
 
-describe('spawning', () => {
-  it('capitals add troops to the army standing on them', () => {
-    const g = new Game(42);
-    const cap = capitalOf(g, PLAYER);
-    cap.spawnTimer = 0;
-    run(g, SPAWN_EVERY + 0.01);
-    expect(armyOn(g, PLAYER, cap.col, cap.row)!.count).toBe(START_ARMY + g.spawnSize(cap));
-    expect(g.spawnSize(cap)).toBeGreaterThanOrEqual(CAPITAL_SPAWN);
+describe('fishing', () => {
+  it('cast → wait → bite → reel catches the fish and bags it', () => {
+    const g = new Game({ rod: 4 }, rng(3)); // top rod: nothing snaps
+    waitForBite(g);
+    expect(g.line.type).toBe('bite');
+    const fish = (g.line as { fish: { id: string } }).fish;
+    expect(g.reel()).toBe('result');
+    expect(g.line).toMatchObject({ outcome: 'caught' });
+    expect(g.bag).toHaveLength(1);
+    expect(g.bag[0]!.fish).toBe(fish.id);
+    expect(g.journal[fish.id]!.count).toBe(1);
   });
 
-  it('caps armies at ARMY_MAX and neutral towns do not grow', () => {
-    const g = new Game(42);
-    const cap = capitalOf(g, PLAYER);
-    armyOn(g, PLAYER, cap.col, cap.row)!.count = ARMY_MAX - 1;
-    const town = g.cities.find((c) => c.owner === NEUTRAL)!;
-    const before = armyOn(g, NEUTRAL, town.col, town.row)!.count;
-    run(g, SPAWN_EVERY * 2);
-    expect(armyOn(g, PLAYER, cap.col, cap.row)!.count).toBe(ARMY_MAX);
-    expect(armyOn(g, NEUTRAL, town.col, town.row)!.count).toBe(before);
-  });
-});
-
-describe('marching', () => {
-  it('walks hex by hex and paints the land it crosses', () => {
-    const g = new Game(42);
-    const cap = capitalOf(g, PLAYER);
-    const home = armyOn(g, PLAYER, cap.col, cap.row)!;
-    const dest = g.cities.filter((c) => c.owner === NEUTRAL).sort((a, b) => hexDistance(a, cap) - hexDistance(b, cap))[0]!;
-    // Pick an empty passable hex 3 steps short of that town.
-    const army = g.move(home.id, dest.col, dest.row, 4)!;
-    expect(army).not.toBe(home); // split off
-    expect(home.count).toBe(START_ARMY - 4);
-    const route = [...army.path];
-    run(g, 2);
-    expect(g.world.ownerAt(route[0]!.col, route[0]!.row)).toBe(PLAYER);
-  });
-});
-
-describe('battle and capture', () => {
-  it('numbers subtract; the winner keeps the difference', () => {
-    const g = new Game(42);
-    const cap = capitalOf(g, PLAYER);
-    const empty = findEmptyNear(g, cap.col, cap.row);
-    const enemy = place(g, 1, empty.col, empty.row, 7);
-    const mine = g.move(armyOn(g, PLAYER, cap.col, cap.row)!.id, empty.col, empty.row)!;
-    run(g, 20);
-    expect(g.army(enemy.id)).toBeUndefined();
-    expect(mine.count).toBe(START_ARMY - 7);
-    expect(g.events.some((e) => e.type === 'battle' && e.winner === PLAYER)).toBe(true);
+  it('reeling before the bite scares the fish', () => {
+    const g = new Game({}, rng());
+    g.cast();
+    tick(g, 0.8);
+    g.reel();
+    expect(g.line).toMatchObject({ type: 'result', outcome: 'scared' });
+    expect(g.bag).toHaveLength(0);
   });
 
-  it('city garrisons defend at 1.5× and a stronger attacker takes the town', () => {
-    const g = new Game(42);
-    const town = g.cities.find((c) => c.owner === NEUTRAL)!;
-    const garrison = armyOn(g, NEUTRAL, town.col, town.row)!;
-    garrison.count = 10; // defends like 15
-    const near = findEmptyNear(g, town.col, town.row);
-    const weak = place(g, PLAYER, near.col, near.row, 14);
-    g.move(weak.id, town.col, town.row);
-    run(g, 5);
-    expect(g.army(weak.id)).toBeUndefined();
-    expect(town.owner).toBe(NEUTRAL);
-    expect(garrison.count).toBe(Math.round((10 * CITY_DEFENSE - 14) / CITY_DEFENSE));
-
-    const strong = place(g, PLAYER, near.col, near.row, 30);
-    g.move(strong.id, town.col, town.row);
-    run(g, 5);
-    expect(town.owner).toBe(PLAYER);
-    expect(g.events.some((e) => e.type === 'capture' && e.cityId === town.id)).toBe(true);
+  it('waiting too long after the bite lets it escape', () => {
+    const g = new Game({}, rng());
+    waitForBite(g);
+    tick(g, g.reelWindow() + 0.1);
+    expect(g.line).toMatchObject({ type: 'result', outcome: 'escaped' });
   });
 
-  it('taking a capital eliminates the nation: cities to the conqueror, land goes blank', () => {
-    const g = new Game(42);
-    const target = capitalOf(g, 1);
-    for (const a of g.armiesAt(target.col, target.row)) a.count = 1;
-    const near = findEmptyNear(g, target.col, target.row);
-    const army = place(g, PLAYER, near.col, near.row, 50);
-    g.move(army.id, target.col, target.row);
-    run(g, 5);
-    expect(g.nations[1]!.alive).toBe(false);
-    expect(target.owner).toBe(PLAYER);
-    expect(g.world.ownerAt(target.col, target.row)).toBe(PLAYER);
-    expect(g.nations[1]!.territory).toBe(0);
-    expect(Array.from(g.world.owner).includes(1)).toBe(false);
-    expect(g.armies.some((a) => a.owner === 1)).toBe(false);
-    // Territory counts stay consistent with the map.
-    for (const n of g.nations) expect(n.territory).toBe(Array.from(g.world.owner).filter((o) => o === n.id).length);
+  it('a fish too strong for the rod snaps the line', () => {
+    const g = new Game({ rod: 0 }, rng());
+    g.cast();
+    tick(g, 1);
+    g.line = { type: 'bite', t: 0, window: 1, fish: fishById('trout'), tooStrong: true };
+    g.reel();
+    expect(g.line).toMatchObject({ outcome: 'snapped' });
+    expect(g.bag).toHaveLength(0);
   });
 
-  it('the last nation standing wins', () => {
-    const g = new Game(42, 1); // player + one bot
-    const target = capitalOf(g, 1);
-    for (const a of g.armiesAt(target.col, target.row)) a.count = 1;
-    const near = findEmptyNear(g, target.col, target.row);
-    g.move(place(g, PLAYER, near.col, near.row, 50).id, target.col, target.row);
-    run(g, 5);
-    expect(g.winner).toBe(PLAYER);
+  it('skill makes bites faster and the reel window wider', () => {
+    const avgWait = (skill: number) => {
+      const g = new Game({ skill }, rng(11));
+      let s = 0;
+      for (let i = 0; i < 500; i++) s += g.biteWait();
+      return s / 500;
+    };
+    expect(avgWait(SKILL_MAX)).toBeLessThan(avgWait(1) * 0.75);
+    expect(new Game({ skill: SKILL_MAX }).reelWindow()).toBeGreaterThan(new Game({ skill: 1 }).reelWindow());
   });
 });
 
-function findEmptyNear(g: Game, col: number, row: number) {
-  for (let r = 1; r < 6; r++)
-    for (let dr = -r; dr <= r; dr++)
-      for (let dc = -r; dc <= r; dc++) {
-        const c = col + dc, w = row + dr;
-        if (hexDistance({ col, row }, { col: c, row: w }) !== r) continue;
-        if (g.world.passable(c, w) && !g.cityAt(c, w) && g.armiesAt(c, w).length === 0) return { col: c, row: w };
-      }
-  throw new Error('no empty hex nearby');
-}
+describe('market', () => {
+  it('sells one fish or the whole bag', () => {
+    const g = new Game({ bag: [{ id: 1, fish: 'carp', kg: 3, value: 7 }, { id: 2, fish: 'perch', kg: 0.4, value: 4 }] });
+    expect(g.sell(1)).toBe(7);
+    expect(g.money).toBe(7);
+    expect(g.sellAll()).toBe(4);
+    expect(g.money).toBe(11);
+    expect(g.bag).toHaveLength(0);
+    expect(g.earned).toBe(11);
+  });
+
+  it('rods are bought in order and cost money', () => {
+    const start = RODS[1]!.price + RODS[2]!.price - 1; // enough for Bamboo, then $1 short of Fiberglass
+    const g = new Game({ money: start });
+    expect(g.buyRod(2)).toBe(false); // must buy Bamboo first
+    expect(g.buyRod(1)).toBe(true);
+    expect(g.money).toBe(start - RODS[1]!.price);
+    expect(g.rodTier).toBe(2);
+    expect(g.buyRod(2)).toBe(false);
+  });
+
+  it('skill upgrades cost money and stop at the max', () => {
+    const g = new Game({ money: 1e9 });
+    const first = g.nextSkillCost()!;
+    expect(g.upgradeSkill()).toBe(true);
+    expect(g.money).toBe(1e9 - first);
+    while (g.upgradeSkill());
+    expect(g.skill).toBe(SKILL_MAX);
+    expect(g.nextSkillCost()).toBeNull();
+  });
+
+  it('round-trips through save data', () => {
+    const g = new Game({ money: 500 }, rng());
+    g.buyRod(1);
+    waitForBite(g);
+    g.reel();
+    const copy = new Game(JSON.parse(JSON.stringify(g.save())));
+    expect(copy.save()).toEqual(g.save());
+  });
+});

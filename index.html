@@ -3,116 +3,116 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-    <meta name="theme-color" content="#8fc4e8" />
-    <title>Hex Conquest</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2 29 9.5v13L16 30 3 22.5v-13z' fill='%232f6fd6'/%3E%3Cpath d='M16 8 23.5 12.3v8.6L16 25.2 8.5 20.9v-8.6z' fill='%23f0c23a'/%3E%3C/svg%3E" />
+    <meta name="theme-color" content="#8fd0f0" />
+    <title>Riverside Fishing</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cellipse cx='15' cy='16' rx='10' ry='6' fill='%233f8fe0'/%3E%3Cpath d='M24 16l6-5v10z' fill='%233f8fe0'/%3E%3Ccircle cx='10' cy='14.5' r='1.6' fill='%23fff'/%3E%3C/svg%3E" />
     <style>
-      html, body { margin: 0; padding: 0; height: 100%; background: #8fc4e8; overflow: hidden; touch-action: none; overscroll-behavior: none; }
-      body { font-family: Georgia, 'Times New Roman', serif; color: #f7e7c2; -webkit-user-select: none; user-select: none; }
-      #app { position: fixed; inset: 0; }
-      #app canvas { display: block; }
-
-      #loading {
-        position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
-        font: 700 18px Georgia, serif; color: #1d3550; letter-spacing: 0.04em; pointer-events: none;
+      :root {
+        --wood: #6b4a2c; --wood-dark: #3e2a18; --paper: #fff8e8; --ink: #3a2a1a; --gold: #e0a82a;
       }
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #8fd0f0; touch-action: manipulation; overscroll-behavior: none; }
+      body { font-family: Georgia, 'Times New Roman', serif; color: var(--ink); -webkit-user-select: none; user-select: none; }
+      #scene { position: fixed; inset: 0; display: block; cursor: pointer; }
 
-      /* Army number banners (positioned by view/armies.ts). */
-      #labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
-      .army-label {
-        position: absolute; left: 0; top: 0; translate: -50% -100%;
-        min-width: 22px; padding: 1px 6px; box-sizing: border-box; text-align: center;
-        font: 700 13px/16px Georgia, serif; color: #fff; text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
-        background: var(--team); border: 1.5px solid rgba(255, 255, 255, 0.85); border-radius: 9px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
-      }
-      .army-label.selected { border-color: #ffe27a; box-shadow: 0 0 0 2px #ffe27a, 0 2px 4px rgba(0, 0, 0, 0.35); }
-
-      .pill, .res {
-        display: flex; align-items: center; gap: 5px; padding: 5px 10px;
-        background: linear-gradient(#4a3320, #2e1f13); border: 1px solid #c9a24a; border-radius: 16px;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 220, 150, 0.25);
-        font: 700 14px/1 Georgia, serif; text-shadow: 0 1px 0 #000;
-      }
       #top {
-        position: fixed; top: calc(env(safe-area-inset-top, 0px) + 8px); left: 8px;
-        display: flex; gap: 6px; pointer-events: none;
+        position: fixed; top: calc(env(safe-area-inset-top, 0px) + 8px); left: 8px; right: 8px;
+        display: flex; flex-wrap: wrap; gap: 6px; pointer-events: none;
       }
-
-      /* Leaderboard, territorial.io style. */
-      #board {
-        position: fixed; top: calc(env(safe-area-inset-top, 0px) + 8px); right: 8px;
-        min-width: 150px; padding: 6px 8px; pointer-events: none;
-        background: rgba(30, 20, 12, 0.72); border: 1px solid rgba(201, 162, 74, 0.7); border-radius: 10px;
-        font-size: 12px;
+      .pill {
+        display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px;
+        background: rgba(255, 248, 232, 0.94); border: 2px solid var(--wood); border-radius: 18px;
+        font: 700 14px/1 Georgia, serif; color: var(--ink); box-shadow: 0 2px 0 rgba(0, 0, 0, 0.2);
       }
-      #board .row { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
-      #board .row i { width: 10px; height: 10px; border-radius: 3px; flex: none; border: 1px solid rgba(255, 255, 255, 0.6); }
-      #board .row span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      #board .row b { font-variant-numeric: tabular-nums; }
-      #board .row.me { color: #ffe27a; }
+      .pill.money { color: #2f7a2f; font-size: 16px; }
+      .pill .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c); border: 1px solid rgba(0, 0, 0, 0.3); }
+      .pill.btn { pointer-events: auto; cursor: pointer; margin-left: auto; }
 
       #toast {
-        position: fixed; bottom: calc(env(safe-area-inset-bottom, 0px) + 150px); left: 50%; transform: translateX(-50%);
-        padding: 7px 14px; border-radius: 14px; background: #2e1f13; border: 1px solid #c9a24a;
-        font: 700 14px/1.2 Georgia, serif; white-space: nowrap; opacity: 0; transition: opacity 0.3s; pointer-events: none;
+        position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 64px); transform: translate(-50%, -8px);
+        max-width: min(92vw, 440px); padding: 9px 16px; text-align: center;
+        background: var(--paper); border: 2px solid var(--wood); border-radius: 14px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+        font: 15px/1.35 Georgia, serif; opacity: 0; transition: opacity 0.25s, transform 0.25s; pointer-events: none; z-index: 20;
       }
-      #toast.show { opacity: 1; }
+      #toast.show { opacity: 1; transform: translate(-50%, 0); }
+      #toast.good { border-color: #3f9a4a; }
+      #toast.bad { border-color: #c0503a; }
+      #toast .new { color: #fff; background: #e0503a; border-radius: 6px; padding: 1px 6px; font-size: 12px; font-weight: 700; }
 
-      #panel {
-        position: fixed; left: 8px; right: 8px; bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
-        max-width: 460px; margin: 0 auto; padding: 10px 12px 12px; box-sizing: border-box;
-        background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.025) 0 2px, transparent 2px 9px), linear-gradient(#4a3320, #2b1c11);
-        border: 2px solid #c9a24a; border-radius: 12px;
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 220, 150, 0.2);
+      #action {
+        position: fixed; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+        display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none;
       }
-      #panel .head { display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 16px; color: #ffe6a8; text-shadow: 0 1px 0 #000; }
-      #panel .hint { font-size: 13px; font-style: italic; opacity: 0.85; margin: 4px 0 9px; }
-      #panel .row { display: flex; gap: 6px; }
-      #panel button {
-        min-height: 44px; padding: 0 14px; flex: 1;
-        background: linear-gradient(#6b4a2c, #4a3220); color: #f7e7c2; border: 1px solid #a88338; border-radius: 8px;
-        box-shadow: 0 2px 0 #1a1008, inset 0 1px 0 rgba(255, 220, 150, 0.25);
-        font: 700 14px/1.1 Georgia, serif; cursor: pointer; touch-action: manipulation;
+      #action .hint, #action .bagline {
+        padding: 7px 14px; background: rgba(255, 248, 232, 0.92); border: 2px solid var(--wood); border-radius: 14px;
+        font-size: 14px; text-align: center; max-width: 88vw;
       }
-      #panel button:active { transform: translateY(1px); box-shadow: 0 1px 0 #1a1008; }
-      #panel button:disabled { opacity: 0.45; }
-      #panel button.seg.on { background: linear-gradient(#c9a24a, #8a6a24); color: #2b1c11; border-color: #ffe6a8; }
-      #panel button.x { flex: none; min-height: 36px; min-width: 44px; padding: 0; font-size: 16px; }
+      #action .bagline { font-size: 13px; padding: 4px 12px; }
+      button { font-family: Georgia, serif; touch-action: manipulation; cursor: pointer; }
+      button.big {
+        pointer-events: auto; min-width: 220px; min-height: 60px; padding: 0 28px;
+        font: 700 22px Georgia, serif; color: #fff; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+        background: linear-gradient(#4fb35a, #2f8a3a); border: 3px solid #1f5a26; border-radius: 16px;
+        box-shadow: 0 4px 0 #1f5a26, 0 8px 18px rgba(0, 0, 0, 0.25);
+      }
+      button.big:active { transform: translateY(3px); box-shadow: 0 1px 0 #1f5a26; }
+      button.big.wait { background: linear-gradient(#9aa8b0, #76848c); border-color: #4a565c; box-shadow: 0 4px 0 #4a565c; font-size: 18px; }
+      button.big.bite { background: linear-gradient(#ff6a3a, #d8401a); border-color: #8a2a10; box-shadow: 0 4px 0 #8a2a10; animation: pulse 0.35s infinite alternate; font-size: 28px; }
+      @keyframes pulse { to { transform: scale(1.08); } }
 
-      #modal {
-        position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
-        background: rgba(20, 14, 8, 0.55); z-index: 20;
+      /* Market & journal sheet. */
+      #sheet { position: fixed; inset: 0; display: none; align-items: flex-end; justify-content: center; background: rgba(20, 30, 40, 0.35); z-index: 10; }
+      #sheet.show { display: flex; }
+      #sheet .card {
+        width: min(100%, 520px); max-height: 84vh; display: flex; flex-direction: column; box-sizing: border-box;
+        margin: 0 8px calc(env(safe-area-inset-bottom, 0px) + 8px); background: var(--paper);
+        border: 3px solid var(--wood); border-radius: 16px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); overflow: hidden;
       }
-      #modal.show { display: flex; animation: fadein 0.5s ease-out; }
-      @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
-      #modal .card {
-        max-width: 300px; padding: 22px 26px; text-align: center; border: 2px solid #c9a24a; border-radius: 14px;
-        background: linear-gradient(#4a3320, #2b1c11); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+      #sheet .head { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 6px; background: #f3e4c0; border-bottom: 2px solid #d8c090; }
+      #sheet h2 { margin: 0; font-size: 19px; }
+      #sheet .x { min-width: 40px; min-height: 36px; border: 2px solid var(--wood); border-radius: 10px; background: #fff; font-size: 16px; }
+      #sheet .tabs { display: flex; gap: 4px; padding: 8px 10px 0; background: #f3e4c0; }
+      #sheet .tab { flex: 1; min-height: 40px; border: 2px solid var(--wood); border-bottom: none; border-radius: 10px 10px 0 0; background: #e8d4a8; font-weight: 700; font-size: 14px; color: var(--ink); }
+      #sheet .tab.on { background: var(--paper); }
+      #sheet .body { padding: 10px 12px 14px; overflow-y: auto; }
+      #sheet .list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+      #sheet .item { display: flex; align-items: center; gap: 10px; padding: 6px 8px; background: #fff; border: 1px solid #e0d0a8; border-radius: 10px; }
+      #sheet .item.have { background: #f2f8ec; }
+      #sheet .item img { width: 64px; height: 38px; }
+      #sheet .item .rod { width: 64px; height: 6px; border-radius: 3px; background: var(--c); transform: rotate(-20deg); border: 1px solid rgba(0, 0, 0, 0.35); }
+      #sheet .meta { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+      #sheet .meta small { opacity: 0.7; font-size: 12px; }
+      #sheet .item button, #sheet .wide {
+        min-height: 40px; padding: 0 14px; border: 2px solid #1f5a26; border-radius: 10px;
+        background: linear-gradient(#4fb35a, #2f8a3a); color: #fff; font-weight: 700; font-size: 15px;
       }
-      #modal h1 { margin: 0 0 6px; font-size: 34px; letter-spacing: 0.08em; text-shadow: 0 2px 0 #000; }
-      #modal h1.win { color: #ffd86b; }
-      #modal h1.lose { color: #ff8a70; }
-      #modal p { margin: 0 0 16px; opacity: 0.85; }
-      #modal button {
-        min-height: 46px; padding: 0 24px; font: 700 15px Georgia, serif; color: #f7e7c2; cursor: pointer;
-        background: linear-gradient(#4f8a3a, #356226); border: 1px solid #a8d890; border-radius: 8px;
-      }
-
-      @media (max-width: 420px) {
-        #top { flex-direction: column; align-items: flex-start; }
-        #board { min-width: 128px; font-size: 11px; }
-      }
+      #sheet button:disabled { opacity: 0.4; cursor: default; }
+      #sheet .wide { width: 100%; min-height: 48px; font-size: 16px; }
+      #sheet .wide.danger { margin-top: 14px; background: #fff; color: #b0402a; border-color: #b0402a; }
+      #sheet .owned { font-size: 13px; color: #2f7a2f; font-weight: 700; }
+      #sheet .locked { font-size: 13px; opacity: 0.5; }
+      #sheet .empty, #sheet .note { font-size: 13px; opacity: 0.75; margin: 8px 2px; }
+      #sheet .maxed { text-align: center; font-weight: 700; color: var(--gold); }
+      .tier { align-self: flex-start; font-size: 11px; font-weight: 700; color: #fff; background: var(--c); border-radius: 6px; padding: 1px 6px; }
+      #sheet .lvl { font-size: 17px; }
+      #sheet .oddslist { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+      #sheet .odds { display: grid; grid-template-columns: 82px 1fr 52px 64px; align-items: center; gap: 6px; font-size: 13px; }
+      #sheet .odds .bar { height: 10px; background: #eadfc4; border-radius: 5px; overflow: hidden; }
+      #sheet .odds .bar i { display: block; height: 100%; }
+      #sheet .odds small.up { color: #2f8a3a; }
+      #sheet .odds small.down { color: #a05a3a; }
+      #sheet .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; }
+      #sheet .fish { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px; background: #fff; border: 2px solid #e0d0a8; border-radius: 10px; text-align: center; font-size: 12px; }
+      #sheet .fish.seen { border-color: var(--c); }
+      #sheet .fish img { width: 84px; height: 48px; }
+      #sheet .fish small { opacity: 0.7; font-size: 11px; }
     </style>
   </head>
   <body>
-    <div id="app"></div>
-    <div id="loading">Loading…</div>
+    <canvas id="scene"></canvas>
     <div id="top"></div>
-    <div id="board"></div>
     <div id="toast"></div>
-    <div id="panel"></div>
-    <div id="modal"></div>
+    <div id="action"></div>
+    <div id="sheet"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -1,64 +1,48 @@
-# plan of record — hex conquest
+# plan of record — Riverside Fishing
 
-A **real-time hex conquest game**, a blend of **territorial.io** (fast,
-real-time, many bots, painted borders, territory = strength) and **Hex
-Empire** (hex map, cities, armies with a number marching between hexes,
-capitals). Mobile-first web, 3D low-poly KayKit art.
+A cozy 2D fishing game, mobile-first. You start next to a river, walk to
+the dock, cast, reel in fish, carry them to the market, sell, and spend
+the money on better rods and fishing skill.
 
-The previous game (medieval base-builder RTS) is tagged **`rts-v1`** and
-is not coming back in this branch.
+Earlier games in this repo are git tags: `rts-v1` (medieval base-builder)
+and `hex-v1` (hex conquest). They are not coming back in this branch.
 
-Decided with the user 2026-10-07:
+Asked for by the user 2026-10-08: a river with lots of fish, a rod you
+cast, ~20 fish types, rods that can only land certain tiers, a fishing
+skill bought with money that changes catch probability, a market to sell
+at, the upgrade system and an interface. Wanted 2D graphics.
 
-- **Real-time.** No turns.
-- **Armies on the map** (Hex Empire), not a troop pool.
-- **Cities spawn armies** on a timer.
-- **Numbers subtract** in battle.
-- **Many bots (8+).**
-- **Win = last one standing.**
-- **Look = 3D KayKit hexes** (Medieval Hexagon pack).
-- Same repo and URL; the old game is tagged and deleted.
+## Rules (all numbers in `src/data.ts`)
 
-## Rules (milestone 1)
+- **20 fish in 5 tiers** (4 each): Common, Uncommon, Rare, Epic,
+  Legendary. Each catch has a random weight (±40%) that scales its price.
+- **5 rods**, bought in order: Twig (free, Common) → Bamboo $100
+  (Uncommon) → Fiberglass $900 (Rare) → Carbon $5,000 (Epic) → Mythril
+  $25,000 (Legendary). A rod lands fish up to its tier. 12% of bites are a
+  fish one tier above the rod, which snaps the line ("you need a …").
+- **Fishing skill 1–20**, bought at the market (cost grows ×1.4 per
+  level). Each level multiplies every tier's bite weight by
+  (1 + 0.14·(skill−1))^(tier−1), so rarer tiers grow fastest; bites also
+  come sooner and the reel window widens.
+- **Fishing:** Cast → wait 2–6.5 s for a bite → the bobber dips and you
+  have ~0.9 s (more with skill) to reel. Too early scares the fish, too
+  late it escapes.
+- **Market:** sell one fish or everything; buy the next rod; train skill.
+- **Journal:** all 20 species, caught ones with count and best weight.
+- Progress saves to the browser (localStorage) every 2 s.
 
-Numbers are starting defaults in `src/config.ts`.
+Pacing (bot-free sim of a decent player, see changelog): Bamboo ≈ 4 min,
+Fiberglass ≈ 22 min, Carbon ≈ 55 min, Mythril ≈ 97 min, everything maxed
+≈ 1 h 40.
 
-- **Map:** ~40×30 pointy-top hexes. Grass (passable), forest (passable,
-  slower), mountain (impassable), water (impassable). Generated from a
-  seed; `?seed=N` pins it.
-- **Nations:** the player + 8 bots. Each starts with a **capital** and the
-  hexes around it. ~18 **neutral towns** with garrisons sit between them.
-- **Spawning:** every few seconds each city adds troops to the army on
-  its hex (creating one if empty): capitals more, towns fewer, plus a
-  bonus that grows with the nation's territory. Armies cap at 99.
-- **Movement:** an army walks a hex path to its destination and claims
-  every hex it enters for its nation. The whole army moves, or half of
-  it (the player picks).
-- **Battle:** an army entering a hex with an enemy army fights at once:
-  bigger number wins and keeps the difference. An army defending a city
-  hex counts 1.5×. Own armies on the same hex merge.
-- **Capture:** winning on a city hex takes the city. Taking a
-  **capital eliminates** that nation: its cities and land go to the
-  captor and its armies disband.
-- **End:** you win when you're the last nation; you lose when your
-  capital falls.
+## Look & input
 
-## Look
-
-KayKit hex tiles (grass, water, coast, hills, mountains, forests) drawn
-instanced. Ownership = territory tint on the hex + a flag in the nation
-colour on each city + coloured army banners. KayKit only has 4 team
-colours, so all cities use one stone palette and nations are told apart
-by colour accents. Armies are small soldier figures with a number banner.
-
-## Input
-
-- Drag / WASD = pan, pinch / wheel = zoom.
-- Tap own army (or an own city with a garrison) → select it; tap a hex →
-  march there. Panel toggles **all / half**.
-- Leaderboard shows every nation's colour, name and share of the map.
+Plain Canvas 2D, everything drawn in code (sky, hills, river with fish
+shadows, dock, striped market stall, straw-hat fisher, 20 fish drawings).
+DOM interface on top. Tap the river or the market to walk there; A/D or
+arrows walk, Space casts / reels, E opens the market.
 
 ## Not yet (ask before adding)
 
-Online multiplayer, boats / sea movement, roads / rivers as gameplay,
-upgrades, diplomacy, difficulty levels, sound, save/load.
+Bag capacity, more locations / rivers, bait, weather or time of day,
+fishing minigame beyond timing (tension bar), achievements, sound.
