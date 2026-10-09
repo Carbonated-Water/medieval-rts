@@ -31,6 +31,10 @@ export interface Boat {
   haul: HaulItem[] | null;
   /** What happened on the last trip, for the haul screen. */
   event: TripEvent | null;
+  /** The ledger: money put into this boat, money it has brought in, trips made. */
+  invested: number;
+  earned: number;
+  trips: number;
   /** Old saves: the gear level before boats had tracks. */
   net?: number;
 }
@@ -172,10 +176,11 @@ export class Game {
     // Boats from before upgrade tracks: keep their gear level and crew.
     this.boats = this.boats.map((b) => ({
       ...b, type: b.type ?? 'net', tracks: { ...NO_TRACKS(), ...(b.tracks ?? { gear: Math.min(b.net ?? 0, TRACK_MAX) }) },
-      ground: b.ground ?? 'coast', event: b.event ?? null,
+      ground: b.ground ?? 'coast', event: b.event ?? null, earned: b.earned ?? 0, trips: b.trips ?? 0, invested: b.invested ?? -1,
       trip: b.trip ? { ...b.trip, ground: b.trip.ground ?? b.ground ?? 'coast' } : null,
     }));
     for (const b of this.boats) delete b.net;
+    this.boats.forEach((b, i) => { if (b.invested < 0) b.invested = this.boatResale(i) * 2; });
     this.berths = clamp(this.berths, 0, BERTHS.length - 1);
     this.warehouse = clamp(this.warehouse, 0, WAREHOUSE.length - 1);
     // The Fish Buyer became the Fish Seller (who also sells your bag).
@@ -593,7 +598,7 @@ export class Game {
     const price = this.boatPrice(type);
     if (!this.canBuyBoat(type) || this.money < price) return false;
     this.money -= price;
-    this.boats.push({ type, tracks: NO_TRACKS(), crew: 0, ground: 'coast', trip: null, haul: null, event: null });
+    this.boats.push({ type, tracks: NO_TRACKS(), crew: 0, ground: 'coast', trip: null, haul: null, event: null, invested: price, earned: 0, trips: 0 });
     return true;
   }
 
@@ -616,7 +621,33 @@ export class Game {
     if (cost === null || this.money < cost) return false;
     this.money -= cost;
     this.boats[i]!.tracks[id]++;
+    this.boats[i]!.invested += cost;
     return true;
+  }
+
+  /**
+   * What a boat is expected to make per minute, worked out from its stats (not
+   * luck): catches per trip x average value at its ground, storms and lucky
+   * schools averaged in, less wages and the harbor master's fee, over the trip
+   * time. With `change`, the same for the boat after one more level of a
+   * track, one more deckhand, or another ground: that's the upgrade preview.
+   */
+  boatRate(b: Boat, change: { track?: TrackId; crew?: boolean; ground?: GroundId } = {}): number {
+    const x: Boat = { ...b, tracks: { ...b.tracks }, crew: b.crew + (change.crew ? 1 : 0), ground: change.ground ?? b.ground };
+    if (change.track) x.tracks[change.track] = Math.min(TRACK_MAX, x.tracks[change.track] + 1);
+    const ground = this.groundOf(x.ground), def = BOATS[x.type];
+    const step = 1 + ground.step + SONAR_STEP * x.tracks.sonar;
+    const worth = ground.size * (1 + ICE_VALUE * x.tracks.ice);
+    const weights = def.catch.map((c) => TIERS[c.tier].weight * c.rarity * Math.pow(step, c.tier - 1));
+    const total = weights.reduce((s, w) => s + w, 0);
+    const avg = def.catch.reduce((s, c, k) => s + (weights[k]! / total) * c.price, 0) * worth;
+    const storm = this.stormChance(x);
+    const luck = 1 - STORM_LOSS * storm + SCHOOL_CHANCE * (1 - storm);
+    const sighting = GROUNDS.indexOf(ground) >= 2 ? SIGHTING_CHANCE * 3 * def.catch[def.catch.length - 1]!.price * worth : 0;
+    const raw = this.haulSize(x) * avg * luck + sighting;
+    const keep = (1 + HAGGLE_PER_LEVEL * this.haggling) * (this.dev ? DEV_MULTIPLIER : 1)
+      * (x.tracks.captain > 0 ? 1 - CAPTAIN_WAGE : 1) * (this.harbor.master ? 1 - HARBOR_UPGRADES.master.fee : 1);
+    return (raw * keep) / (this.tripSeconds(x) / 60);
   }
 
   /** What selling a boat pays: half of its base price, its upgrades and its crew. */
@@ -658,6 +689,7 @@ export class Game {
     if (cost === null || this.money < cost) return false;
     this.money -= cost;
     this.boats[i]!.crew++;
+    this.boats[i]!.invested += cost;
     return true;
   }
 
@@ -711,6 +743,7 @@ export class Game {
     const b = this.boats[i];
     if (!b?.haul) return 0;
     const paid = this.haulValue(b, fee);
+    b.earned += paid;
     b.haul = null;
     this.money += paid;
     this.earned += paid;
@@ -758,6 +791,7 @@ export class Game {
           const g = b.trip.ground;
           b.trip = null;
           b.haul = this.rollHaul(b, g);
+          b.trips++;
           // Automation: the harbor master sells hauls as they come in.
           const paid = this.harbor.master ? this.collectHaul(i, HARBOR_UPGRADES.master.fee) : 0;
           this.fleetNews.push({ boat: i, paid, event: b.event });

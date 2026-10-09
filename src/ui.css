@@ -96,6 +96,16 @@ button { font: inherit; color: inherit; cursor: pointer; padding: 0; border: 0; 
 #sheet .row.letter p { flex: 1; margin: 0; font: 16px/1.35 'Kenney Mini'; color: var(--ink); }
 #notes .line span { max-width: 60vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #sheet small.warn { color: var(--red); }
+/* Ledger rows. */
+#sheet .row.tight { padding: 3px 6px; width: 100%; text-align: left; font: inherit; color: inherit; }
+#sheet .row.tight .slot { width: 30px; height: 26px; }
+#sheet .row.tight .meta { gap: 3px; }
+#sheet .row.tight .meta b { font: 16px/1 'Kenney Mini'; }
+#sheet .row.tight .meta b .small { color: var(--go-dark); }
+#sheet .row.total .meta b { font: 32px/0.8 'Kenney Pixel'; }
+#sheet .row.total { background: var(--parch-light); }
+#sheet .cash.gain { color: var(--go-dark); font: 32px/1 'Kenney Pixel'; }
+#sheet .cash.loss { color: var(--red); font: 32px/1 'Kenney Pixel'; }
 /* Fleet: berth tiles, fishing grounds, upgrade tracks. */
 #sheet .grid.fleet .slot { aspect-ratio: auto; height: 46px; }
 #sheet .grid.hands { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px 4px; padding: 6px; }

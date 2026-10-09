@@ -4,6 +4,21 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Fleet ledger and upgrade previews
+  WHAT: Boats keep books (invested on purchase / upgrades / crew, earned on
+        each sale, trips); old boats get an estimated cost. Game.boatRate gives
+        a boat's expected $/min from its stats (catch x average value at its
+        ground, storms / schools averaged, wages and fees), optionally after
+        one more track level, deckhand or another ground; within ~8% of 3 h
+        simulations. New Ledger panel (from Fishing Co.): fleet totals, then
+        per boat $/min, earned of cost, paid off / pays off in, profit in
+        green or red. Boat panel: current $/min, '+$X/min, back in N m' for
+        the selected upgrade and for crew. 73 tests.
+  WHY:  User: no ledger of ships, so no way to weigh keeping, upgrading or
+        replacing a boat.
+
+---
+
 2026-10-09  Fix: dead clicks in busy menus
   WHAT: Panels redraw (innerHTML) whenever money, timers or the crate change,
         which with a running company is almost every frame; a click whose

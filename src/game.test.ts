@@ -633,6 +633,40 @@ describe('the fleet', () => {
     expect(g.boats.map((b) => b.type)).toEqual(['lobster']);
   });
 
+  it('the ledger: each boat tracks what went in and what came out', () => {
+    const g = owner();
+    g.buyBoat('net');
+    const b = g.boats[0]!;
+    expect(b.invested).toBe(BOATS.net.price);
+    const cost = g.nextTrackCost(0, 'gear')!;
+    g.upgradeTrack(0, 'gear');
+    g.hireCrew(0);
+    expect(b.invested).toBeGreaterThan(BOATS.net.price + cost);
+    g.sendBoat(0);
+    tick(g, b.trip!.dur + 0.1);
+    const paid = g.collectHaul(0);
+    expect(b.earned).toBe(paid);
+    expect(b.trips).toBe(1);
+  });
+
+  it('the projected rate rises with upgrades and farther grounds', () => {
+    const g = owner();
+    g.buyBoat('net');
+    const b = g.boats[0]!;
+    const now = g.boatRate(b);
+    expect(now).toBeGreaterThan(0);
+    for (const id of ['hull', 'gear', 'sonar', 'ice'] as const) expect(g.boatRate(b, { track: id })).toBeGreaterThan(now);
+    expect(g.boatRate(b, { crew: true })).toBeGreaterThan(now);
+    g.upgradeTrack(0, 'engine');
+    expect(g.boatRate(b, { ground: 'reef' })).toBeGreaterThan(g.boatRate(b));
+  });
+
+  it('old boats get an estimated cost for the ledger', () => {
+    const g = new Game({ company: true, boats: [{ type: 'net', net: 2, crew: 3, trip: null, haul: null }] } as never);
+    expect(g.boats[0]!.invested).toBeGreaterThan(BOATS.net.price);
+    expect(g.boats[0]!.earned).toBe(0);
+  });
+
   it('the company keeps earning while the game is closed, up to the warehouse limit', () => {
     const g = owner(1e7);
     g.buyBoat('net');

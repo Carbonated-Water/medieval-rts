@@ -10,7 +10,7 @@ import { pixelFishIcon as fishIcon, pixelIcon, type IconName } from './pixelart'
 import type { Place } from './scene';
 
 /** One panel per job: the market sells fish, the tackle shop sells gear, the school trains skills. */
-export type Panel = 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'boat' | 'shipyard' | 'harborup' | 'pier' | 'pierstaff' | 'hand' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
+export type Panel = 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'ledger' | 'boat' | 'shipyard' | 'harborup' | 'pier' | 'pierstaff' | 'hand' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
 
 export type Action =
   | 'cast' | 'reel' | 'close' | 'reset' | 'toggleDev' | Panel
@@ -40,6 +40,13 @@ const level = (lv: number, max: number) => max <= 10
   ? `<span class="pips">${Array.from({ length: max }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('')}</span>`
   : `<span class="bar"><i style="width:${Math.round((lv / max) * 100)}%"></i></span>`;
 const short = (s: string) => s.replace(/\.$/, '');
+/** Compact money for tight rows: 950, 12.4k, 3.1M. */
+const kmb = (n: number) => {
+  const a = Math.abs(n), sign = n < 0 ? '-' : '';
+  return sign + (a >= 1e6 ? `${(a / 1e6).toFixed(a >= 1e7 ? 0 : 1)}M` : a >= 1e3 ? `${(a / 1e3).toFixed(a >= 1e4 ? 0 : 1)}k` : String(Math.round(a)));
+};
+/** Minutes as "45m" or "3.2h". */
+const mins = (m: number) => (!isFinite(m) || m <= 0 ? 'never' : m < 90 ? `${Math.ceil(m)}m` : `${(m / 60).toFixed(1)}h`);
 
 /**
  * The DOM interface in a wood & parchment pixel style: top bar, the big
@@ -143,6 +150,7 @@ export class UI {
           : panel === 'pouch' ? ['Bait Pouch', this.pouchHtml(game)]
           : panel === 'harbor' ? [game.company ? 'Fishing Co.' : 'Old Harbor', this.harborHtml(game)]
           : panel === 'boat' ? [game.boats[this.boatSel] ? game.boatName(this.boatSel) : 'Boat', this.boatHtml(game)]
+          : panel === 'ledger' ? ['Ledger', this.ledgerHtml(game)]
           : panel === 'shipyard' ? [`Shipyard ${game.boats.length}/${game.berthCount}`, this.shipyardHtml(game)]
           : panel === 'harborup' ? ['Harbor', this.harborUpHtml(game)]
           : panel === 'pier' ? [`The Pier ${game.hands.length}/${game.pierSpots}`, this.pierHtml(game)]
@@ -263,7 +271,10 @@ export class UI {
       : idle ? `<button class="btn wide" data-act="sendAll">SEND ${idle} BOAT${idle > 1 ? 'S' : ''}</button>` : '';
     const harbor = `<div class="row"><button class="slot" data-act="harborup" aria-label="harbor">${icon('anchor')}</button><div class="meta"><b>Harbor</b>
       <div class="sub"><small>${game.berthCount} berths · ${game.harbor.master ? 'Harbor Master' : 'no staff'} · ${game.offlineHours}h away</small></div></div><button class="btn plain" data-act="harborup">OPEN</button></div>`;
-    return `${quick}<div class="grid fleet">${tiles}</div>${harbor}<p class="note">Tap a boat for its upgrades and fishing grounds.</p>`;
+    const fleetRate = game.boats.reduce((s2, b) => s2 + game.boatRate(b), 0);
+    const ledger = game.boats.length ? `<div class="row"><button class="slot" data-act="ledger" aria-label="ledger">${icon('book')}</button><div class="meta"><b>Ledger</b>
+      <div class="sub"><small>Fleet $${kmb(fleetRate)}/min · what each boat earns</small></div></div><button class="btn plain" data-act="ledger">OPEN</button></div>` : '';
+    return `${quick}<div class="grid fleet">${tiles}</div>${harbor}${ledger}`;
   }
 
   private boatStatus(game: Game, b: Boat): string {
@@ -290,7 +301,8 @@ export class UI {
     const i = this.boatSel, b = game.boats[i];
     if (!b) return '<p class="empty">No boat.</p>';
     const def = BOATS[b.type];
-    const status = `<div class="row"><div class="slot">${icon(this.trackIcon(b, 'gear'))}</div><div class="meta"><b>${def.gearNames[b.tracks.gear]}</b>
+    const rate = game.boatRate(b);
+    const status = `<div class="row"><div class="slot">${icon(this.trackIcon(b, 'gear'))}</div><div class="meta"><b>${def.gearNames[b.tracks.gear]} <span class="small">$${kmb(rate)}/min</span></b>
       <div class="sub"><small>${this.boatStatus(game, b)}</small></div></div>${this.boatAction(game, b, i)}</div>`;
     const haul = b.haul ? `<div class="haul">${b.haul.map((h) => {
       const f = def.catch.find((x) => x.id === h.fish)!;
@@ -300,7 +312,7 @@ export class UI {
     const grounds = GROUNDS.map((g) => {
       const open = game.groundOpen(b, g);
       const need = (Object.entries(g.need) as [TrackId, number][]).filter(([id, l]) => b.tracks[id] < l).map(([id, l]) => `${TRACKS[id].name} ${l}`).join(', ');
-      return `<button class="ground ${b.ground === g.id ? 'sel' : ''} ${open ? '' : 'locked'}" data-act="ground:${i}:${g.id}" ${open ? '' : 'disabled'} title="${open ? `${Math.round(game.tripSeconds(b, g.id))}s, storms ${pct(game.stormChance(b, g.id))}` : `Needs ${need}`}">
+      return `<button class="ground ${b.ground === g.id ? 'sel' : ''} ${open ? '' : 'locked'}" data-act="ground:${i}:${g.id}" ${open ? '' : 'disabled'} title="${open ? `$${kmb(game.boatRate(b, { ground: g.id }))}/min, ${Math.round(game.tripSeconds(b, g.id))}s trips, storms ${pct(game.stormChance(b, g.id))}` : `Needs ${need}`}">
         ${open ? '' : icon('lock', 1)}${g.name.replace('Open Sea', 'Sea').replace('The Deep', 'Deep')}</button>`;
     }).join('');
     // Six upgrade tracks; the selected one gets the detail strip.
@@ -308,14 +320,40 @@ export class UI {
       ${icon(this.trackIcon(b, id))}</button>${level(b.tracks[id], TRACK_MAX)}</div>`).join('');
     const id = this.trackSel, cost = game.nextTrackCost(i, id);
     const name = id === 'gear' ? def.gearNames[Math.min(b.tracks.gear + 1, TRACK_MAX)]! : TRACKS[id].name;
-    const detail = `<div class="row detail"><div class="meta"><b>${name} <span class="small">LV ${b.tracks[id]}</span></b><div class="sub"><small>${TRACKS[id].blurb}</small></div></div>
+    // Upgrade preview: what this level adds per minute and how fast it pays for itself.
+    const gain = cost === null ? 0 : game.boatRate(b, { track: id }) - rate;
+    const preview = cost === null ? TRACKS[id].blurb
+      : id === 'captain' && b.tracks.captain === 0 ? 'Sails by itself · 8% wages'
+      : gain > 1 ? `<span class="up">+$${kmb(gain)}/min</span> · back in ${mins(cost / gain)}`
+      : id === 'engine' || id === 'hull' || id === 'sonar' ? `${TRACKS[id].blurb}` : 'No gain here';
+    const detail = `<div class="row detail"><div class="meta"><b>${name} <span class="small">LV ${b.tracks[id]}</span></b><div class="sub"><small>${preview}</small></div></div>
       ${cost === null ? '<span class="maxed">MAX</span>' : `<button class="btn" data-act="upgrade:${i}:${id}" ${game.money < cost ? 'disabled' : ''}>${coin(cost)}</button>`}</div>`;
     const crewCost = game.nextCrewCost(i);
-    const crew = `<div class="row"><div class="slot">${icon('crew')}</div><div class="meta"><b>Crew ${b.crew}/${game.crewMax(b)}</b><div class="sub"><small>${game.haulSize(b)} a trip · Hull adds slots</small></div></div>
+    const crewGain = crewCost === null ? 0 : game.boatRate(b, { crew: true }) - rate;
+    const crew = `<div class="row"><div class="slot">${icon('crew')}</div><div class="meta"><b>Crew ${b.crew}/${game.crewMax(b)}</b><div class="sub"><small>${crewCost === null ? `${game.haulSize(b)} a trip · Hull adds slots` : `<span class="up">+$${kmb(crewGain)}/min</span> · back in ${mins(crewCost / crewGain)}`}</small></div></div>
       ${crewCost === null ? '<span class="maxed">FULL</span>' : `<button class="btn" data-act="crew:${i}" ${game.money < crewCost ? 'disabled' : ''}>${coin(crewCost)}</button>`}</div>`;
     const sell = `<div class="row"><div class="meta"><b>Sell boat</b><div class="sub"><small>${b.trip ? 'At sea: this trip is lost' : 'Frees the berth'}</small></div></div>
       <button class="btn red" data-act="sellBoat:${i}">${coin(game.boatResale(i))}</button></div>`;
     return status + haul + `<div class="grounds">${grounds}</div><div class="grid tracks">${tiles}</div>` + detail + crew + sell;
+  }
+
+  /**
+   * The ledger, nothing else: the fleet's totals, then per boat what it makes
+   * per minute now, what it has earned against what went into it, and its
+   * profit so far. Tap a boat to open it.
+   */
+  private ledgerHtml(game: Game): string {
+    const sum = (f: (b: Boat) => number) => game.boats.reduce((s, b) => s + f(b), 0);
+    const profit = (n: number) => `<span class="cash ${n >= 0 ? 'gain' : 'loss'}">${n >= 0 ? '+' : '-'}$${kmb(Math.abs(n))}</span>`;
+    const total = `<div class="row tight total"><div class="meta"><b>Fleet $${kmb(sum((b) => game.boatRate(b)))}/min</b>
+      <div class="sub"><small>earned $${kmb(sum((b) => b.earned))} · cost $${kmb(sum((b) => b.invested))}</small></div></div>${profit(sum((b) => b.earned - b.invested))}</div>`;
+    const rows = game.boats.map((b, i) => {
+      const rate = game.boatRate(b), left = b.invested - b.earned;
+      const payback = left <= 0 ? 'paid off' : `pays off in ${mins(left / Math.max(1, rate))}`;
+      return `<button class="row tight" data-act="boat:${i}"><div class="slot">${icon(b.type === 'lobster' ? 'trap' : b.type === 'sword' ? 'hook' : 'boat', 2)}</div>
+        <div class="meta"><b>${game.boatName(i)} <span class="small">$${kmb(rate)}/min</span></b><div class="sub"><small>$${kmb(b.earned)} of $${kmb(b.invested)} · ${payback}</small></div></div>${profit(b.earned - b.invested)}</button>`;
+    }).join('');
+    return total + rows + '<p class="note">$/min is the expected rate from each boat\'s upgrades and ground.</p>';
   }
 
   /** Buy boats, nothing else. */
