@@ -91,7 +91,7 @@ function onAction(a: Action): void {
     if (!game.cast() && !game.activeBait) { const at = scene.fisherScreen(); note.float('NO BAIT', at.x, at.y, 'bad'); }
   }
   else if (a === 'reel') game.reel();
-  else if (a === 'market' || a === 'tackle' || a === 'baitshop' || a === 'pouch' || a === 'harbor' || a === 'pier' || a === 'shipyard' || a === 'harborup' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'inbox' || a === 'settings') ui.open = ui.open === a ? null : a;
+  else if (a === 'market' || a === 'tackle' || a === 'baitshop' || a === 'pouch' || a === 'harbor' || a === 'pier' || a === 'shipyard' || a === 'harborup' || a === 'pierstaff' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'inbox' || a === 'settings') ui.open = ui.open === a ? null : a;
   else if (a.startsWith('bait:')) game.selectBait(a.slice(5) as BaitId);
   else if (a === 'buyCompany') {
     if (game.buyCompany()) { ui.open = null; note.clearBanners(); note.banner(pixelIcon('boat'), 'THE FISHING CO.', 'is yours', 'rare'); }
@@ -105,6 +105,8 @@ function onAction(a: Action): void {
       if (paid) { note.banner(pixelIcon('boat'), `SOLD ${name.toUpperCase()}`, `$${paid.toLocaleString()}`); ui.open = 'harbor'; }
     }
   } else if (a.startsWith('boat:')) { ui.boatSel = Number(a.slice(5)); ui.trackSel = 'hull'; ui.open = 'boat'; }
+  else if (a === 'buyPierSection') { if (game.buyPierSection()) note.banner(pixelIcon('anchor'), 'PIER EXTENDED', `${game.pierSpots} spots`); }
+  else if (a.startsWith('budget:')) game.setManagerBudget(Number(a.slice(7)));
   else if (a === 'hire') { if (game.hireHand()) note.banner(pixelIcon('crew'), 'HIRED', HAND_NAMES[game.hands.length - 1]!); }
   else if (a === 'sellCrate') { const n = game.sellCrate(); if (n) note.banner(pixelIcon('fish'), 'CRATE SOLD', `$${n.toLocaleString()}`); }
   else if (a.startsWith('hand:')) { ui.handSel = Number(a.slice(5)); ui.open = 'hand'; }
@@ -151,7 +153,7 @@ function onAction(a: Action): void {
     const paid = game.claim(ui.pick);
     if (paid) note.banner(pixelIcon('coin'), 'COLLECTED', `$${paid.toLocaleString()}`);
   }
-  else if (a === 'close') ui.open = ui.open === 'boat' || ui.open === 'shipyard' || ui.open === 'harborup' ? 'harbor' : ui.open === 'hand' ? 'pier' : null;
+  else if (a === 'close') ui.open = ui.open === 'boat' || ui.open === 'shipyard' || ui.open === 'harborup' ? 'harbor' : ui.open === 'hand' || ui.open === 'pierstaff' ? 'pier' : null;
   else if (a === 'sellAll') { const n = game.sellAll(); if (n) note.banner(pixelIcon('coin'), 'SOLD', `$${n.toLocaleString()}`); }
   else if (a.startsWith('sellFish:')) {
     const f = fishById(a.slice(9));
@@ -228,6 +230,7 @@ function announceHarbor(): void {
     note.log(`letter:${text}`, pixelIcon('letter'), 'A letter from H.', 'plain');
     dirty = true;
   }
+  if (game.sellerNews) { note.log('seller', pixelIcon('coin'), `Fish Seller sold your bag $${game.sellerNews.toLocaleString()}`, 'plain'); game.sellerNews = 0; }
   for (const n of game.fleetNews.splice(0)) {
     const name = game.boatName(n.boat), b = game.boats[n.boat]!;
     if (n.event === 'storm') note.banner(pixelIcon('storm'), `${name.toUpperCase()}: STORM`, 'Lost half the catch', 'bad');
@@ -244,7 +247,7 @@ function announceHarbor(): void {
 }
 const handStarved: boolean[] = [];
 
-/** Hired fishermen: only their notable catches float up (big fish, rare variants), and snaps. */
+/** Hired fishermen: with up to 24 of them, only Legendaries and rare variants float up. */
 const handKeys: string[] = [];
 function announceHands(): void {
   game.hands.forEach((h, i) => {
@@ -254,10 +257,10 @@ function announceHands(): void {
     handKeys[i] = key;
     if (l.type !== 'result' || !l.fish) return;
     const at = scene.handScreen(i);
-    if (l.outcome === 'caught' && l.caught && (l.fish.tier >= 3 || l.caught.variant)) {
+    if (l.outcome === 'caught' && l.caught && (l.fish.tier >= 5 || l.caught.variant)) {
       note.float(`+$${game.priceOf(l.caught).toLocaleString()}`, at.x, at.y, l.caught.variant ? 'rare' : 'good');
       dirty = true;
-    } else if (l.outcome === 'snapped') note.float('SNAP!', at.x, at.y, 'bad');
+    }
   });
 }
 

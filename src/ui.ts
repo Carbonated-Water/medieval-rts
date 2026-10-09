@@ -1,5 +1,6 @@
 import {
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_ORDER, COMPANY_PRICE, COMPANY_UNLOCK_EARNED, DEV_MULTIPLIER, GROUNDS, HARBOR_UPGRADES,
+  MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, PIER_STAFF, HANDS_MAX,
   TRACKS, TRACK_MAX, TRACK_ORDER, WAREHOUSE, type HarborUpgradeId, type TrackId, HAND_NAMES, HAND_SKILL_MAX, LETTERS, RODS, FISH, GEAR, REFLEX_PER_LEVEL, SKILLS, STRENGTH_PER_LEVEL, HAGGLE_PER_LEVEL,
   TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier,
 } from './data';
@@ -9,7 +10,7 @@ import { pixelFishIcon as fishIcon, pixelIcon, type IconName } from './pixelart'
 import type { Place } from './scene';
 
 /** One panel per job: the market sells fish, the tackle shop sells gear, the school trains skills. */
-export type Panel = 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'boat' | 'shipyard' | 'harborup' | 'pier' | 'hand' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
+export type Panel = 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'boat' | 'shipyard' | 'harborup' | 'pier' | 'pierstaff' | 'hand' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
 
 export type Action =
   | 'cast' | 'reel' | 'close' | 'reset' | 'toggleDev' | Panel
@@ -18,6 +19,7 @@ export type Action =
   | 'buyCompany' | `buyBoat:${BoatType}` | `boat:${number}` | `send:${number}` | `collect:${number}` | `crew:${number}` | `net:${number}`
   | 'sendAll' | 'collectAll' | `ground:${number}:${string}` | `track:${TrackId}` | `upgrade:${number}:${TrackId}`
   | `sellBoat:${number}` | 'buyBerth' | 'buyWarehouse' | `buyHarbor:${HarborUpgradeId}`
+  | 'buyPierSection' | `budget:${number}`
   | 'hire' | 'sellCrate' | `hand:${number}` | `handRod:${number}` | `handTrain:${number}` | `handBait:${number}:${BaitId}`;
 
 const GEAR_ORDER: GearKind[] = ['rod', 'holders', 'auto', 'clothes', 'boots'];
@@ -114,7 +116,8 @@ export class UI {
           : panel === 'boat' ? [game.boats[this.boatSel] ? game.boatName(this.boatSel) : 'Boat', this.boatHtml(game)]
           : panel === 'shipyard' ? [`Shipyard ${game.boats.length}/${game.berthCount}`, this.shipyardHtml(game)]
           : panel === 'harborup' ? ['Harbor', this.harborUpHtml(game)]
-          : panel === 'pier' ? ['The Pier', this.pierHtml(game)]
+          : panel === 'pier' ? [`The Pier ${game.hands.length}/${game.pierSpots}`, this.pierHtml(game)]
+          : panel === 'pierstaff' ? ['Pier Staff', this.pierStaffHtml(game)]
           : panel === 'hand' ? [HAND_NAMES[this.handSel] ?? 'Fisherman', this.handHtml(game)]
           : panel === 'training' ? ['Fishing School', this.schoolHtml(game)]
             : panel === 'journal' ? [`Journal ${Object.keys(game.journal).length}/${FISH.length}`, this.journalHtml(game)]
@@ -230,12 +233,8 @@ export class UI {
     const quick = ready ? `<button class="btn wide" data-act="collectAll">SELL ${ready} HAUL${ready > 1 ? 'S' : ''} ${coin(game.boats.reduce((s2, b) => s2 + (b.haul ? game.haulValue(b) : 0), 0), 3)}</button>`
       : idle ? `<button class="btn wide" data-act="sendAll">SEND ${idle} BOAT${idle > 1 ? 'S' : ''}</button>` : '';
     const harbor = `<div class="row"><button class="slot" data-act="harborup" aria-label="harbor">${icon('anchor')}</button><div class="meta"><b>Harbor</b>
-      <div class="sub"><small>${game.berthCount} berths · ${(Object.keys(HARBOR_UPGRADES) as HarborUpgradeId[]).filter((k) => game.harbor[k]).length}/3 staff · ${game.offlineHours}h away</small></div></div><button class="btn plain" data-act="harborup">OPEN</button></div>`;
-    const pier = game.pierOpen
-      ? `<div class="row"><button class="slot" data-act="pier" aria-label="pier">${icon('crew')}</button><div class="meta"><b>The Pier</b>
-          <div class="sub"><small>${game.hands.length} fishermen · crate ${coin(game.crateValue(), 1)}</small></div></div><button class="btn plain" data-act="pier">OPEN</button></div>`
-      : row('lock', 'The Pier', 'Opens with your first boat');
-    return `${quick}<div class="grid fleet">${tiles}</div>${harbor}${pier}`;
+      <div class="sub"><small>${game.berthCount} berths · ${game.harbor.master ? 'Harbor Master' : 'no staff'} · ${game.offlineHours}h away</small></div></div><button class="btn plain" data-act="harborup">OPEN</button></div>`;
+    return `${quick}<div class="grid fleet">${tiles}</div>${harbor}<p class="note">Tap a boat for its upgrades and fishing grounds.</p>`;
   }
 
   private boatStatus(game: Game, b: Boat): string {
@@ -306,30 +305,53 @@ export class UI {
       `<div class="row"><div class="slot">${icon(ic)}</div><div class="meta"><b>${name}</b><div class="sub"><small>${sub}</small></div></div>${right}</div>`;
     const buy = (act: string, price: number) => `<button class="btn" data-act="${act}" ${game.money < price ? 'disabled' : ''}>${coin(price)}</button>`;
     const berth = game.nextBerth(), wh = game.nextWarehouse();
-    const staff = (Object.keys(HARBOR_UPGRADES) as HarborUpgradeId[]).map((k) => {
+    const staff = (['master'] as HarborUpgradeId[]).map((k) => {
       const u = HARBOR_UPGRADES[k];
-      const ic: IconName = k === 'master' ? 'captain' : k === 'buyer' ? 'coin' : 'bait';
-      return row(ic, u.name, `${u.blurb} · ${pct(u.fee)} ${k === 'supplier' ? 'markup' : 'fee'}`, game.harbor[k] ? '<span class="maxed">HIRED</span>' : buy(`buyHarbor:${k}`, u.price));
+      return row('captain', u.name, `${u.blurb} · ${pct(u.fee)} ${u.feeName}`, game.harbor[k] ? '<span class="maxed">HIRED</span>' : buy(`buyHarbor:${k}`, u.price));
     }).join('');
     return row('anchor', `Berths ${game.berthCount}/${BERTHS[BERTHS.length - 1]!.boats}`, 'Room for more boats', berth ? buy('buyBerth', berth.price) : '<span class="maxed">MAX</span>')
       + staff
       + row('trap', `Warehouse ${game.offlineHours}h`, 'Keeps earning while you are away', wh ? buy('buyWarehouse', wh.price) : '<span class="maxed">MAX</span>');
   }
 
-  /** The wide pier: the catch crate, your fishermen, hiring. */
+  /** The pier, nothing else: the catch crate, a tile per fishing spot (tap to manage or hire), and the staff. */
   private pierHtml(game: Game): string {
-    const crate = `<div class="row"><div class="slot">${icon('fish')}</div><div class="meta"><b>Catch crate</b><div class="sub"><small>${game.crate.length} fish</small></div></div>
+    const crate = `<div class="row"><div class="slot">${icon('fish')}</div><div class="meta"><b>Catch crate</b><div class="sub"><small>${game.crate.length} fish${game.harbor.seller ? ' · seller collects' : ''}</small></div></div>
       <button class="btn" data-act="sellCrate" ${game.crate.length ? '' : 'disabled'}>${coin(game.crateValue())}</button></div>`;
-    const hands = game.hands.map((h, i) => {
-      const bait = BAITS.find((b) => b.id === h.bait)!;
-      const sub = game.handStarved(h) ? '<small class="warn">Needs bait</small>' : `<small>${bait.name} x${game.baitCount(h.bait)}</small>`;
-      return `<div class="row"><button class="slot" data-act="hand:${i}" aria-label="${HAND_NAMES[i]}">${icon(BAIT_ICON[h.bait])}</button><div class="meta">
-        <b>${HAND_NAMES[i]} <span class="small">${RODS[h.rod]!.name} · LV ${h.skill}</span></b><div class="sub">${sub}</div></div><button class="btn plain" data-act="hand:${i}">MANAGE</button></div>`;
-    }).join('');
     const cost = game.nextHandCost();
-    const hire = cost === null ? '' : `<div class="row"><div class="slot">${icon('crew')}</div><div class="meta"><b>Hire a fisherman</b><div class="sub"><small>Fishes with your bait</small></div></div>
-      <button class="btn" data-act="hire" ${game.money < cost ? 'disabled' : ''}>${coin(cost)}</button></div>`;
-    return crate + hands + hire;
+    const tiles = Array.from({ length: game.pierSpots }, (_, i) => {
+      const h = game.hands[i];
+      if (!h) {
+        const next = i === game.hands.length && cost !== null;
+        return `<div class="cell"><button class="slot berth" ${next ? 'data-act="hire"' : 'disabled'} aria-label="hire">${icon('plus', 2)}</button>
+          <span class="small">${next ? coin(cost!, 1) : ''}</span></div>`;
+      }
+      return `<div class="cell"><button class="slot ${game.handStarved(h) ? 'starved' : ''}" data-act="hand:${i}" title="${HAND_NAMES[i]}">${icon(BAIT_ICON[h.bait], 2)}
+        <i class="n">${h.skill}</i></button><span class="small">${HAND_NAMES[i]}</span></div>`;
+    }).join('');
+    const staff = PIER_STAFF.filter((k) => game.harbor[k]).length;
+    return crate + `<div class="grid hands">${tiles}</div>`
+      + `<div class="row"><button class="slot" data-act="pierstaff" aria-label="staff">${icon('captain')}</button><div class="meta"><b>Staff</b>
+        <div class="sub"><small>${staff}/${PIER_STAFF.length} hired · ${game.pierSpots}/${HANDS_MAX} spots</small></div></div><button class="btn plain" data-act="pierstaff">OPEN</button></div>`;
+  }
+
+  /** Pier staff and expansion: sections, the Manager (and their budget), the Bait Supplier, the Fish Seller. */
+  private pierStaffHtml(game: Game): string {
+    const row = (ic: IconName, name: string, sub: string, right: string) =>
+      `<div class="row"><div class="slot">${icon(ic)}</div><div class="meta"><b>${name}</b><div class="sub"><small>${sub}</small></div></div>${right}</div>`;
+    const buy = (act: string, price: number) => `<button class="btn" data-act="${act}" ${game.money < price ? 'disabled' : ''}>${coin(price)}</button>`;
+    const section = game.nextPierSection();
+    const ic: Record<string, IconName> = { manager: 'captain', supplier: 'bait', seller: 'coin' };
+    const staff = PIER_STAFF.map((k) => {
+      const u = HARBOR_UPGRADES[k];
+      return row(ic[k]!, u.name, `${u.blurb} · ${pct(u.fee)} ${u.feeName}`, game.harbor[k] ? '<span class="maxed">HIRED</span>' : buy(`buyHarbor:${k}`, u.price));
+    }).join('');
+    const budget = game.harbor.manager
+      ? `<div class="row"><div class="meta"><b>Manager budget</b><div class="sub"><small>Spends up to this share of your money per upgrade</small></div></div></div>
+        <div class="budgets">${MANAGER_BUDGETS.map((v, i) => `<button class="ground ${game.managerBudget === i ? 'sel' : ''}" data-act="budget:${i}">${v ? pct(v) : 'Off'}</button>`).join('')}</div>`
+      : '';
+    return row('anchor', `Pier ${game.pierSpots}/${HANDS_MAX} spots`, `A new section adds ${PIER_SPOTS}`, section === null ? '<span class="maxed">MAX</span>' : buy('buyPierSection', section))
+      + staff + budget;
   }
 
   /** One fisherman: rod, training, and which bait they use from your pouch. */
@@ -348,7 +370,7 @@ export class UI {
         rod ? `<button class="btn" data-act="handRod:${i}" ${game.money < rod.price ? 'disabled' : ''}>${coin(rod.price)}</button>` : '<span class="maxed">MAX</span>')
       + row('hook', `Fishing LV ${h.skill}`, `${level(h.skill, HAND_SKILL_MAX)}<small>Quicker hands</small>`,
         train === null ? '<span class="maxed">MAX</span>' : `<button class="btn" data-act="handTrain:${i}" ${game.money < train ? 'disabled' : ''}>${coin(train)}</button>`)
-      + `<div class="grid three">${baits}</div><p class="note">Tap a bait: they take it from your pouch, one per cast.</p>`;
+      + `<div class="grid three">${baits}</div><p class="note">${game.harbor.manager ? 'Your manager picks the best bait for them.' : 'Tap a bait: they take it from your pouch, one per cast.'}</p>`;
   }
 
   /** Raises the fisher's skills, nothing else. */

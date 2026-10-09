@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_REPEAT, BOOTS, CAPTAIN_WAGE, COMPANY_PRICE, CREW_BASE, GROUNDS, HANDS_MAX, HAND_COST, SHELLFISH,
+  ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_REPEAT, BOOTS, CAPTAIN_WAGE, COMPANY_PRICE, CREW_BASE, GROUNDS, HANDS_MAX, handCost, PIER_SPOTS, PIER_SECTIONS, SELLER_BAG, SHELLFISH,
   COMPANY_UNLOCK_EARNED, LETTERS, TRACK_GROWTH, TRACK_MAX, TRACK_ORDER, CLOTHES, DEV_MULTIPLIER, FISH, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_MAX, VARIANTS,
   MAX_GROUND_WORMS, START_WORMS, STRENGTH_PER_LEVEL, WORM_SPAWN_SECONDS, skillCost,
 } from './data';
@@ -596,7 +596,7 @@ describe('the fleet', () => {
     g.buyBoat('net');
     g.hireHand();
     g.setHandBait(0, 'shiner');
-    g.buyHarbor('buyer');
+    g.buyHarbor('seller');
     g.buyHarbor('supplier');
     tick(g, 130);
     expect(g.baitCount('shiner')).toBeGreaterThan(0);
@@ -642,7 +642,7 @@ describe('hired fishermen', () => {
     return g;
   };
 
-  it('can only be hired once you own a boat; up to four', () => {
+  it('can only be hired once you own a boat; up to 24, a pier section at a time', () => {
     const g = owner();
     expect(g.pierOpen).toBe(false);
     expect(g.hireHand()).toBe(false);
@@ -650,9 +650,14 @@ describe('hired fishermen', () => {
     expect(g.pierOpen).toBe(true);
     const money = g.money;
     expect(g.hireHand()).toBe(true);
-    expect(g.money).toBe(money - HAND_COST[0]!);
+    expect(g.money).toBe(money - handCost(0));
+    while (g.hireHand());
+    expect(g.hands).toHaveLength(PIER_SPOTS); // one pier section to start
+    g.money = 1e9;
+    while (g.buyPierSection());
     while (g.hireHand());
     expect(g.hands).toHaveLength(HANDS_MAX);
+    expect(HANDS_MAX).toBe(24);
   });
 
   it('fish on their own with bait from your pouch, into the crate', () => {
@@ -717,5 +722,56 @@ describe('hired fishermen', () => {
     const copy = new Game(JSON.parse(JSON.stringify(g.save())));
     expect(copy.hands[0]).toMatchObject({ rod: 1, bait: 'worm', line: { type: 'idle' } });
     expect(copy.crate.length).toBe(g.crate.length);
+  });
+});
+
+describe('pier staff', () => {
+  const pier = (extra = {}) => {
+    const g = new Game({ money: 1e9, earned: 30000, ...extra }, rng(51));
+    g.buyCompany(); g.buyBoat();
+    return g;
+  };
+
+  it('pier staff need the pier; the Fish Seller sells your bag when it fills', () => {
+    const g = new Game({ money: 1e9, earned: 30000 }, rng(52));
+    g.buyCompany();
+    expect(g.buyHarbor('seller')).toBe(false); // no pier yet
+    g.buyBoat();
+    expect(g.buyHarbor('seller')).toBe(true);
+    g.bag = Array.from({ length: SELLER_BAG }, (_, i) => ({ id: 9000 + i, fish: 'perch', kg: 0.4, value: 10 }));
+    const money = g.money;
+    tick(g, 0.1);
+    expect(g.bag).toHaveLength(0);
+    expect(g.money).toBeGreaterThan(money);
+    expect(g.sellerNews).toBeGreaterThan(0);
+  });
+
+  it('the Manager gives each fisherman the best bait they can use and spends within budget', () => {
+    const g = pier({ baits: { worm: 1e6, shiner: 1e6, glow: 1e6 } });
+    g.hireHand(); g.hireHand();
+    g.hands[0]!.rod = 4; g.hands[0]!.skill = 20; // Mythril, trained: a big bait pays
+    g.buyHarbor('manager');
+    g.setManagerBudget(3);
+    tick(g, 31);
+    expect(g.hands[0]!.bait).toBe('glow');
+    expect(g.hands[1]!.bait).toBe('worm'); // a rookie only profits on worms
+    expect(g.hands[1]!.skill + g.hands[1]!.rod).toBeGreaterThan(1); // spent on the crew
+    g.setManagerBudget(0);
+    const before = JSON.stringify(g.hands.map((h) => [h.rod, h.skill]));
+    tick(g, 30);
+    expect(JSON.stringify(g.hands.map((h) => [h.rod, h.skill]))).toBe(before); // budget Off: no spending
+  });
+
+  it('pier sections cost money and add four spots each', () => {
+    const g = pier();
+    expect(g.pierSpots).toBe(PIER_SPOTS);
+    expect(g.nextPierSection()).toBe(PIER_SECTIONS[1]);
+    expect(g.buyPierSection()).toBe(true);
+    expect(g.pierSpots).toBe(PIER_SPOTS * 2);
+  });
+
+  it('old saves: the Fish Buyer becomes the Fish Seller', () => {
+    const g = new Game({ company: true, harbor: { buyer: true } } as never);
+    expect(g.harbor.seller).toBe(true);
   });
 });

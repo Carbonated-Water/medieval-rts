@@ -308,27 +308,41 @@ export const BOAT_REPEAT = 0.5;
 export const BERTHS: { boats: number; price: number }[] = [
   { boats: 3, price: 0 }, { boats: 4, price: 150000 }, { boats: 5, price: 400000 }, { boats: 6, price: 1000000 }, { boats: 8, price: 2500000 },
 ];
-export type HarborUpgradeId = 'master' | 'buyer' | 'supplier';
-export const HARBOR_UPGRADES: Record<HarborUpgradeId, { name: string; price: number; blurb: string; fee: number }> = {
-  master: { name: 'Harbor Master', price: 200000, blurb: 'Sells hauls as boats come in', fee: 0.05 },
-  buyer: { name: 'Fish Buyer', price: 80000, blurb: 'Buys the pier crate every minute', fee: 0.05 },
-  supplier: { name: 'Bait Supplier', price: 120000, blurb: "Restocks your fishermen's bait", fee: 0.25 },
+/** Staff you hire. The Harbor Master works the boats; the rest work the pier. */
+export type HarborUpgradeId = 'master' | 'manager' | 'supplier' | 'seller';
+export const HARBOR_UPGRADES: Record<HarborUpgradeId, { name: string; price: number; blurb: string; fee: number; feeName: string }> = {
+  master: { name: 'Harbor Master', price: 200000, blurb: 'Sells hauls as boats come in', fee: 0.05, feeName: 'fee' },
+  manager: { name: 'Manager', price: 150000, blurb: 'Best bait for each, trains them', fee: 0.03, feeName: 'of crate' },
+  supplier: { name: 'Bait Supplier', price: 120000, blurb: 'Keeps every fisherman in bait', fee: 0.25, feeName: 'markup' },
+  seller: { name: 'Fish Seller', price: 80000, blurb: 'Sells your bag and the crate', fee: 0.05, feeName: 'fee' },
 };
+export const PIER_STAFF: HarborUpgradeId[] = ['manager', 'supplier', 'seller'];
+/** The Fish Seller sells your bag once it holds this many fish. */
+export const SELLER_BAG = 20;
+/** How much of your money the Manager may spend on one upgrade (choices in the pier staff panel). */
+export const MANAGER_BUDGETS = [0, 0.05, 0.1, 0.25];
 export const WAREHOUSE: { hours: number; price: number }[] = [
   { hours: 1, price: 0 }, { hours: 2, price: 100000 }, { hours: 4, price: 300000 }, { hours: 8, price: 900000 },
 ];
 
 // ---------- hired fishermen on the wide pier (open once you own a boat) ----------
 
-export const HANDS_MAX = 4;
-export const HAND_COST = [8000, 16000, 28000, 45000];
-export const HAND_NAMES = ['Ada', 'Bo', 'Cy', 'Dee'];
-export const HAND_OUTFITS: { shirt: string; trousers: string; boots: string }[] = [
-  { shirt: '#3f8fe0', trousers: '#3a4a6a', boots: '#6b4526' },
-  { shirt: '#5aa04a', trousers: '#5a4a30', boots: '#3a3a3a' },
-  { shirt: '#c060c0', trousers: '#3a3a5a', boots: '#7a3020' },
-  { shirt: '#e08a2a', trousers: '#2a4a3a', boots: '#4a2a1a' },
+/** The pier grows in sections of 4 spots (first section free with your first boat), up to 24 fishermen. */
+export const PIER_SPOTS = 4;
+export const PIER_SECTIONS: number[] = [0, 60000, 150000, 400000, 1000000, 2500000];
+export const HANDS_MAX = PIER_SPOTS * PIER_SECTIONS.length;
+/** Hiring the n-th fisherman (0-based). */
+export const handCost = (n: number) => Math.round((8000 * Math.pow(1.3, n)) / 1000) * 1000;
+export const HAND_NAMES = [
+  'Ada', 'Bo', 'Cy', 'Dee', 'Eli', 'Fay', 'Gus', 'Hal', 'Ivy', 'Jo', 'Kit', 'Lou',
+  'Max', 'Nell', 'Otto', 'Pip', 'Quin', 'Ray', 'Sue', 'Tam', 'Uma', 'Vic', 'Wes', 'Zoe',
 ];
+const SHIRTS = ['#3f8fe0', '#5aa04a', '#c060c0', '#e08a2a', '#d84a4a', '#40b0b0', '#e0c040', '#8a6ad0'];
+const TROUSERS = ['#3a4a6a', '#5a4a30', '#2a4a3a'];
+const BOOTS_COL = ['#6b4526', '#3a3a3a', '#7a3020'];
+export const HAND_OUTFITS: { shirt: string; trousers: string; boots: string }[] = HAND_NAMES.map((_, i) => ({
+  shirt: SHIRTS[i % 8]!, trousers: TROUSERS[Math.floor(i / 8) % 3]!, boots: BOOTS_COL[i % 3]!,
+}));
 /** How fast hired fishermen react to a bite: random in [min, max], the max dropping per Fishing level (slow hands miss bites). */
 export const HAND_REACT: [number, number] = [0.5, 1.2];
 export const HAND_REACT_PER_LEVEL = 0.02;

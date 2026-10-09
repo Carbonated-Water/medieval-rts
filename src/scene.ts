@@ -114,6 +114,7 @@ export class Scene {
   private boatAlerts: Sprite[] = [];
   private builtCompany = false;
   private builtPier = false;
+  private builtSpots = 0;
   private handSprites: Sprite[] = [];
   private pierFx = new Graphics();
   /** Seconds into the zoom-out fade (null when not fading). */
@@ -268,13 +269,18 @@ export class Scene {
     const dockW = 14;
     tiling(plankCanvas(dockW), V.dockX - dockW / 2, V.dockEnd - 4, dockW, V.riverBottom - V.dockEnd + 2);
     this.builtPier = this.game.pierOpen;
+    this.builtSpots = this.game.pierSpots;
     if (this.builtPier) {
+      // One deck per 8 fishing spots, stepping down the dock toward the bank.
       const half = this.pierHalf(), x0 = V.dockX - half;
       const bar = add(new Graphics());
-      bar.rect(x0, V.dockEnd - 5, half * 2, 7).fill(PAL.sand);
-      for (let x = x0 + 3; x < x0 + half * 2; x += 4) bar.rect(x, V.dockEnd - 5, 1, 7).fill(PAL.sandMid);
-      bar.rect(x0, V.dockEnd + 2, half * 2, 1).fill(PAL.dirtDark).rect(x0, V.dockEnd - 6, half * 2, 1).fill(PAL.outline).rect(x0, V.dockEnd + 3, half * 2, 1).fill(PAL.outline);
-      for (let x = x0 + 2; x < x0 + half * 2; x += 14) bar.rect(x, V.dockEnd + 3, 2, 6).fill(PAL.dirtDeep);
+      for (let r = 0; r < this.deckRows(); r++) {
+        const y = V.dockEnd + r * this.deckGap();
+        bar.rect(x0, y - 5, half * 2, 7).fill(PAL.sand);
+        for (let x = x0 + 3; x < x0 + half * 2; x += 4) bar.rect(x, y - 5, 1, 7).fill(PAL.sandMid);
+        bar.rect(x0, y + 2, half * 2, 1).fill(PAL.dirtDark).rect(x0, y - 6, half * 2, 1).fill(PAL.outline).rect(x0, y + 3, half * 2, 1).fill(PAL.outline);
+        for (let x = x0 + 2; x < x0 + half * 2; x += 14) bar.rect(x, y + 3, 2, 6).fill(PAL.dirtDeep);
+      }
     }
     const posts = add(new Graphics());
     for (let y = V.dockEnd; y < V.riverBottom - 4; y += 14) {
@@ -297,10 +303,10 @@ export class Scene {
 
     // Moving things on top: holder rods, bobbers, "!", the rod, the player, leaping fish.
     this.holders = [1, 2, 3].map(() => add(new Sprite(this.cached('holder', holderCanvas)), this.world));
-    this.bobbers = Array.from({ length: 8 }, () => add(new Sprite(this.cached('bobber', bobberCanvas)), this.world));
-    this.alerts = Array.from({ length: 8 }, () => add(new Sprite(this.cached('alert', alertCanvas)), this.world));
+    this.bobbers = Array.from({ length: 28 }, () => add(new Sprite(this.cached('bobber', bobberCanvas)), this.world));
+    this.alerts = Array.from({ length: 28 }, () => add(new Sprite(this.cached('alert', alertCanvas)), this.world));
     this.pierFx = add(new Graphics(), this.world);
-    this.handSprites = [0, 1, 2, 3].map(() => { const s = add(new Sprite(), this.world); s.anchor.set(0.5, 1); s.visible = false; return s; });
+    this.handSprites = Array.from({ length: 24 }, () => { const s = add(new Sprite(), this.world); s.anchor.set(0.5, 1); s.visible = false; return s; });
     for (const s of [...this.bobbers, ...this.alerts, ...this.holders]) s.anchor.set(0.5, 1);
     this.world.addChild(this.rodLine);
     this.player.anchor.set(0.5, 1);
@@ -374,14 +380,31 @@ export class Scene {
   }
 
   private pierHalf(): number {
-    return Math.round(this.V.w * 0.43);
+    return Math.round(this.V.w * 0.45);
   }
 
-  /** Where hired fisherman `i` stands on the wide pier (inner pair first), and which way they face. */
-  private handSpot(i: number): { x: number; y: number; facing: number } {
-    const off = [-0.25, 0.25, -0.37, 0.37][i]!;
-    return { x: Math.round(this.V.dockX + off * this.V.w), y: this.V.dockEnd, facing: off < 0 ? -1 : 1 };
+  /** Fishermen per deck: 8 on a phone, up to 12 on a wide screen (about 22 px each). */
+  private perDeck(): number {
+    return Math.max(8, Math.min(12, Math.floor((this.pierHalf() * 2) / 44) * 2));
   }
+
+  private deckRows(): number {
+    return Math.max(1, Math.ceil(this.builtSpots / this.perDeck()));
+  }
+
+  /** Space between the pier's decks, fitted to the water between the dock's end and the bank. */
+  private deckGap(): number {
+    return Math.max(16, Math.min(26, Math.round((this.V.riverBottom - this.V.dockEnd - 8) / this.deckRows())));
+  }
+
+  /** Where hired fisherman `i` stands: filling each deck from the middle outward, alternating sides; decks step toward the bank. */
+  private handSpot(i: number): { x: number; y: number; facing: number } {
+    const n = this.perDeck(), j = i % n, k = j >> 1, side = j % 2 ? 1 : -1;
+    const step = (0.43 - 0.12) / (n / 2 - 1);
+    const off = side * (0.12 + k * step);
+    return { x: Math.round(this.V.dockX + off * this.V.w), y: this.V.dockEnd + Math.floor(i / n) * this.deckGap(), facing: side };
+  }
+
 
   /** The line in a slot: 0-3 are yours, 4-7 belong to the hired fishermen. */
   private lineOf(slot: number): Line | undefined {
@@ -391,8 +414,10 @@ export class Scene {
   /** Where a slot's bobber sits in the water. */
   private homeOf(slot: number): { x: number; y: number } {
     if (slot < 4) return this.V.bobbers[slot]!;
-    const s = this.handSpot(slot - 4), V = this.V;
-    return { x: Math.max(6, Math.min(V.w - 6, s.x + s.facing * 12)), y: Math.round(V.riverTop + (V.dockEnd - V.riverTop) * 0.4) - (slot >= 6 ? 8 : 0) };
+    const s = this.handSpot(slot - 4), V = this.V, i = slot - 4;
+    // The top deck casts far out; lower decks cast just past the deck in front of them.
+    const y = i < this.perDeck() ? Math.round(V.riverTop + (V.dockEnd - V.riverTop) * 0.45) - (i % 2) * 6 : s.y - this.deckGap() + 4 - (i % 2) * 3;
+    return { x: Math.max(6, Math.min(V.w - 6, s.x + s.facing * 10)), y };
   }
 
   /** Hired fisherman `i`'s head on screen (CSS px), for floating numbers. */
@@ -500,7 +525,7 @@ export class Scene {
     this.ripples = this.ripples.filter((r) => (r.t += dt) < (r.big ? 1.2 : 0.9));
     if (!this.ready) return;
     if (this.game.company !== this.builtCompany && this.fading === null) this.fading = 0;
-    if (this.game.pierOpen !== this.builtPier && this.fading === null) this.resize();
+    if ((this.game.pierOpen !== this.builtPier || (this.builtPier && this.game.pierSpots !== this.builtSpots)) && this.fading === null) this.resize();
     if (this.game.company && this.game.berthCount !== this.builtBerths && this.fading === null) this.resize();
     if (this.fading !== null) this.fade(dt);
     this.trackLines();
@@ -534,7 +559,7 @@ export class Scene {
 
   /** React to each line's state changes: splashes, caught fish leaping out. */
   private trackLines(): void {
-    for (let slot = 0; slot < 8; slot++) {
+    for (let slot = 0; slot < 28; slot++) {
       const line = this.lineOf(slot);
       if (!line) { this.lastLines[slot] = ''; continue; }
       const key = line.type + (line.type === 'result' ? line.outcome : '');
@@ -681,7 +706,7 @@ export class Scene {
     });
     this.bobbers.forEach((b, slot) => { b.visible = false; this.alerts[slot]!.visible = false; });
     this.drawHands(g);
-    for (let slot = 0; slot < 8; slot++) {
+    for (let slot = 0; slot < 28; slot++) {
       const line = this.lineOf(slot);
       if (slot < 4 && slot >= lines.length) continue;
       if (!line || line.type === 'idle' || (line.type === 'result' && line.outcome !== 'caught' && line.t > 0.4)) continue;
@@ -737,7 +762,7 @@ export class Scene {
     });
     if (!this.builtPier) return;
     // The catch crate on the pier, with fish showing when there's something to sell.
-    const V = this.V, cx = V.dockX - 17, cy = V.dockEnd - 10;
+    const V = this.V, cx = V.dockX + 12, cy = V.riverBottom + 9;
     p.rect(cx - 1, cy - 1, 12, 9).fill(PAL.outline).rect(cx, cy, 10, 7).fill(PAL.dirt).rect(cx, cy + 3, 10, 1).fill(PAL.dirtDark);
     if (this.game.crate.length) p.rect(cx + 2, cy - 3, 6, 3).fill('#9fc3d8').rect(cx + 7, cy - 3, 1, 1).fill(PAL.outline);
   }
@@ -746,7 +771,7 @@ export class Scene {
   hitCrate(cx: number, cy: number): boolean {
     if (!this.builtPier) return false;
     const x = cx / this.scale, y = cy / this.scale, V = this.V;
-    return Math.abs(x - (V.dockX - 12)) < 9 && Math.abs(y - (V.dockEnd - 7)) < 9;
+    return Math.abs(x - (V.dockX + 17)) < 10 && Math.abs(y - (V.riverBottom + 12)) < 10;
   }
 
   private drawFlyingFish(g: Graphics): void {

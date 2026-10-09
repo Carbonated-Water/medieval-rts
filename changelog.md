@@ -4,6 +4,22 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  The pier: 24 fishermen, sections, Manager, Fish Seller
+  WHAT: Pier sections (4 spots each, up to 24; decks of 8-12 by screen
+        width, stepping toward the bank). Pier staff moved off the Harbor
+        into a Pier Staff panel: Manager (best bait per fisherman via
+        Game.bestBait, budgeted training / rods, 3% of crate), Bait
+        Supplier, Fish Seller (was Fish Buyer; now also sells your bag at
+        20 fish). Crate moved off the pier onto the bank. The Pier panel is
+        a crate row + a tile per spot (+ to hire) + Staff; Fishing Co. no
+        longer shows the pier. Fishermen float "+$" only for Legendaries and
+        rare variants. Old saves: Fish Buyer becomes Fish Seller. 68 tests.
+  WHY:  User: automate restocking bait for the fishermen, expand the pier
+        to 24, hire a manager and someone to auto-sell fish, move the crate
+        off the pier, keep pier details out of the boat menu.
+
+---
+
 2026-10-09  Sell a boat
   WHAT: Boat panel gets a red Sell boat row (confirm first): refunds half of
         the boat's base price, upgrades and crew (BOAT_RESALE), sells any haul

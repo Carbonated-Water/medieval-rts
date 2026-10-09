@@ -138,6 +138,21 @@ arrows walk, Space casts / reels, E opens the building you stand at.
   A maxed fisherman on Glow Lures ~= $8.5k/min (Golden is slightly worse
   for them: the bait choice still matters).
 
+## The pier (2026-10-09)
+
+- Opens with your first boat; managed from **The Pier** panel (tap the
+  crate on the bank by the dock, or a fisherman). Fishing Co. is boats only.
+- **Sections**: 4 spots free, +4 per section ($60k, 150k, 400k, 1M, 2.5M)
+  up to 24 fishermen. Decks of 8 (phone) to 12 (wide screen) step down the
+  dock toward the bank. Hiring the n-th: $8k x 1.3^n.
+- **Pier staff** (Pier Staff panel): **Manager** $150k (gives each fisherman
+  the most profitable bait they can use; spends Off / 5% / 10% / 25% of your
+  money per upgrade on their training and rods, cheapest first; 3% of crate
+  sales), **Bait Supplier** $120k (+25% markup), **Fish Seller** $80k (sells
+  the crate every minute and your own bag at 20 fish; 5% fee). The Harbor
+  keeps only the Harbor Master (boats).
+- Only Legendary / rare-variant catches by fishermen float a "+$".
+
 ## Roadmap (agreed order, 2026-10-09)
 
 1. ~~Multiple lines + rare variants~~ (done)

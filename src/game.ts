@@ -3,7 +3,7 @@ import {
   CREW_BASE, CREW_HAUL, CREW_SPEED, ENGINE_SPEED, GROUNDS, HARBOR_UPGRADES, HULL_HOLD, HULL_STORM, ICE_VALUE, SCHOOL_CHANCE,
   SIGHTING_CHANCE, SONAR_STEP, STORM_LOSS, TRACKS, TRACK_GROWTH, TRACK_MAX, WAREHOUSE, crewCost,
   type GroundDef, type GroundId, type HarborUpgradeId, type TrackId,
-  HANDS_MAX, HAND_COST, HAND_REACT, HAND_REACT_PER_LEVEL, HAND_REST, HAND_SKILL_MAX, LETTERS, handSkillCost, type BoatType, BITE_WAIT, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, GEAR, HAGGLE_PER_LEVEL, HOLDERS, MAX_GROUND_WORMS,
+  HANDS_MAX, MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, SELLER_BAG, handCost, HAND_REACT, HAND_REACT_PER_LEVEL, HAND_REST, HAND_SKILL_MAX, LETTERS, handSkillCost, type BoatType, BITE_WAIT, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, GEAR, HAGGLE_PER_LEVEL, HOLDERS, MAX_GROUND_WORMS,
   MIN_BITE_WAIT, REEL_WINDOW, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, START_WORMS, STRENGTH_PER_LEVEL, TIERS,
   TOO_STRONG_WEIGHT, VARIANTS, VARIANT_ORDER, WORMS_PER_PICK, WORM_SPAWN_SECONDS, WORM_SPOTS, baitById,
   type AchStat, type AchievementDef, type BaitId, type FishDef, type GearKind, type SkillId, type Tier, type Variant,
@@ -85,6 +85,9 @@ export interface SaveData {
   warehouse: number;
   /** When this was saved (ms), for earnings while away. */
   savedAt: number;
+  /** Pier sections bought (4 fishing spots each) and the Manager's spending limit (index into MANAGER_BUDGETS). */
+  pierSections: number;
+  managerBudget: number;
   hands: Hand[];
   /** Hired fishermen's catches, waiting to be sold. */
   crate: Catch[];
@@ -144,8 +147,14 @@ export class Game {
   warehouse = 0;
   /** What just happened in the fleet (boats back, sold, events), for the UI to announce; not saved. */
   fleetNews: { boat: number; paid: number; event: TripEvent | null }[] = [];
+  /** Money the Fish Seller made from your bag since the UI last looked; not saved. */
+  sellerNews = 0;
+  pierSections = 1;
+  managerBudget = 2;
   private buyerClock = 0;
   private supplierClock = 0;
+  private managerClock = 0;
+  private trainClock = 0;
   hands: Hand[] = [];
   crate: Catch[] = [];
   private nextId = 1;
@@ -169,6 +178,11 @@ export class Game {
     for (const b of this.boats) delete b.net;
     this.berths = clamp(this.berths, 0, BERTHS.length - 1);
     this.warehouse = clamp(this.warehouse, 0, WAREHOUSE.length - 1);
+    // The Fish Buyer became the Fish Seller (who also sells your bag).
+    const oldHarbor = this.harbor as Record<string, boolean | undefined>;
+    if (oldHarbor.buyer) { this.harbor = { ...this.harbor, seller: true }; delete oldHarbor.buyer; }
+    this.pierSections = clamp(this.pierSections, 1, PIER_SECTIONS.length);
+    this.managerBudget = clamp(this.managerBudget, 0, MANAGER_BUDGETS.length - 1);
     for (const h of this.hands) { h.line = { type: 'idle' }; h.react = null; }
     // Saves already past the reveal skip the earlier letters and get just the last one.
     if (!this.company && this.earned >= COMPANY_UNLOCK_EARNED) this.letters = Math.max(this.letters, LETTERS.length - 1);
@@ -759,7 +773,8 @@ export class Game {
 
   buyHarbor(id: HarborUpgradeId): boolean {
     const u = HARBOR_UPGRADES[id];
-    if (!this.company || this.harbor[id] || this.money < u.price) return false;
+    const pierJob = id !== 'master';
+    if (!this.company || (pierJob && !this.pierOpen) || this.harbor[id] || this.money < u.price) return false;
     this.money -= u.price;
     this.harbor[id] = true;
     return true;
@@ -782,14 +797,22 @@ export class Game {
     return WAREHOUSE[this.warehouse]!.hours;
   }
 
-  /** Fish Buyer empties the pier crate every minute; Bait Supplier tops up each fisherman's bait (at a markup). */
+  /**
+   * Pier staff at work: the Fish Seller sells the crate every minute and your
+   * bag once it's full; the Bait Supplier tops each fisherman up (at a markup);
+   * the Manager picks everyone's bait and spends within budget on training
+   * and rods, cheapest first.
+   */
   private tickHarbor(dt: number): void {
-    if (this.harbor.buyer && (this.buyerClock += dt) >= 60) {
-      this.buyerClock = 0;
-      const total = Math.round(this.crateValue() * (1 - HARBOR_UPGRADES.buyer.fee));
-      this.crate = [];
-      this.money += total;
-      this.earned += total;
+    if (this.harbor.seller) {
+      if ((this.buyerClock += dt) >= 60) { this.buyerClock = 0; this.sellCrate(HARBOR_UPGRADES.seller.fee); }
+      if (this.bag.length >= SELLER_BAG) {
+        const total = Math.round(this.bagValue() * (1 - HARBOR_UPGRADES.seller.fee));
+        this.bag = [];
+        this.money += total;
+        this.earned += total;
+        this.sellerNews += total;
+      }
     }
     if (this.harbor.supplier && (this.supplierClock += dt) >= 5) {
       this.supplierClock = 0;
@@ -798,6 +821,25 @@ export class Game {
         if (price <= 0 || this.baitCount(h.bait) >= 5 || this.money < price * 20) continue;
         this.money -= Math.round(price * 20);
         this.baits[h.bait] = this.baitCount(h.bait) + 20;
+      }
+    }
+    if (this.harbor.manager) {
+      if ((this.managerClock += dt) >= 3) {
+        this.managerClock = 0;
+        for (const h of this.hands) h.bait = this.bestBait(h);
+      }
+      const share = MANAGER_BUDGETS[this.managerBudget]!;
+      if (share > 0 && (this.trainClock += dt) >= 10) {
+        this.trainClock = 0;
+        // The cheapest useful upgrade across the crew, if it fits the budget.
+        let pick: { cost: number; buy: () => boolean } | null = null;
+        this.hands.forEach((_, i) => {
+          const rod = this.handNextRod(i), train = this.handTrainCost(i);
+          if (rod && (!pick || rod.price < pick.cost)) pick = { cost: rod.price, buy: () => this.upgradeHandRod(i) };
+          if (train !== null && (!pick || train < pick.cost)) pick = { cost: train, buy: () => this.trainHand(i) };
+        });
+        const chosen = pick as { cost: number; buy: () => boolean } | null;
+        if (chosen && chosen.cost <= this.money * share) chosen.buy();
       }
     }
   }
@@ -813,6 +855,7 @@ export class Game {
     const total = Math.min(seconds, this.offlineHours * 3600);
     for (let t = 0; t < total; t += 0.5) this.tick(0.5);
     this.fleetNews = [];
+    this.sellerNews = 0;
     return Math.round(this.money - before);
   }
 
@@ -823,8 +866,50 @@ export class Game {
     return this.boats.length > 0;
   }
 
+  /** Fishing spots on the pier right now. */
+  get pierSpots(): number {
+    return Math.min(HANDS_MAX, this.pierSections * PIER_SPOTS);
+  }
+
   nextHandCost(): number | null {
-    return this.pierOpen && this.hands.length < HANDS_MAX ? HAND_COST[this.hands.length]! : null;
+    return this.pierOpen && this.hands.length < this.pierSpots ? handCost(this.hands.length) : null;
+  }
+
+  nextPierSection(): number | null {
+    return this.pierOpen && this.pierSections < PIER_SECTIONS.length ? PIER_SECTIONS[this.pierSections]! : null;
+  }
+
+  buyPierSection(): boolean {
+    const price = this.nextPierSection();
+    if (price === null || this.money < price) return false;
+    this.money -= price;
+    this.pierSections++;
+    return true;
+  }
+
+  /**
+   * The most profitable bait a fisherman can use right now: what they'd earn
+   * per minute with it (catch value minus bait price, over the time a cast
+   * takes). Only bait you have, unless the Bait Supplier can bring it.
+   */
+  bestBait(h: Hand): BaitId {
+    let best: BaitId = 'worm', bestRate = -Infinity;
+    const tier = RODS[h.rod]!.tier;
+    for (const b of BAITS) {
+      if (this.baitCount(b.id) <= 0 && !(this.harbor.supplier && b.price > 0)) continue;
+      const odds = this.handOdds({ ...h, bait: b.id });
+      const ev = odds.reduce((s, o) => s + (o.tooStrong ? 0 : o.p * o.fish.price), 0);
+      const cost = b.price * (this.harbor.supplier ? 1 + HARBOR_UPGRADES.supplier.fee : 1);
+      const secs = ((BITE_WAIT[0] + BITE_WAIT[1]) / 2) * b.wait * (1 - 0.06 * h.rod) + 4.5;
+      const rate = (ev - cost) / secs;
+      if (rate > bestRate && tier >= 1) { bestRate = rate; best = b.id; }
+    }
+    return best;
+  }
+
+  /** Index into MANAGER_BUDGETS (Off / 5% / 10% / 25%). */
+  setManagerBudget(i: number): void {
+    this.managerBudget = clamp(i, 0, MANAGER_BUDGETS.length - 1);
   }
 
   hireHand(): boolean {
@@ -877,8 +962,9 @@ export class Game {
   }
 
   /** Sell everything the fishermen caught. */
-  sellCrate(): number {
-    const total = this.crateValue();
+  sellCrate(fee = 0): number {
+    const wage = this.harbor.manager ? HARBOR_UPGRADES.manager.fee : 0;
+    const total = Math.round(this.crateValue() * (1 - fee) * (1 - wage));
     this.money += total;
     this.earned += total;
     this.crate = [];
@@ -964,6 +1050,7 @@ export class Game {
       bag: this.bag, journal: this.journal, nextId: this.nextId, earned: this.earned, claimed: this.claimed,
       company: this.company, letters: this.letters, boats: this.boats,
       berths: this.berths, harbor: { ...this.harbor }, warehouse: this.warehouse, savedAt: Date.now(),
+      pierSections: this.pierSections, managerBudget: this.managerBudget,
       hands: this.hands.map((h) => ({ ...h, line: { type: 'idle' as const }, react: null })), crate: this.crate,
     };
   }
