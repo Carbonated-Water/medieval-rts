@@ -70,6 +70,21 @@
       #sheet .head { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 6px; background: #f3e4c0; border-bottom: 2px solid #d8c090; }
       #sheet h2 { margin: 0; font-size: 19px; }
       #sheet .x { min-width: 40px; min-height: 36px; border: 2px solid var(--wood); border-radius: 10px; background: #fff; font-size: 16px; }
+      /* Achievements: 4×5 trophy grid. */
+      #sheet .trophy-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; margin-top: 8px; }
+      #sheet .trophy { display: flex; flex-direction: column; align-items: center; gap: 0; padding: 4px 2px; background: #fff; border: 2px solid #e0d0a8; border-radius: 10px; font: inherit; color: var(--ink); line-height: 1.2; }
+      #sheet .trophy i { font-style: normal; font-size: 20px; }
+      #sheet .trophy b { font-size: 11px; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      #sheet .trophy small { font-size: 11px; opacity: 0.75; }
+      #sheet .trophy.locked { opacity: 1; filter: grayscale(1); color: #8a7a60; }
+      #sheet .trophy.locked i { opacity: 0.45; }
+      #sheet .trophy.ready { border-color: #e0a820; background: #fff6d0; box-shadow: 0 0 10px #f0c03088; cursor: pointer; animation: glow 1.2s ease-in-out infinite alternate; }
+      #sheet .trophy.ready small { color: #2f7a2f; font-weight: 700; opacity: 1; }
+      #sheet .trophy.claimed { border-color: #8cc080; background: #f2f8ec; }
+      #sheet .trophy.claimed small { color: #2f7a2f; font-weight: 700; }
+      @keyframes glow { to { box-shadow: 0 0 2px #f0c03044; } }
+      #top .badge { font-style: normal; margin-left: 4px; background: #e0402a; color: #fff; border-radius: 9px; padding: 0 6px; font-size: 12px; }
+      #action .big.auto { background: linear-gradient(#5aa0d8, #2f6fae); border-color: #1f4f7c; font-size: 18px; }
       #sheet .purse { margin-left: auto; margin-right: 10px; font-weight: 700; color: #2f7a2f; font-size: 16px; }
       /* Market: one chip per species; a 4-wide grid fits all 20 without scrolling. */
       #sheet .chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }

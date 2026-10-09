@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  BAIT, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_MAX, VARIANTS,
+  ACHIEVEMENTS, AUTO, BAIT, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_MAX, VARIANTS,
   STRENGTH_PER_LEVEL, TOO_STRONG_SHARE, skillCost,
 } from './data';
 import { Game, fishById, type Line } from './game';
@@ -325,5 +325,64 @@ describe('rare variants', () => {
     const logged = Object.values(g.journal).reduce((s, j) => s + (j.variants?.golden ?? 0), 0);
     expect(logged).toBe(goldens);
     expect(g.variantsFound()).toBeGreaterThan(0);
+  });
+});
+
+describe('autofisher', () => {
+  /** Run the autofisher as if standing on the dock for `s` seconds. */
+  const autoRun = (g: Game, s: number) => { for (let t = 0; t < s; t += 0.02) { g.tick(0.02); g.autoFish(); } };
+
+  it('does nothing until bought', () => {
+    const g = new Game({}, rng(3));
+    autoRun(g, 30);
+    expect(g.lines[0]!.type).toBe('idle');
+    expect(g.bag).toHaveLength(0);
+  });
+
+  it('casts and reels on its own, every line', () => {
+    const g = new Game({ auto: 1, holders: 3 }, rng(5));
+    autoRun(g, 300);
+    expect(g.bag.length).toBeGreaterThan(40);
+  });
+
+  it('higher levels catch more', () => {
+    const catches = (auto: number) => { const g = new Game({ auto }, rng(7)); autoRun(g, 1200); return g.bag.length; };
+    expect(catches(4)).toBeGreaterThan(catches(1) * 1.3);
+  });
+
+  it('is bought in order like other gear', () => {
+    const g = new Game({ money: AUTO[1]!.price + AUTO[2]!.price - 1 });
+    expect(g.buyGear('auto')).toBe(true);
+    expect(g.buyGear('auto')).toBe(false);
+    expect(g.save().auto).toBe(1);
+  });
+});
+
+describe('achievements', () => {
+  it('unlock from progress and pay out once', () => {
+    const g = new Game({ money: 0 }, rng(11));
+    expect(g.claimable()).toHaveLength(0);
+    waitForBite(g); g.reel();
+    const first = ACHIEVEMENTS.find((a) => a.id === 'catch1')!;
+    expect(g.claimable().map((a) => a.id)).toContain('catch1');
+    expect(g.claim('catch1')).toBe(first.reward);
+    expect(g.money).toBe(first.reward);
+    expect(g.claim('catch1')).toBe(0);
+    expect(new Game(g.save()).claimed).toContain('catch1');
+  });
+
+  it('claim all collects every ready reward', () => {
+    const g = new Game({ money: 0, holders: 3, auto: 1, skill: 10 });
+    const ready = g.claimable();
+    expect(ready.map((a) => a.id).sort()).toEqual(['auto', 'fishing10', 'lines4']);
+    expect(g.claim()).toBe(ready.reduce((s, a) => s + a.reward, 0));
+    expect(g.claimable()).toHaveLength(0);
+  });
+
+  it('track the highest tier and variants from the journal', () => {
+    const g = new Game({ journal: { salmon: { count: 1, bestKg: 3, variants: { golden: 2 } } } });
+    expect(g.stat('tier')).toBe(fishById('salmon').tier);
+    expect(g.stat('golden')).toBe(2);
+    expect(g.stat('catches')).toBe(1);
   });
 });

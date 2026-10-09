@@ -35,6 +35,12 @@ at, the upgrade system and an interface. Wanted 2D graphics.
   line, tapping a bobber reels just that one; an early press scares one line.
 - **Rare variants** on every catch: Giant 5% (2.5× weight/price), Golden 1.5%
   (×5), Shiny 0.3% (×12). Tracked per species in the journal (x/60).
+- **Autofisher** (gear line, Tackle Shop): I $750 / II $5,000 / III $22,000
+  / IV $60,000. While you stand on the dock it recasts empty lines and reels
+  bites after a random reaction time (I: 0.45–1.2 s, so it misses some; IV:
+  0.25–0.55 s). You can still reel by hand.
+- **Achievements**: 20, each paying a one-time cash reward (≈ $50k total)
+  collected in the 🏆 panel; a toast announces each one.
 - **Dev mode**: fish sell for 20×. Toggle in ⚙ Settings or ?dev=1;
   a DEV ×20 badge shows while it's on.
 - **Fishing:** Cast → wait 2–6.5 s for a bite → the bobber dips and you
@@ -45,8 +51,10 @@ at, the upgrade system and an interface. Wanted 2D graphics.
     species (×count, total price); tap a chip to sell that kind, or Sell all.
   - **Tackle Shop** (stall right of the dock): sells gear only. One row per
     gear line showing just the next upgrade.
-  - **Training** (the 💪 Fishing badge in the top bar, works anywhere):
-    the four skills, one row each.
+  - **Fishing School** (log cabin on the grass below the path, between
+    the market and the dock): the four skills, one row each.
+  - **Achievements** (🏆 in the top bar, red count when rewards wait): 4×5
+    trophy grid; tap a glowing one or "Collect all".
   - **Journal** (📖): the 20 species as a 4×5 grid, one row per tier, with
     variant badges.
   - **Settings** (⚙): lifetime earnings, dev mode, start over.
@@ -62,8 +70,7 @@ Plain Canvas 2D, everything drawn in code (sky, hills, river with fish
 shadows, dock in the middle, red-striped fish market and blue-striped
 tackle shop, straw-hat fisher, 20 fish drawings).
 DOM interface on top. Tap the river or a shop to walk there; A/D or
-arrows walk, Space casts / reels, E opens the shop you stand at, T opens
-training.
+arrows walk, Space casts / reels, E opens the building you stand at.
 
 ## Roadmap (agreed order, 2026-10-09)
 

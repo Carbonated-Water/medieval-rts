@@ -1,7 +1,7 @@
 import {
-  BAIT, BITE_WAIT, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, GEAR, HAGGLE_PER_LEVEL, HOLDERS, MIN_BITE_WAIT, REEL_WINDOW,
+  ACHIEVEMENTS, AUTO, BAIT, BITE_WAIT, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, GEAR, HAGGLE_PER_LEVEL, HOLDERS, MIN_BITE_WAIT, REEL_WINDOW,
   REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, STRENGTH_PER_LEVEL, TIERS, TOO_STRONG_SHARE,
-  VARIANTS, VARIANT_ORDER, type FishDef, type GearKind, type SkillId, type Tier, type Variant,
+  VARIANTS, VARIANT_ORDER, type AchStat, type AchievementDef, type FishDef, type GearKind, type SkillId, type Tier, type Variant,
 } from './data';
 
 export interface Catch {
@@ -20,6 +20,7 @@ export interface SaveData {
   money: number;
   rod: number;
   holders: number;
+  auto: number;
   bait: number;
   clothes: number;
   boots: number;
@@ -33,6 +34,8 @@ export interface SaveData {
   journal: Record<string, JournalEntry>;
   nextId: number;
   earned: number;
+  /** Achievement ids whose reward has been collected. */
+  claimed: string[];
 }
 
 const CAST_SECONDS = 0.6;
@@ -59,6 +62,7 @@ export class Game {
   money = START_MONEY;
   rod = 0;
   holders = 0;
+  auto = 0;
   bait = 0;
   clothes = 0;
   boots = 0;
@@ -74,13 +78,17 @@ export class Game {
   earned = 0;
   /** One entry per line in the water (length = lineCount). */
   lines: Line[] = [{ type: 'idle' }];
+  claimed: string[] = [];
   private nextId = 1;
+  /** Autofisher reaction time picked for each line's current bite. */
+  private autoReact: (number | undefined)[] = [];
 
   constructor(save?: Partial<SaveData>, private rng: () => number = Math.random) {
     if (save) Object.assign(this, { ...save, nextId: save.nextId ?? 1 });
     this.rod = clamp(this.rod, 0, RODS.length - 1);
     this.holders = clamp(this.holders, 0, HOLDERS.length - 1);
     this.syncLines();
+    this.auto = clamp(this.auto, 0, AUTO.length - 1);
     this.bait = clamp(this.bait, 0, BAIT.length - 1);
     this.clothes = clamp(this.clothes, 0, CLOTHES.length - 1);
     this.boots = clamp(this.boots, 0, BOOTS.length - 1);
@@ -185,9 +193,13 @@ export class Game {
 
   /** Throw every line that's out of the water (idle or showing a result). Staggered a little. */
   cast(): boolean {
+    return this.castWhere((line) => line.type === 'idle' || line.type === 'result');
+  }
+
+  private castWhere(ready: (line: Line) => boolean): boolean {
     let n = 0;
     this.lines.forEach((line, i) => {
-      if (line.type !== 'idle' && line.type !== 'result') return;
+      if (!ready(line)) return;
       this.lines[i] = { type: 'casting', t: -0.18 * n++ };
     });
     return n > 0;
@@ -247,6 +259,21 @@ export class Game {
         this.lines[i] = { type: 'idle' };
       }
     });
+  }
+
+  /**
+   * The autofisher's turn (call each frame while the player is on the dock):
+   * recast empty lines and reel bites after a human-ish reaction time.
+   */
+  autoFish(): void {
+    if (this.auto === 0) return;
+    const a = AUTO[this.auto]!;
+    this.lines.forEach((line, i) => {
+      if (line.type !== 'bite') { this.autoReact[i] = undefined; return; }
+      const react = (this.autoReact[i] ??= a.react[0] + this.rng() * (a.react[1] - a.react[0]));
+      if (line.t >= react) { this.autoReact[i] = undefined; this.reelLine(i); }
+    });
+    this.castWhere((line) => line.type === 'idle' || (line.type === 'result' && line.t >= a.recast));
   }
 
   /** Roll for a rare variant (rarest first, at most one). */
@@ -335,11 +362,51 @@ export class Game {
     return true;
   }
 
+  // ---------- achievements ----------
+
+  /** The number an achievement measures. */
+  stat(s: AchStat): number {
+    const entries = Object.values(this.journal);
+    const variantCount = (v: Variant) => entries.reduce((n, j) => n + (j.variants?.[v] ?? 0), 0);
+    switch (s) {
+      case 'catches': return entries.reduce((n, j) => n + j.count, 0);
+      case 'species': return entries.length;
+      case 'tier': return Math.max(0, ...Object.keys(this.journal).map((id) => fishById(id).tier));
+      case 'giant': case 'golden': case 'shiny': return variantCount(s);
+      case 'variants': return this.variantsFound();
+      case 'earned': return this.earned;
+      case 'lines': return this.lineCount;
+      case 'auto': return this.auto;
+      case 'fishing': return this.skill;
+    }
+  }
+
+  achieved(a: AchievementDef): boolean {
+    return this.stat(a.stat) >= a.goal;
+  }
+
+  /** Done but reward not collected yet. */
+  claimable(): AchievementDef[] {
+    return ACHIEVEMENTS.filter((a) => this.achieved(a) && !this.claimed.includes(a.id));
+  }
+
+  /** Collect one achievement's reward (or every ready one without an id). Returns the cash paid. */
+  claim(id?: string): number {
+    let paid = 0;
+    for (const a of this.claimable()) {
+      if (id && a.id !== id) continue;
+      this.claimed.push(a.id);
+      this.money += a.reward;
+      paid += a.reward;
+    }
+    return paid;
+  }
+
   save(): SaveData {
     return {
-      money: this.money, rod: this.rod, holders: this.holders, bait: this.bait, clothes: this.clothes, boots: this.boots,
+      money: this.money, rod: this.rod, holders: this.holders, auto: this.auto, bait: this.bait, clothes: this.clothes, boots: this.boots,
       skill: this.skill, reflexes: this.reflexes, haggling: this.haggling, strength: this.strength, dev: this.dev,
-      bag: this.bag, journal: this.journal, nextId: this.nextId, earned: this.earned,
+      bag: this.bag, journal: this.journal, nextId: this.nextId, earned: this.earned, claimed: this.claimed,
     };
   }
 }

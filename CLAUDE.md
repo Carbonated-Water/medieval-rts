@@ -14,8 +14,9 @@ changing anything.** Earlier games are git tags `rts-v1` and `hex-v1`.
 
 - **One place, one job.** Every building and every panel does exactly one
   thing: the Fish Market only sells fish, the Tackle Shop only sells gear,
-  Training only raises skills, the Journal only shows the collection,
-  Settings holds dev mode / start over. A new feature gets its own place;
+  the Fishing School only trains skills, the Journal only shows the
+  collection, 🏆 only shows achievements, Settings holds dev mode / start
+  over. A new feature gets its own place;
   it never becomes a tab inside someone else's.
 - **Nothing scrolls.** Every panel fits on a 360×640 phone. If it doesn't
   fit, there is too much in it: cut, group or split it, don't add a

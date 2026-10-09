@@ -2,10 +2,10 @@ import { BOOTS, CLOTHES, RODS, TIERS, VARIANTS, type FishDef, type Variant } fro
 import { drawFish } from './fishart';
 import type { Game } from './game';
 
-export type Place = 'market' | 'tackle' | 'dock';
+export type Place = 'market' | 'school' | 'tackle' | 'dock';
 
 /** Where each place sits along the path, as a fraction of the screen width. */
-const PLACE_X: Record<Place, number> = { market: 0.17, dock: 0.5, tackle: 0.84 };
+const PLACE_X: Record<Place, number> = { market: 0.17, school: 0.335, dock: 0.5, tackle: 0.84 };
 
 /** Key positions, recomputed from the canvas size every frame (CSS px). */
 interface Layout {
@@ -17,6 +17,7 @@ interface Layout {
   path: number; // y the player walks along
   marketX: number;
   tackleX: number;
+  schoolX: number;
   dockX: number;
   dockEnd: number; // y of the dock's far end (where you fish)
   bobbers: { x: number; y: number }[]; // where each line's bobber lands
@@ -63,7 +64,7 @@ export class Scene {
   get place(): Place | null {
     if (this.route.length) return null;
     if (this.onDock >= 1) return 'dock';
-    if (this.onDock === 0) for (const p of ['market', 'tackle'] as const) if (Math.abs(this.px - PLACE_X[p]) < 0.04) return p;
+    if (this.onDock === 0) for (const p of ['market', 'school', 'tackle'] as const) if (Math.abs(this.px - PLACE_X[p]) < 0.04) return p;
     return null;
   }
 
@@ -76,6 +77,8 @@ export class Scene {
   /** What's at a screen point. */
   hit(x: number, y: number): Place | 'ground' {
     const L = this.L;
+    // The school cabin sits on the grass just below the path.
+    if (y > L.path + 8 && y < L.path + 12 + this.schoolSize().h && Math.abs(x - L.schoolX) < this.schoolSize().w * 0.65) return 'school';
     const nearShop = y > L.path - L.h * 0.22 && y < L.path + 30;
     if (nearShop && Math.abs(x - L.marketX) < L.w * 0.14) return 'market';
     if (nearShop && Math.abs(x - L.tackleX) < L.w * 0.14) return 'tackle';
@@ -205,6 +208,7 @@ export class Scene {
       path: h * 0.76,
       marketX: w * PLACE_X.market,
       tackleX: w * PLACE_X.tackle,
+      schoolX: w * PLACE_X.school,
       dockX,
       dockEnd: riverTop + (riverBottom - riverTop) * 0.42,
       // One spot per line: right, left, then further out right and left of the dock.
@@ -231,6 +235,7 @@ export class Scene {
     this.drawDock();
     this.drawShop(this.L.marketX, 'FISH MARKET', ['#e0503a', '#fff4e0'], '#c0402c', 'fish');
     this.drawShop(this.L.tackleX, 'TACKLE SHOP', ['#2f6fd6', '#f0f6ff'], '#1f4f9c', 'tackle');
+    this.drawSchool();
     this.drawHolders();
     this.drawLines();
     this.drawPlayer();
@@ -388,6 +393,48 @@ export class Scene {
     ctx.strokeStyle = 'rgba(60,40,20,0.35)';
     ctx.lineWidth = 1;
     ctx.strokeRect(x, top, w, L.riverBottom + L.h * 0.03 - top);
+  }
+
+  private schoolSize(): { w: number; h: number } {
+    return { w: Math.max(84, this.L.w * 0.15), h: Math.min(82, this.L.h * 0.11) };
+  }
+
+  /** The Fishing School: a little log cabin on the grass below the path. */
+  private drawSchool(): void {
+    const { ctx, L } = this;
+    const { w, h } = this.schoolSize();
+    const cx = L.schoolX, top = L.path + 12, base = top + h;
+    const x = cx - w / 2, wallTop = top + h * 0.42;
+    // Shadow, log walls.
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.beginPath(); ctx.ellipse(cx, base, w * 0.6, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#9a6a3c';
+    ctx.fillRect(x, wallTop, w, base - wallTop);
+    ctx.strokeStyle = '#7a4e28';
+    ctx.lineWidth = 2;
+    for (let y = wallTop + 7; y < base; y += 8) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + w, y); ctx.stroke(); }
+    // Door (facing the path) and a window.
+    ctx.fillStyle = '#5a3a1e';
+    ctx.fillRect(cx - w * 0.1, base - (base - wallTop) * 0.75, w * 0.2, (base - wallTop) * 0.75);
+    ctx.fillStyle = '#bfe4f4';
+    ctx.fillRect(x + w * 0.12, wallTop + 7, w * 0.2, (base - wallTop) * 0.35);
+    // Green roof.
+    ctx.fillStyle = '#3f7a3a';
+    ctx.beginPath(); ctx.moveTo(x - 8, wallTop + 2); ctx.lineTo(cx, top); ctx.lineTo(x + w + 8, wallTop + 2); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#2f5f2a';
+    ctx.fillRect(x - 8, wallTop - 1, w + 16, 4);
+    // Sign on the roof.
+    ctx.font = '700 11px Georgia, serif';
+    const label = 'SCHOOL', sw = ctx.measureText(label).width + 12;
+    ctx.fillStyle = '#f7e7c2';
+    ctx.strokeStyle = '#5a3e24';
+    ctx.lineWidth = 1.5;
+    ctx.fillRect(cx - sw / 2, top + h * 0.2, sw, 15);
+    ctx.strokeRect(cx - sw / 2, top + h * 0.2, sw, 15);
+    ctx.fillStyle = '#5a3e24';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, cx, top + h * 0.2 + 8);
   }
 
   /** A market stall: counter, goods, striped awning, sign. One per shop. */

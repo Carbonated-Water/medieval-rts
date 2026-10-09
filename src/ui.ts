@@ -1,18 +1,18 @@
 import {
-  BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, GEAR, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, STRENGTH_PER_LEVEL,
+  ACHIEVEMENTS, AUTO, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, GEAR, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, STRENGTH_PER_LEVEL,
   TIERS, VARIANTS, VARIANT_ORDER, type GearKind, type SkillId, type Tier, type Variant,
 } from './data';
 import { fishIcon } from './fishart';
 import { fishById, type Game } from './game';
 import type { Place } from './scene';
 
-/** One panel per job: the market sells fish, the tackle shop sells gear, training raises skills. */
-export type Panel = 'market' | 'tackle' | 'training' | 'journal' | 'settings';
+/** One panel per job: the market sells fish, the tackle shop sells gear, the school trains skills. */
+export type Panel = 'market' | 'tackle' | 'training' | 'journal' | 'trophies' | 'settings';
 
 export type Action =
   | 'cast' | 'reel' | 'close' | 'reset' | 'toggleDev' | Panel
-  | 'sellAll' | `sellFish:${string}` | `buy:${GearKind}` | `train:${SkillId}`;
-const GEAR_ORDER: GearKind[] = ['rod', 'holders', 'bait', 'clothes', 'boots'];
+  | 'sellAll' | `sellFish:${string}` | `buy:${GearKind}` | `train:${SkillId}` | 'claimAll' | `claim:${string}`;
+const GEAR_ORDER: GearKind[] = ['rod', 'holders', 'auto', 'bait', 'clothes', 'boots'];
 const money = (n: number) => `$${n.toLocaleString('en-US')}`;
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 const tierTag = (t: Tier) => `<span class="tier" style="--c:${TIERS[t].color}">${TIERS[t].name}</span>`;
@@ -24,6 +24,7 @@ function gearIcon(kind: GearKind, level: number): string {
   if (kind === 'rod') return `<i class="rod" style="--c:${RODS[level]!.color}"></i>`;
   if (kind === 'bait') return `<i class="emoji">${['🍞', '🪱', '🦗', '✨', '🌟'][level]}</i>`;
   if (kind === 'holders') return `<i class="emoji">🎣<sub>×${HOLDERS[level]!.lines}</sub></i>`;
+  if (kind === 'auto') return `<i class="emoji">🤖<sub>${level ? ['', 'I', 'II', 'III', 'IV'][level] : ''}</sub></i>`;
   if (kind === 'clothes') return `<i class="swatch shirt" style="--c:${CLOTHES[level]!.shirt};--d:${CLOTHES[level]!.trousers}"></i>`;
   return `<i class="swatch boot" style="--c:${BOOTS[level]!.color ?? '#f0c8a0'}"></i>`;
 }
@@ -60,10 +61,11 @@ export class UI {
     if (this.toastUntil && this.time > this.toastUntil) { this.toast.className = ''; this.toastUntil = 0; }
 
     const rod = RODS[game.rod]!;
+    const ready = game.claimable().length;
     this.set('top', this.top,
       `<span class="pill money">${money(game.money)}</span>` +
       `<span class="pill" style="--c:${TIERS[rod.tier].color}"><i class="dot"></i>${rod.name}</span>` +
-      `<button class="pill btn" data-act="training" aria-label="training">💪 Fishing ${game.skill}</button>` +
+      `<button class="pill btn" data-act="trophies" aria-label="achievements">🏆 ${game.claimed.length}/${ACHIEVEMENTS.length}${ready ? `<i class="badge">${ready}</i>` : ''}</button>` +
       (game.dev ? `<span class="pill dev">DEV ×${DEV_MULTIPLIER}</span>` : '') +
       `<button class="pill btn" data-act="journal" aria-label="journal">📖 ${Object.keys(game.journal).length}/${FISH.length}</button>` +
       '<button class="pill btn" data-act="settings" aria-label="settings">⚙</button>');
@@ -79,7 +81,13 @@ export class UI {
     if (walking) return `${bagLine}<div class="hint">Walking…</div>`;
     if (place === 'market') return `${bagLine}<button class="big" data-act="market">🐟 Sell fish</button>`;
     if (place === 'tackle') return `${bagLine}<button class="big" data-act="tackle">🎣 Browse gear</button>`;
-    if (place !== 'dock') return `${bagLine}<div class="hint">Tap the <b>river</b> to fish · <b>market</b> to sell · <b>tackle shop</b> for gear</div>`;
+    if (place === 'school') return `${bagLine}<button class="big" data-act="training">🎓 Train skills</button>`;
+    if (place !== 'dock') return `${bagLine}<div class="hint">Tap the <b>river</b> to fish · <b>market</b> to sell · <b>tackle shop</b> for gear · <b>school</b> to train</div>`;
+    if (game.auto) {
+      // The autofisher works the lines; the player can still reel by hand.
+      const biting = game.lines.some((l) => l.type === 'bite');
+      return `${bagLine}<button class="big ${biting ? 'bite' : 'auto'}" data-act="${biting ? 'reel' : 'cast'}">${biting ? 'REEL!' : `🤖 ${AUTO[game.auto]!.name} is fishing…`}</button>`;
+    }
     // Priority: a bite beats everything; then lines to throw; otherwise wait.
     const biting = game.lines.filter((l) => l.type === 'bite').length;
     const out = game.lines.filter((l) => l.type === 'idle' || l.type === 'result').length;
@@ -96,7 +104,8 @@ export class UI {
     const [title, body] =
       panel === 'market' ? ['Fish Market', this.marketHtml(game)]
         : panel === 'tackle' ? ['Tackle Shop', this.tackleHtml(game)]
-          : panel === 'training' ? ['Training', this.trainingHtml(game)]
+          : panel === 'training' ? ['Fishing School', this.trainingHtml(game)]
+            : panel === 'trophies' ? [`Achievements · ${game.claimed.length}/${ACHIEVEMENTS.length}`, this.trophiesHtml(game)]
             : panel === 'journal' ? [`Fish Journal · ${Object.keys(game.journal).length}/${FISH.length}`, this.journalHtml(game)]
               : ['Settings', this.settingsHtml(game)];
     return `<div class="card ${panel}"><div class="head"><h2>${title}</h2><span class="purse">${money(game.money)}</span>
@@ -133,9 +142,28 @@ export class UI {
         ? `<button data-act="buy:${kind}" ${game.money < next.price ? 'disabled' : ''}>${money(next.price)}</button>`
         : '<span class="owned">Max</span>';
       return `<div class="item gear">${gearIcon(kind, shown)}<div class="meta">
-        <b>${next ? next.name : have} ${kind === 'rod' ? tierTag(RODS[shown]!.tier) : ''}</b>
-        <small>${next ? `${next.blurb} <span class="was">(have: ${have})</span>` : 'Fully upgraded'}</small></div>${btn}</div>`;
+        <b>${next ? next.name : have} <small class="was">${shown + 1}/${GEAR[kind].levels.length}</small> ${kind === 'rod' ? tierTag(RODS[shown]!.tier) : ''}</b>
+        <small>${next ? next.blurb : 'Fully upgraded'}</small></div>${btn}</div>`;
     }).join('')}</div>`;
+  }
+
+  /** Achievements, nothing else: a 4×5 grid of trophies; tap a glowing one to collect its reward. */
+  private trophiesHtml(game: Game): string {
+    const ready = game.claimable();
+    const total = ready.reduce((s, a) => s + a.reward, 0);
+    const tiles = ACHIEVEMENTS.map((a) => {
+      const claimed = game.claimed.includes(a.id);
+      const done = claimed || game.achieved(a);
+      const progress = Math.min(game.stat(a.stat), a.goal);
+      const foot = claimed ? '✓' : done ? money(a.reward) : a.goal > 1 && a.stat !== 'tier' ? `${progress.toLocaleString('en-US')}/${a.goal.toLocaleString('en-US')}` : money(a.reward);
+      const state = claimed ? 'claimed' : done ? 'ready' : 'locked';
+      return `<button class="trophy ${state}" ${state === 'ready' ? `data-act="claim:${a.id}"` : 'disabled'} title="${a.desc} · ${money(a.reward)}">
+        <i>${a.icon}</i><b>${a.name}</b><small>${foot}</small></button>`;
+    }).join('');
+    const claimAll = ready.length
+      ? `<button class="wide go" data-act="claimAll">Collect ${ready.length} reward${ready.length > 1 ? 's' : ''} · ${money(total)}</button>`
+      : '<p class="note">Glowing trophies are ready to collect. Hold or hover one to see its goal.</p>';
+    return `${claimAll}<div class="trophy-grid">${tiles}</div>`;
   }
 
   /** Raises the fisher's skills, nothing else. */

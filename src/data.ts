@@ -102,10 +102,26 @@ export const HOLDERS: HolderDef[] = [
   { name: 'Triple Holder', price: 35000, blurb: 'Fish with 4 lines at once.', lines: 4 },
 ];
 
-export type GearKind = 'rod' | 'holders' | 'bait' | 'clothes' | 'boots';
+/**
+ * Autofisher: while you stand on the dock it casts every empty line (after
+ * `recast` seconds) and reels each bite after a random reaction time in
+ * `react` — slower than a sharp human at first, so playing yourself pays.
+ */
+export interface AutoDef { name: string; price: number; blurb: string; recast: number; react: [number, number] }
+
+export const AUTO: AutoDef[] = [
+  { name: 'Manual', price: 0, blurb: 'You cast and reel yourself.', recast: Infinity, react: [0, 0] },
+  { name: 'Autofisher I', price: 750, blurb: 'Fishes for you on the dock. Slow hands.', recast: 2.5, react: [0.45, 1.2] },
+  { name: 'Autofisher II', price: 5000, blurb: 'Recasts sooner, reels quicker.', recast: 1.4, react: [0.35, 0.95] },
+  { name: 'Autofisher III', price: 22000, blurb: 'Rarely misses a bite.', recast: 0.7, react: [0.3, 0.75] },
+  { name: 'Autofisher IV', price: 60000, blurb: 'Recasts at once, near-perfect reels.', recast: 0.25, react: [0.25, 0.55] },
+];
+
+export type GearKind = 'rod' | 'holders' | 'auto' | 'bait' | 'clothes' | 'boots';
 export const GEAR: Record<GearKind, { title: string; levels: { name: string; price: number; blurb: string }[] }> = {
   rod: { title: 'Rod', levels: RODS },
   holders: { title: 'Rod Holders', levels: HOLDERS },
+  auto: { title: 'Autofisher', levels: AUTO },
   bait: { title: 'Bait', levels: BAIT },
   clothes: { title: 'Clothes', levels: CLOTHES },
   boots: { title: 'Boots', levels: BOOTS },
@@ -160,3 +176,32 @@ export const REEL_WINDOW = 0.9;
 export const DEV_MULTIPLIER = 20;
 
 export const START_MONEY = 0;
+
+// ---------- achievements (one-time cash reward, claimed in the trophy panel) ----------
+
+/** What an achievement measures; Game.stat() computes each from saved data. */
+export type AchStat = 'catches' | 'species' | 'tier' | 'giant' | 'golden' | 'shiny' | 'variants' | 'earned' | 'lines' | 'auto' | 'fishing';
+export interface AchievementDef { id: string; icon: string; name: string; desc: string; stat: AchStat; goal: number; reward: number }
+
+export const ACHIEVEMENTS: AchievementDef[] = [
+  { id: 'catch1', icon: '🎣', name: 'First Catch', desc: 'Catch a fish', stat: 'catches', goal: 1, reward: 10 },
+  { id: 'catch50', icon: '🪣', name: 'Bucket Full', desc: 'Catch 50 fish', stat: 'catches', goal: 50, reward: 150 },
+  { id: 'catch250', icon: '🛶', name: 'Regular', desc: 'Catch 250 fish', stat: 'catches', goal: 250, reward: 1000 },
+  { id: 'catch1000', icon: '⚓', name: 'Old Salt', desc: 'Catch 1,000 fish', stat: 'catches', goal: 1000, reward: 5000 },
+  { id: 'species5', icon: '📘', name: 'Curious', desc: 'Find 5 species', stat: 'species', goal: 5, reward: 50 },
+  { id: 'species10', icon: '📗', name: 'Naturalist', desc: 'Find 10 species', stat: 'species', goal: 10, reward: 400 },
+  { id: 'species15', icon: '📙', name: 'Collector', desc: 'Find 15 species', stat: 'species', goal: 15, reward: 2500 },
+  { id: 'species20', icon: '📕', name: 'Master Angler', desc: 'Find all 20 species', stat: 'species', goal: 20, reward: 15000 },
+  { id: 'rare', icon: '🔵', name: 'Something Rare', desc: 'Catch a Rare fish', stat: 'tier', goal: 3, reward: 200 },
+  { id: 'epic', icon: '🟣', name: 'Epic Pull', desc: 'Catch an Epic fish', stat: 'tier', goal: 4, reward: 1500 },
+  { id: 'legend', icon: '🟠', name: 'Legend', desc: 'Catch a Legendary fish', stat: 'tier', goal: 5, reward: 8000 },
+  { id: 'giant', icon: '⬆', name: 'Big One', desc: 'Catch a Giant fish', stat: 'giant', goal: 1, reward: 100 },
+  { id: 'golden', icon: '★', name: 'Struck Gold', desc: 'Catch a Golden fish', stat: 'golden', goal: 1, reward: 500 },
+  { id: 'shiny', icon: '✦', name: 'Shiny!', desc: 'Catch a Shiny fish', stat: 'shiny', goal: 1, reward: 2500 },
+  { id: 'variants15', icon: '💎', name: 'Oddity Hunter', desc: 'Find 15 rare variants', stat: 'variants', goal: 15, reward: 4000 },
+  { id: 'earn10k', icon: '💰', name: 'Making a Living', desc: 'Earn $10,000', stat: 'earned', goal: 10000, reward: 500 },
+  { id: 'earn100k', icon: '🏦', name: 'Fish Tycoon', desc: 'Earn $100,000', stat: 'earned', goal: 100000, reward: 5000 },
+  { id: 'lines4', icon: '🎏', name: 'Four Lines Out', desc: 'Fish with 4 lines', stat: 'lines', goal: 4, reward: 2000 },
+  { id: 'auto', icon: '🤖', name: 'Hands Free', desc: 'Buy an Autofisher', stat: 'auto', goal: 1, reward: 150 },
+  { id: 'fishing10', icon: '🎓', name: 'Graduate', desc: 'Reach Fishing 10', stat: 'fishing', goal: 10, reward: 1000 },
+];

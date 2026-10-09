@@ -4,6 +4,26 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Fishing School, Autofisher, achievements
+  WHAT: Skills moved out of the top bar into a Fishing School: a log cabin
+        on the grass between the market and the dock (walk there, it opens).
+        New gear line Autofisher (I–IV, $750 → $60,000) in the Tackle Shop:
+        on the dock it recasts and reels by itself with a reaction time
+        that shortens per level (Game.autoFish, called each frame on the
+        dock). 20 achievements with cash rewards (data.ts ACHIEVEMENTS,
+        Game.stat / claimable / claim, saved as `claimed`): toast on unlock,
+        🏆 top-bar button with a red count, 4×5 trophy grid panel, Collect
+        all. Tackle rows trimmed to one line ("2/5" level instead of
+        "(have: …)") so six rows fit. 37 tests.
+  WHY:  User: the skill upgrades' location wasn't intuitive; asked for an
+        achievement system and an autofisher upgrade path. Chose a School
+        building, full auto from level 1, and cash rewards.
+  Pacing: sim with rewards: everything maxed ≈ 47 min (was ≈ 58); a player
+        who goes fully idle after Autofisher I keeps pace with a perfect
+        active one. All panels fit 360×640 without scrolling.
+
+---
+
 2026-10-09  One place, one job: Tackle Shop split from the Fish Market
   WHAT: The market's Sell / Gear / Skills tabs are gone. Fish Market (left)
         only sells fish: a 4-wide grid with one chip per species (×count,

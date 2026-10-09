@@ -1,4 +1,4 @@
-import { DEV_MULTIPLIER, RODS, SKILLS, TIERS, type GearKind, type SkillId, type Tier } from './data';
+import { ACHIEVEMENTS, DEV_MULTIPLIER, RODS, SKILLS, TIERS, type GearKind, type SkillId, type Tier } from './data';
 import { Game, fishById, type Line, type SaveData } from './game';
 import { Scene } from './scene';
 import { UI, variantTag, type Action } from './ui';
@@ -33,6 +33,7 @@ addEventListener('pagehide', save);
 scene.onArrive = (p) => {
   if (p === 'market' && game.bag.length) ui.open = 'market';
   if (p === 'tackle') ui.open = 'tackle';
+  if (p === 'school') ui.open = 'training';
 };
 
 canvas.addEventListener('click', (e) => {
@@ -50,7 +51,7 @@ const primaryAction = (): Action =>
   game.lines.some((l) => l.type === 'bite') ? 'reel'
     : game.lines.some((l) => l.type === 'idle' || l.type === 'result') ? 'cast' : 'reel';
 
-// Keyboard: A/D or arrows walk, Space casts / reels, E opens the shop you're at, T trains.
+// Keyboard: A/D or arrows walk, Space casts / reels, E opens the building you're at.
 const held = new Set<string>();
 addEventListener('keydown', (e) => {
   if (['KeyA', 'KeyD', 'ArrowLeft', 'ArrowRight'].includes(e.code)) { held.add(e.code); e.preventDefault(); }
@@ -58,8 +59,8 @@ addEventListener('keydown', (e) => {
     e.preventDefault();
     if (scene.place === 'dock' && !ui.open) onAction(primaryAction());
   }
-  if (e.code === 'KeyE' && (scene.place === 'market' || scene.place === 'tackle')) onAction(ui.open ? 'close' : scene.place);
-  if (e.code === 'KeyT') onAction(ui.open === 'training' ? 'close' : 'training');
+  const shop = scene.place === 'school' ? 'training' : scene.place === 'market' || scene.place === 'tackle' ? scene.place : null;
+  if (e.code === 'KeyE' && shop) onAction(ui.open ? 'close' : shop);
   if (e.code === 'Escape') onAction('close');
 });
 addEventListener('keyup', (e) => held.delete(e.code));
@@ -68,7 +69,11 @@ addEventListener('blur', () => held.clear());
 function onAction(a: Action): void {
   if (a === 'cast') game.cast();
   else if (a === 'reel') game.reel();
-  else if (a === 'market' || a === 'tackle' || a === 'training' || a === 'journal' || a === 'settings') ui.open = ui.open === a ? null : a;
+  else if (a === 'market' || a === 'tackle' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'settings') ui.open = ui.open === a ? null : a;
+  else if (a === 'claimAll' || a.startsWith('claim:')) {
+    const paid = game.claim(a === 'claimAll' ? undefined : a.slice(6));
+    if (paid) ui.say(`🏆 Collected <b>$${paid.toLocaleString()}</b>`, 2, 'good');
+  }
   else if (a === 'close') ui.open = null;
   else if (a === 'sellAll') { const n = game.sellAll(); if (n) ui.say(`Sold everything for <b>$${n.toLocaleString()}</b>`, 2, 'good'); }
   else if (a.startsWith('sellFish:')) {
@@ -140,6 +145,19 @@ function announce(): void {
   }
 }
 
+/** Toast newly completed achievements (ones already done at load stay quiet). */
+const done = new Set(ACHIEVEMENTS.filter((a) => game.achieved(a)).map((a) => a.id));
+let achCheck = 0;
+function announceAchievements(): void {
+  if (++achCheck % 15) return; // a few times a second is plenty
+  for (const a of ACHIEVEMENTS) {
+    if (done.has(a.id) || !game.achieved(a)) continue;
+    done.add(a.id);
+    dirty = true;
+    ui.say(`🏆 <b>${a.name}</b> — ${a.desc}. Collect <b>$${a.reward.toLocaleString()}</b> in 🏆`, 3.2, 'good');
+  }
+}
+
 let last = performance.now();
 function frame(now: number): void {
   const dt = Math.min((now - last) / 1000, 0.1);
@@ -147,7 +165,9 @@ function frame(now: number): void {
   const dir = (held.has('KeyD') || held.has('ArrowRight') ? 1 : 0) - (held.has('KeyA') || held.has('ArrowLeft') ? 1 : 0);
   if (!ui.open) scene.nudge(dir, dt);
   game.tick(dt);
+  if (scene.place === 'dock') game.autoFish();
   announce();
+  announceAchievements();
   scene.update(dt);
   ui.update(dt, game, scene.place, scene.walking);
   requestAnimationFrame(frame);
