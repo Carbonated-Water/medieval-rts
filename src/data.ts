@@ -299,6 +299,8 @@ export const BOATS: Record<BoatType, BoatDef> = {
   },
 };
 export const BOAT_ORDER: BoatType[] = ['net', 'lobster', 'sword'];
+/** Selling a boat refunds this share of what went into it (boat, upgrades, crew). */
+export const BOAT_RESALE = 0.5;
 /** Every extra boat of the same kind costs this much more (+50%, +100%, ...). */
 export const BOAT_REPEAT = 0.5;
 

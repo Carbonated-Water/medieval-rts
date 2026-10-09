@@ -17,7 +17,7 @@ export type Action =
   | `bait:${BaitId}` | `buyBait:${BaitId}:${number}`
   | 'buyCompany' | `buyBoat:${BoatType}` | `boat:${number}` | `send:${number}` | `collect:${number}` | `crew:${number}` | `net:${number}`
   | 'sendAll' | 'collectAll' | `ground:${number}:${string}` | `track:${TrackId}` | `upgrade:${number}:${TrackId}`
-  | 'buyBerth' | 'buyWarehouse' | `buyHarbor:${HarborUpgradeId}`
+  | `sellBoat:${number}` | 'buyBerth' | 'buyWarehouse' | `buyHarbor:${HarborUpgradeId}`
   | 'hire' | 'sellCrate' | `hand:${number}` | `handRod:${number}` | `handTrain:${number}` | `handBait:${number}:${BaitId}`;
 
 const GEAR_ORDER: GearKind[] = ['rod', 'holders', 'auto', 'clothes', 'boots'];
@@ -285,7 +285,9 @@ export class UI {
     const crewCost = game.nextCrewCost(i);
     const crew = `<div class="row"><div class="slot">${icon('crew')}</div><div class="meta"><b>Crew ${b.crew}/${game.crewMax(b)}</b><div class="sub"><small>${game.haulSize(b)} a trip · Hull adds slots</small></div></div>
       ${crewCost === null ? '<span class="maxed">FULL</span>' : `<button class="btn" data-act="crew:${i}" ${game.money < crewCost ? 'disabled' : ''}>${coin(crewCost)}</button>`}</div>`;
-    return status + haul + `<div class="grounds">${grounds}</div><div class="grid tracks">${tiles}</div>` + detail + crew;
+    const sell = `<div class="row"><div class="meta"><b>Sell boat</b><div class="sub"><small>${b.trip ? 'Wait for it to come back' : 'Frees the berth'}</small></div></div>
+      <button class="btn red" data-act="sellBoat:${i}" ${b.trip ? 'disabled' : ''}>${coin(game.boatResale(i))}</button></div>`;
+    return status + haul + `<div class="grounds">${grounds}</div><div class="grid tracks">${tiles}</div>` + detail + crew + sell;
   }
 
   /** Buy boats, nothing else. */

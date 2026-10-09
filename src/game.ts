@@ -1,5 +1,5 @@
 import {
-  ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_REPEAT, CAPTAIN_CATCH, CAPTAIN_STORM, CAPTAIN_WAGE, COMPANY_PRICE, COMPANY_UNLOCK_EARNED,
+  ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_REPEAT, BOAT_RESALE, CAPTAIN_CATCH, CAPTAIN_STORM, CAPTAIN_WAGE, COMPANY_PRICE, COMPANY_UNLOCK_EARNED,
   CREW_BASE, CREW_HAUL, CREW_SPEED, ENGINE_SPEED, GROUNDS, HARBOR_UPGRADES, HULL_HOLD, HULL_STORM, ICE_VALUE, SCHOOL_CHANCE,
   SIGHTING_CHANCE, SONAR_STEP, STORM_LOSS, TRACKS, TRACK_GROWTH, TRACK_MAX, WAREHOUSE, crewCost,
   type GroundDef, type GroundId, type HarborUpgradeId, type TrackId,
@@ -603,6 +603,30 @@ export class Game {
     this.money -= cost;
     this.boats[i]!.tracks[id]++;
     return true;
+  }
+
+  /** What selling a boat pays: half of its base price, its upgrades and its crew. */
+  boatResale(i: number): number {
+    const b = this.boats[i];
+    if (!b) return 0;
+    const def = BOATS[b.type];
+    let spent = def.price;
+    for (const id of Object.keys(b.tracks) as TrackId[]) {
+      for (let l = 0; l < b.tracks[id]; l++) spent += def.upgrade * TRACKS[id].cost * Math.pow(TRACK_GROWTH, l);
+    }
+    for (let n = 0; n < b.crew; n++) spent += crewCost(def.upgrade, n);
+    return Math.round((spent * BOAT_RESALE) / 100) * 100;
+  }
+
+  /** Sell a boat that's at the pier (its haul is sold first). Frees its berth. Returns the money. */
+  sellBoat(i: number): number {
+    const b = this.boats[i];
+    if (!b || b.trip) return 0;
+    const haul = this.collectHaul(i);
+    const refund = this.boatResale(i);
+    this.boats.splice(i, 1);
+    this.money += refund;
+    return refund + haul;
   }
 
   /** Crew slots: a bigger hull holds more hands. */

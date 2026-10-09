@@ -4,6 +4,15 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Sell a boat
+  WHAT: Boat panel gets a red Sell boat row (confirm first): refunds half of
+        the boat's base price, upgrades and crew (BOAT_RESALE), sells any haul
+        on board, frees the berth; not while at sea. 64 tests.
+  WHY:  User: with the harbor full (8 berths) there was no way to swap a
+        boat for a different kind.
+
+---
+
 2026-10-09  The fleet (company phase 3): upgrade trees, grounds, automation, harbor growth
   WHAT: Boats now have six upgrade tracks (Hull, Engine, Gear, Sonar, Ice
         Hold, Captain, 5 levels each), crew slots from the hull, a fishing

@@ -604,6 +604,23 @@ describe('the fleet', () => {
     expect(g.earned).toBeGreaterThan(30000);
   });
 
+  it('a boat can be sold (at the pier) for half of what went into it, freeing its berth', () => {
+    const g = owner();
+    for (const type of ['net', 'lobster', 'sword'] as const) g.buyBoat(type);
+    expect(g.canBuyBoat('net')).toBe(false); // berths full
+    const net = g.boats[0]!;
+    g.upgradeTrack(0, 'hull'); g.hireCrew(0);
+    expect(g.boatResale(0)).toBeGreaterThan(BOATS.net.price / 2);
+    g.sendBoat(0);
+    expect(g.sellBoat(0)).toBe(0); // at sea: can't sell
+    tick(g, net.trip!.dur + 0.1);
+    const money = g.money, refund = g.boatResale(0), haul = g.haulValue(g.boats[0]!);
+    expect(g.sellBoat(0)).toBe(refund + haul);
+    expect(g.money).toBe(money + refund + haul);
+    expect(g.boats.map((b) => b.type)).toEqual(['lobster', 'sword']);
+    expect(g.canBuyBoat('sword')).toBe(true);
+  });
+
   it('the company keeps earning while the game is closed, up to the warehouse limit', () => {
     const g = owner(1e7);
     g.buyBoat('net');

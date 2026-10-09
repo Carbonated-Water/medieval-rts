@@ -98,6 +98,12 @@ function onAction(a: Action): void {
   } else if (a.startsWith('buyBoat:')) {
     const type = a.slice(8) as BoatType;
     if (game.buyBoat(type)) { note.banner(pixelIcon('boat'), 'BOUGHT', game.boatName(game.boats.length - 1)); ui.open = 'harbor'; }
+  } else if (a.startsWith('sellBoat:')) {
+    const i = Number(a.slice(9)), name = game.boatName(i);
+    if (confirm(`Sell ${name} for $${game.boatResale(i).toLocaleString()}? Its upgrades and crew go with it.`)) {
+      const paid = game.sellBoat(i);
+      if (paid) { note.banner(pixelIcon('boat'), `SOLD ${name.toUpperCase()}`, `$${paid.toLocaleString()}`); ui.open = 'harbor'; }
+    }
   } else if (a.startsWith('boat:')) { ui.boatSel = Number(a.slice(5)); ui.trackSel = 'hull'; ui.open = 'boat'; }
   else if (a === 'hire') { if (game.hireHand()) note.banner(pixelIcon('crew'), 'HIRED', HAND_NAMES[game.hands.length - 1]!); }
   else if (a === 'sellCrate') { const n = game.sellCrate(); if (n) note.banner(pixelIcon('fish'), 'CRATE SOLD', `$${n.toLocaleString()}`); }
