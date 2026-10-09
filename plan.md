@@ -153,31 +153,10 @@ arrows walk, Space casts / reels, E opens the building you stand at.
   keeps only the Harbor Master (boats).
 - Only Legendary / rare-variant catches by fishermen float a "+$".
 
-## The seafood empire (phase 3, 2026-10-09)
+## Phase 3: prestige across the whole game (next)
 
-- **Town** screen: TOWN / RIVER on the action bar (with the company).
-- **One chain, one step at a time**: Fish Plant $500k (freezer, x1.4) >
-  Fish & Chips $750k > Cannery $300k (x2) > Smokehouse $600k (x2.4) >
-  Smoke & Grill $2M > Kitchen $1.2M (x3) > Lobster Bistro $5M > Sushi
-  Palace $12M > Export Office $400k. Only built things and the next lot
-  (FOR SALE, or a marker on the plant for a new line) show in town; the
-  bar always says NEXT with its price.
-- **Everything is automatic**: boat hauls and the Fish Seller's crate go to
-  the plant while it has under 2 minutes of work waiting, else sold as
-  before. Restaurants serve their menu at a premium; anything beyond a
-  minute of restaurant demand plus open contracts sells at value; export
-  contracts (x1.8) deliver themselves.
-- Each line upgrades stations / speed / quality.
-- **Restaurants are idle-tycoon buildings** (in progress): levels 1-100, look
-  and x2 speed at 10/25/50/100 (cart, shop, terrace, two floors, landmark);
-  takings fill a till (120 dishes) you tap to collect (coin burst), or a
-  manager (1.5x price) does it; hold to hustle (x3). Next: lunch rush (tap
-  customers for tips, combo), golden critic, plant and export get the same
-  treatment.
-- Sim (6 boats LV3, arctic) vs raw: plant x1.22, +chips x1.29, 4 steps
-  x1.40, 6 steps x1.76, all x2.13, all maxed x6.4.
-- HUD: $/sec under the money (You / Fishermen / Boats / Town; Town counts
-  only what it adds over the raw fish), no log line per catch.
+The town (seafood empire) was built and scrapped 2026-10-09: too linear
+(upgrade plant, upgrade restaurant, repeat). Kept: the $/sec readout.
 
 ## Roadmap (agreed order, 2026-10-09)
 

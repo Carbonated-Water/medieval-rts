@@ -35,20 +35,8 @@ export class Notices {
     document.body.appendChild(this.bannerEl);
   }
 
-  /**
-   * Floats belong to one view (the riverbank's rise from the fisher and the
-   * pier; the town's from its buildings): only the showing view's appear, and
-   * switching clears any still rising.
-   */
-  set view(v: 'river' | 'town') {
-    if (v !== this.shown) this.root.querySelectorAll('.float').forEach((el) => el.remove());
-    this.shown = v;
-  }
-  private shown: 'river' | 'town' = 'river';
-
   /** Text rising from a screen point (CSS px). */
-  float(text: string, x: number, y: number, tone: Tone = 'good', where: 'river' | 'town' = 'river'): void {
-    if (where !== this.shown) return;
+  float(text: string, x: number, y: number, tone: Tone = 'good'): void {
     const el = document.createElement('div');
     el.className = `float ${tone}`;
     el.textContent = text;

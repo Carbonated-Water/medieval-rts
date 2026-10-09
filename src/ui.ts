@@ -1,7 +1,6 @@
 import {
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_ORDER, COMPANY_PRICE, COMPANY_UNLOCK_EARNED, DEV_MULTIPLIER, GROUNDS, HARBOR_UPGRADES,
-  MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, PIER_STAFF, HANDS_MAX, LINES, LINE_TRACKS, LINE_TRACK_MAX, type TownStep,
-  RESTAURANTS, RESTAURANT_MAX, RESTAURANT_MILESTONES, TIER_NAMES, TILL_DISHES, restaurantTier, SEA_FISH, SHELLFISH, BILLFISH, restaurantPremium, restaurantRate, type LineId, type LineTrack, type RestaurantId,
+  MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, PIER_STAFF, HANDS_MAX,
   TRACKS, TRACK_MAX, TRACK_ORDER, WAREHOUSE, type HarborUpgradeId, type TrackId, HAND_NAMES, HAND_SKILL_MAX, LETTERS, RODS, FISH, GEAR, REFLEX_PER_LEVEL, SKILLS, STRENGTH_PER_LEVEL, HAGGLE_PER_LEVEL,
   TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier,
 } from './data';
@@ -11,7 +10,7 @@ import { pixelFishIcon as fishIcon, pixelIcon, type IconName } from './pixelart'
 import type { Place } from './scene';
 
 /** One panel per job: the market sells fish, the tackle shop sells gear, the school trains skills. */
-export type Panel = 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'ledger' | 'boat' | 'plant' | 'line' | 'restaurant' | 'export' | 'next' | 'shipyard' | 'harborup' | 'pier' | 'pierstaff' | 'hand' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
+export type Panel = 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'ledger' | 'boat' | 'shipyard' | 'harborup' | 'pier' | 'pierstaff' | 'hand' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
 
 export type Action =
   | 'cast' | 'reel' | 'close' | 'reset' | 'toggleDev' | Panel
@@ -21,22 +20,10 @@ export type Action =
   | 'sendAll' | 'collectAll' | `ground:${number}:${string}` | `track:${TrackId}` | `upgrade:${number}:${TrackId}`
   | `sellBoat:${number}` | 'buyBerth' | 'buyWarehouse' | `buyHarbor:${HarborUpgradeId}`
   | 'buyPierSection' | `budget:${number}`
-  | 'town' | 'river' | 'townNext' | `line:${LineId}` | `lineUp:${LineId}:${LineTrack}` | `upRestaurant:${RestaurantId}:${string}` | `till:${RestaurantId}` | `mgr:${RestaurantId}` | `rest:${RestaurantId}`
   | 'hire' | 'sellCrate' | `hand:${number}` | `handRod:${number}` | `handTrain:${number}` | `handBait:${number}:${BaitId}`;
 
 const GEAR_ORDER: GearKind[] = ['rod', 'holders', 'auto', 'clothes', 'boots'];
 export const GEAR_ICON: Record<GearKind, IconName> = { rod: 'rod', holders: 'holder', auto: 'auto', clothes: 'shirt', boots: 'boot' };
-/** A town step's name, for the NEXT button and its panel. */
-export const stepName = (s: TownStep | null): string => !s ? 'Town' : s.kind === 'plant' ? 'Fish Plant' : s.kind === 'export' ? 'Export Office'
-  : s.kind === 'line' ? LINES[s.id].name : RESTAURANTS[s.id].name;
-
-/** What a step does, in two short lines. */
-const stepBlurb = (s: TownStep): [string, string] => s.kind === 'plant' ? ['Freezes your catch. Worth x1.4.', 'Your boats and pier send fish here by themselves.']
-  : s.kind === 'export' ? ['Big orders that pay x1.8.', 'Contracts fill and pay by themselves.']
-  : s.kind === 'line' ? [`${LINES[s.id].blurb}. Worth x${LINES[s.id].mult}.`, 'A new line inside the plant.']
-  : [`Sells ${RESTAURANTS[s.id].menu.map((m) => LINES[m].product.toLowerCase()).join(' and ')} at x${restaurantPremium(1).toFixed(2)}.`, 'Better than selling them at value.'];
-
-export const LINE_ICON: Record<LineId, IconName> = { freezer: 'ice', cannery: 'can', smokehouse: 'smoked', kitchen: 'dish' };
 export const BAIT_ICON: Record<BaitId, IconName> = { worm: 'bait', cricket: 'cricket', shiner: 'shiner', leech: 'leech', glow: 'glow', gold: 'gold' };
 export const SKILL_ICON: Record<SkillId, IconName> = { fishing: 'hook', reflexes: 'bolt', haggling: 'bag', strength: 'fist' };
 export const ACH_ICON: Record<AchStat, IconName> = {
@@ -70,8 +57,7 @@ export class UI {
   private top = document.getElementById('top')!;
   private action = document.getElementById('action')!;
   private sheet = document.getElementById('sheet')!;
-  private last = { top: '', action: '', sheet: '', townui: '' };
-  private townui = document.getElementById('townui')!;
+  private last = { top: '', action: '', sheet: '' };
   readonly notices = new Notices(document.getElementById('notes')!);
   open: Panel | null = null;
   /** Trophy shown in the detail strip. */
@@ -82,10 +68,7 @@ export class UI {
   /** Upgrade track shown in the boat panel's detail strip. */
   trackSel: TrackId = 'hull';
   /** Money made per second by source, averaged over the last minute (set by main). */
-  rates: { you: number; hands: number; boats: number; town: number } | null = null;
-  /** Plant line / restaurant lot shown in their panels. */
-  lineSel: LineId = 'freezer';
-  restSel: RestaurantId = 'chips';
+  rates: { you: number; hands: number; boats: number } | null = null;
 
   /** A finger / mouse button is down on the interface: hold redraws so buttons don't change under it. */
   private pressing = false;
@@ -130,13 +113,11 @@ export class UI {
     const rows: [string, number][] = [['You', r.you]];
     if (game.hands.length) rows.push(['Fishermen', r.hands]);
     if (game.boats.length) rows.push(['Boats', r.boats]);
-    if (game.plant) rows.push(['Town', r.town]);
     const fmt = (n: number) => (n < 10 ? n.toFixed(1) : kmb(Math.round(n)));
     return `<div class="plaque rates">${rows.map(([k, v]) => `<span>${k}</span><b>$${fmt(v)}/s</b>`).join('')}</div>`;
   }
 
-  update(_dt: number, game: Game, place: Place | null, walking: boolean, inTown = false, spots: { id: RestaurantId; x: number; y: number }[] = []): void {
-    this.set('townui', this.townui, inTown && !this.open ? this.townChipsHtml(game, spots) : '');
+  update(_dt: number, game: Game, place: Place | null, walking: boolean): void {
     if (this.open === 'inbox') this.notices.markRead();
     this.notices.update();
     const ready = game.claimable().length, unread = this.notices.unread;
@@ -148,7 +129,7 @@ export class UI {
       `<button class="slot" data-act="trophies" aria-label="achievements">${icon('trophy')}${badge(ready)}</button>` +
       `<button class="slot" data-act="inbox" aria-label="log">${icon('bell')}${badge(unread)}</button>` +
       `<button class="slot" data-act="settings" aria-label="settings">${icon('menu')}</button>`);
-    this.set('action', this.action, inTown ? this.townBarHtml(game) : this.actionHtml(game, place, walking));
+    this.set('action', this.action, this.actionHtml(game, place, walking));
     this.set('sheet', this.sheet, this.open ? this.panelHtml(this.open, game) : '');
     this.sheet.classList.toggle('show', this.open !== null);
   }
@@ -161,7 +142,7 @@ export class UI {
     if (place === 'tackle') return `${bag}<button class="btn big" data-act="tackle">BUY GEAR</button>`;
     if (place === 'school') return `${bag}<button class="btn big" data-act="training">TRAIN</button>`;
     if (place === 'bait') return `${bag}<button class="btn big" data-act="baitshop">BUY BAIT</button>`;
-    if (place !== 'dock') return `${bag}<div class="dockrow"><div class="plaque hint">Tap the river to fish</div>${game.company ? '<button class="btn" data-act="town">TOWN &gt;</button>' : ''}</div>`;
+    if (place !== 'dock') return `${bag}<div class="plaque hint">Tap the river to fish</div>`;
     const active = game.activeBait;
     const pouch = `<button class="slot pouch" data-act="pouch" aria-label="bait">${icon(BAIT_ICON[active ?? game.baitSel])}<i class="badge count">${active ? game.baitCount(active) : 0}</i></button>`;
     const row = (btn: string) => `${bag}<div class="dockrow">${pouch}${btn}</div>`;
@@ -183,11 +164,6 @@ export class UI {
           : panel === 'harbor' ? [game.company ? 'Fishing Co.' : 'Old Harbor', this.harborHtml(game)]
           : panel === 'boat' ? [game.boats[this.boatSel] ? game.boatName(this.boatSel) : 'Boat', this.boatHtml(game)]
           : panel === 'ledger' ? ['Ledger', this.ledgerHtml(game)]
-          : panel === 'plant' ? ['Fish Plant', this.plantHtml(game)]
-          : panel === 'line' ? [LINES[this.lineSel].name, this.lineHtml(game)]
-          : panel === 'next' ? [stepName(game.nextTownStep()), this.nextHtml(game)]
-          : panel === 'restaurant' ? [RESTAURANTS[this.restSel].name, this.restaurantHtml(game)]
-          : panel === 'export' ? ['Export Office', this.exportHtml(game)]
           : panel === 'shipyard' ? [`Shipyard ${game.boats.length}/${game.berthCount}`, this.shipyardHtml(game)]
           : panel === 'harborup' ? ['Harbor', this.harborUpHtml(game)]
           : panel === 'pier' ? [`The Pier ${game.hands.length}/${game.pierSpots}`, this.pierHtml(game)]
@@ -391,108 +367,6 @@ export class UI {
         <div class="meta"><b>${game.boatName(i)} <span class="small">$${kmb(rate)}/min</span></b><div class="sub"><small>$${kmb(b.earned)} of $${kmb(b.invested)} · ${payback}</small></div></div>${profit(b.earned - b.invested)}</button>`;
     }).join('');
     return total + rows + '<p class="note">$/min is the expected rate from each boat\'s upgrades and ground.</p>';
-  }
-
-  // ---------- the seafood empire ----------
-
-  /**
-   * The buttons over each restaurant in town: its level (glowing with an arrow
-   * when you can afford one; opens its card) and its till (tap to collect;
-   * gone once a manager empties it).
-   */
-  private townChipsHtml(game: Game, spots: { id: RestaurantId; x: number; y: number }[]): string {
-    return spots.map(({ id, x, y }) => {
-      const r = game.restaurants[id]!, next = game.nextRestaurantCost(id);
-      const up = next !== null && game.money >= next;
-      const till = Math.round(r.till ?? 0), full = game.tillFull(id);
-      const tillBtn = r.manager || !till ? '' : `<button class="tchip till${full ? ' full' : ''}" data-act="till:${id}">${icon('coin', 2)}${full ? 'FULL' : '$' + kmb(till)}</button>`;
-      const fast = game.hustling(id) ? '<span class="tchip fast">x3</span>' : '';
-      return `<div class="tspot" style="left:${x}px;top:${y}px"><button class="tchip lvl${up ? ' up' : ''}" data-act="rest:${id}">${up ? icon('up', 2) : ''}LV ${r.level}</button>${tillBtn}${fast}</div>`;
-    }).join('');
-  }
-
-  /** In town the action bar shows the one next thing to build (and the way back). */
-  private townBarHtml(game: Game): string {
-    const step = game.nextTownStep(), river = '<button class="btn" data-act="river">&lt; RIVER</button>';
-    if (!step) return `<div class="dockrow"><div class="plaque hint">Tap a building</div>${river}</div>`;
-    return `<div class="dockrow"><button class="btn next" data-act="townNext"><small>NEXT · $${kmb(game.townStepPrice(step))}</small>${stepName(step)}</button>${river}</div>`;
-  }
-
-  /** The next step: what it is, what it does, its price. */
-  private nextHtml(game: Game): string {
-    const step = game.nextTownStep();
-    if (!step) return '<p class="empty">The town is complete.</p>';
-    const price = game.townStepPrice(step);
-    const ic: IconName = step.kind === 'plant' ? 'factory' : step.kind === 'export' ? 'anchor' : step.kind === 'line' ? LINE_ICON[step.id] : 'dish';
-    const [what, more] = stepBlurb(step);
-    return `<div class="step"><div class="slot">${icon(ic)}</div><p>${what}</p></div>
-      <p class="note">${more}</p>
-      <button class="btn wide" data-act="townNext" ${game.money < price ? 'disabled' : ''}>BUILD ${coin(price, 3)}</button>`;
-  }
-
-  /** The Processing Plant: its lines and the fish waiting. */
-  private plantHtml(game: Game): string {
-    const lines = (['freezer', 'cannery', 'smokehouse', 'kitchen'] as LineId[]).filter((id) => game.plantLines[id]).map((id) => {
-      const def = LINES[id];
-      return `<div class="row"><button class="slot" data-act="line:${id}">${icon(LINE_ICON[id])}</button><div class="meta"><b>${def.name}</b><div class="sub"><small>${Math.round(game.lineCapacity(id))} fish/min · x${def.mult}</small></div></div>
-        <button class="btn plain" data-act="line:${id}">OPEN</button></div>`;
-    }).join('');
-    return lines + `<div class="row"><div class="slot">${icon('fish')}</div><div class="meta"><b>Waiting</b><div class="sub"><small>${game.stockCount()} fish</small></div></div></div>
-      <p class="note">Your catch comes here by itself while there's room. Extra products sell at their value.</p>`;
-  }
-
-  /** One production line: its three upgrades, which fish it takes. */
-  private lineHtml(game: Game): string {
-    const id = this.lineSel, l = game.plantLines[id], def = LINES[id];
-    if (!l) return '<p class="empty">Not built yet.</p>';
-    const head = `<div class="row"><div class="slot">${icon(LINE_ICON[id])}</div><div class="meta"><b>${def.product}</b><div class="sub"><small>${Math.round(game.lineCapacity(id))} fish/min · ${l.jobs.length}/${l.stations} busy · x${def.mult}</small></div></div></div>`;
-    const tracks = (Object.keys(LINE_TRACKS) as LineTrack[]).map((tr) => {
-      const lvl = tr === 'stations' ? l.stations - 1 : l[tr], cost = game.nextLineCost(id, tr);
-      return `<div class="row"><div class="meta"><b>${LINE_TRACKS[tr].name} <span class="small">${tr === 'stations' ? l.stations : `LV ${lvl}`}</span></b>
-        <div class="sub">${level(lvl, LINE_TRACK_MAX)}<small>${LINE_TRACKS[tr].blurb}</small></div></div>
-        ${cost === null ? '<span class="maxed">MAX</span>' : `<button class="btn" data-act="lineUp:${id}:${tr}" ${game.money < cost ? 'disabled' : ''}>${coin(cost)}</button>`}</div>`;
-    }).join('');
-    const all = [...FISH, ...SEA_FISH, ...SHELLFISH, ...BILLFISH];
-    const takes = def.accepts === 'any' ? '<p class="note">Takes any fish the other lines skip.</p>'
-      : `<div class="haul">${def.accepts.map((f) => all.find((x) => x.id === f)!).map((f) => `<span><img src="${fishIcon(f, false, 48, 28)}" alt="${f.name}" title="${f.name}"></span>`).join('')}</div>`;
-    return head + tracks + takes;
-  }
-
-  /** One restaurant: level it up, see its menu and what it has earned. */
-  /**
-   * A restaurant's card: its level and look, progress to the next transform,
-   * what it serves, upgrade x1 / x10 / MAX, and the manager.
-   */
-  private restaurantHtml(game: Game): string {
-    const id = this.restSel, r = game.restaurants[id];
-    if (!r) return '<p class="empty">Not built yet.</p>';
-    const tier = restaurantTier(r.level), goal = RESTAURANT_MILESTONES[tier];
-    const prev = tier ? RESTAURANT_MILESTONES[tier - 1]! : 1;
-    const pct = goal ? Math.round(((r.level - prev) / (goal - prev)) * 100) : 100;
-    const head = `<div class="row"><div class="slot">${icon('dish')}</div><div class="meta"><b>LV ${r.level} · ${TIER_NAMES[tier]}</b>
-      <div class="sub"><small>${restaurantRate(r.level)} dishes/min · x${restaurantPremium(r.level).toFixed(2)} price</small></div></div></div>
-      <div class="goal"><div class="fill" style="width:${pct}%"></div><span>${goal ? `${TIER_NAMES[tier + 1]} at LV ${goal}: x2 speed` : 'Fully grown'}</span></div>`;
-    const buy = (label: string, n: number) => {
-      const b = game.restaurantBulk(id, n), ok = b.n > 0 && game.money >= b.cost;
-      return `<button class="btn" data-act="upRestaurant:${id}:${n === Infinity ? 'max' : n}" ${ok ? '' : 'disabled'}><small>${n === Infinity ? `MAX +${b.n}` : label}</small>${coin(b.cost)}</button>`;
-    };
-    const ups = r.level >= RESTAURANT_MAX ? '<span class="maxed">MAX</span>' : `<div class="ups">${buy('+1', 1)}${buy('+10', 10)}${buy('MAX', Infinity)}</div>`;
-    const mp = game.managerPrice(id);
-    const mgr = r.manager
-      ? `<div class="row"><div class="slot">${icon('captain')}</div><div class="meta"><b>Manager</b><div class="sub"><small>Empties the till for you</small></div></div><span class="maxed">HIRED</span></div>`
-      : `<div class="row"><div class="slot">${icon('captain')}</div><div class="meta"><b>Manager</b><div class="sub"><small>Empties the till for you</small></div></div><button class="btn" data-act="mgr:${id}" ${game.money < mp ? 'disabled' : ''}>${coin(mp)}</button></div>`;
-    const till = r.manager ? '' : `<p class="note">The till holds ${TILL_DISHES} dishes. Tap the coins over the shop to collect; hold the shop to hustle.</p>`;
-    return head + ups + mgr + till;
-  }
-
-  /** The Export Office: contracts fill and pay by themselves. */
-  private exportHtml(game: Game): string {
-    const contracts = game.contracts.map((c) => {
-      const have = Math.min(c.qty, game.products[c.line]?.n ?? 0), left = Math.ceil(c.left);
-      return `<div class="row"><div class="slot">${icon(LINE_ICON[c.line])}</div><div class="meta"><b>${c.qty} ${LINES[c.line].product}</b>
-        <div class="sub">${level(Math.floor((have / c.qty) * 5), 5)}<small>${have}/${c.qty} · ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} left</small></div></div>${coin(c.reward)}</div>`;
-    }).join('') || '<p class="note">New contracts arrive every minute and a half.</p>';
-    return contracts + '<p class="note">Contracts pay x1.8 and deliver themselves when enough is made.</p>';
   }
 
   /** Buy boats, nothing else. */

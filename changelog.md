@@ -4,6 +4,14 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Town scrapped; back to fishing
+  WHAT: Source restored to efa3f56 (fleet ledger) minus the town: no plant,
+        restaurants, export or town screen. Kept the $/sec readout under the
+        money (You / Fishermen / Boats) and no log line per catch.
+  WHY:  After three attempts the user found the town linear and uninspired
+        ("ruined it"). The next step is prestige across the whole game.
+        The town attempts stay in git history (51b1092..aebdc34).
+
 2026-10-09  Town: a living street, then idle-tycoon restaurants (slice)
   WHAT: Street life (src/town.ts) driven by game.townNews: fish trucks unload
         at the plant (crates pile while it's behind), window conveyor, vans,

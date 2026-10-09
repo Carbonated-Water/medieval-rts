@@ -1,10 +1,9 @@
-import { RESTAURANTS, TIER_NAMES, restaurantTier, type LineId, type LineTrack, type RestaurantId } from './data';
 import { ACHIEVEMENTS, BOATS, DEV_MULTIPLIER, HAND_NAMES, HARBOR_UPGRADES, LETTERS, TRACKS, type GroundId, type HarborUpgradeId, type TrackId, RODS, SKILLS, VARIANTS, baitById, type BaitId, type BoatType, type GearKind, type SkillId } from './data';
 import { Game, fishById, type Line, type SaveData } from './game';
 import { Scene, WORM_SPOT_X } from './scene';
 import './ui.css';
 import { pixelFishIcon as fishIcon, pixelIcon } from './pixelart';
-import { ACH_ICON, BAIT_ICON, GEAR_ICON, LINE_ICON, SKILL_ICON, UI, stepName, type Action } from './ui';
+import { ACH_ICON, BAIT_ICON, GEAR_ICON, SKILL_ICON, UI, type Action } from './ui';
 
 const SAVE_KEY = 'riverside-fishing-v1';
 
@@ -32,7 +31,7 @@ const note = ui.notices;
 let dirty = false;
 
 /** Snapshots of game.made, one a second, for the last minute: the $/sec readout is the difference. */
-const madeLog: { t: number; you: number; hands: number; boats: number; town: number }[] = [];
+const madeLog: { t: number; you: number; hands: number; boats: number }[] = [];
 function sampleRates(now: number): void {
   const last = madeLog[madeLog.length - 1];
   if (last && now - last.t < 1000) return;
@@ -40,8 +39,7 @@ function sampleRates(now: number): void {
   while (madeLog.length > 61) madeLog.shift();
   const first = madeLog[0]!, end = madeLog[madeLog.length - 1]!, secs = (end.t - first.t) / 1000;
   ui.rates = secs < 1 ? null : {
-    you: (end.you - first.you) / secs, hands: (end.hands - first.hands) / secs,
-    boats: (end.boats - first.boats) / secs, town: (end.town - first.town) / secs,
+    you: (end.you - first.you) / secs, hands: (end.hands - first.hands) / secs, boats: (end.boats - first.boats) / secs,
   };
 }
 /** Set by Start over: nothing may be saved again, or the unload save would bring the old game back. */
@@ -61,37 +59,10 @@ scene.onArrive = (p) => {
   if (p === 'bait') ui.open = 'baitshop';
 };
 
-/** The restaurant being held down in town (it hustles until released). */
-let hustling: RestaurantId | null = null;
-canvas.addEventListener('pointerdown', (e) => {
-  if (ui.open || scene.mode !== 'town') return;
-  const hit = scene.hitTown(e.clientX, e.clientY);
-  if (hit && hit !== 'plant' && hit !== 'export' && game.restaurants[hit]) { hustling = hit; game.hustle(hit); }
-});
-for (const ev of ['pointerup', 'pointercancel', 'blur'] as const) addEventListener(ev, () => { hustling = null; });
-
-/** Where the money display is (coins from tills fly there), in CSS pixels. */
-function pursePoint(): { x: number; y: number } {
-  const r = document.querySelector('#top .purse')?.getBoundingClientRect();
-  return r ? { x: r.left + 20, y: r.top + r.height / 2 } : { x: 40, y: 30 };
-}
-
 canvas.addEventListener('click', (e) => {
   if (ui.open) return;
-  // In town: buildings open their panels (the action bar has the way back).
-  if (scene.mode === 'town') {
-    const hit = scene.hitTown(e.clientX, e.clientY);
-    const built = hit === 'plant' ? game.plant : hit === 'export' ? game.exportOffice : hit ? !!game.restaurants[hit] : false;
-    if (hit && !built) ui.open = 'next';
-    else if (hit === 'plant') ui.open = 'plant';
-    else if (hit === 'export') ui.open = 'export';
-    // A built restaurant hustles while held (see pointerdown); its card opens from the LV button over it.
-    return;
-  }
-  // On the dock, tapping a bobber reels that one line (checked before the harbor, which is close by on a wide river).
-  const slot = scene.hitBobber(e.clientX, e.clientY);
-  if (slot >= 0) { game.reel(slot); return; }
   // The harbor across the river opens its panel from anywhere.
+  if (scene.hitBobber(e.clientX, e.clientY) >= 0) { game.reel(scene.hitBobber(e.clientX, e.clientY)); return; }
   if (scene.hitHarbor(e.clientX, e.clientY)) { ui.open = 'harbor'; return; }
   // Hired fishermen and the crate on the wide pier.
   const hand = scene.hitHand(e.clientX, e.clientY);
@@ -100,6 +71,9 @@ canvas.addEventListener('click', (e) => {
   // Tapping a worm walks over to dig it up (it's picked up on the way past).
   const worm = scene.hitWorm(e.clientX, e.clientY);
   if (worm) { scene.walkTo('ground', worm.x); return; }
+  // On the dock, tapping a bobber reels that one line.
+  const slot = scene.hitBobber(e.clientX, e.clientY);
+  if (slot >= 0) { game.reel(slot); return; }
   const target = scene.hit(e.clientX, e.clientY);
   if (target === 'dock' && scene.place === 'dock') return; // already there; don't put the lines away
   scene.walkTo(target, e.clientX);
@@ -130,7 +104,7 @@ function onAction(a: Action): void {
     if (!game.cast() && !game.activeBait) { const at = scene.fisherScreen(); note.float('NO BAIT', at.x, at.y, 'bad'); }
   }
   else if (a === 'reel') game.reel();
-  else if (a === 'market' || a === 'tackle' || a === 'baitshop' || a === 'pouch' || a === 'harbor' || a === 'pier' || a === 'shipyard' || a === 'harborup' || a === 'pierstaff' || a === 'ledger' || a === 'plant' || a === 'export' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'inbox' || a === 'settings') ui.open = ui.open === a ? null : a;
+  else if (a === 'market' || a === 'tackle' || a === 'baitshop' || a === 'pouch' || a === 'harbor' || a === 'pier' || a === 'shipyard' || a === 'harborup' || a === 'pierstaff' || a === 'ledger' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'inbox' || a === 'settings') ui.open = ui.open === a ? null : a;
   else if (a.startsWith('bait:')) game.selectBait(a.slice(5) as BaitId);
   else if (a === 'buyCompany') {
     if (game.buyCompany()) { ui.open = null; note.clearBanners(); note.banner(pixelIcon('boat'), 'THE FISHING CO.', 'is yours', 'rare'); }
@@ -145,48 +119,6 @@ function onAction(a: Action): void {
       if (paid) { note.banner(pixelIcon('boat'), `SOLD ${name.toUpperCase()}`, `$${paid.toLocaleString()}`); ui.open = 'harbor'; }
     }
   } else if (a.startsWith('boat:')) { ui.boatSel = Number(a.slice(5)); ui.trackSel = 'hull'; ui.open = 'boat'; }
-  else if (a === 'town' || a === 'river') scene.travel(a);
-  else if (a === 'townNext') {
-    // From the bar: open the step's panel; from that panel: build it.
-    if (ui.open !== 'next') ui.open = 'next';
-    else {
-      const step = game.nextTownStep();
-      if (step && game.buyTownStep()) {
-        ui.open = null;
-        const ic = step.kind === 'plant' ? 'factory' : step.kind === 'export' ? 'anchor' : step.kind === 'line' ? LINE_ICON[step.id] : 'dish';
-        note.banner(pixelIcon(ic), 'BUILT', stepName(step), 'rare');
-      }
-    }
-  }
-  else if (a.startsWith('line:')) { ui.lineSel = a.slice(5) as LineId; ui.open = 'line'; }
-  else if (a.startsWith('lineUp:')) { const [, id, tr] = a.split(':') as [string, LineId, LineTrack]; game.upgradeLine(id, tr); }
-  else if (a.startsWith('rest:')) { ui.restSel = a.slice(5) as RestaurantId; ui.open = 'restaurant'; }
-  else if (a.startsWith('till:')) {
-    const id = a.slice(5) as RestaurantId, at = scene.townSpots().find((s) => s.id === id);
-    const n = game.collectTill(id);
-    if (n) {
-      scene.townBurst(id, n, pursePoint());
-      if (at) note.float(`+$${n.toLocaleString()}`, at.x, at.y - 34, 'rare', 'town');
-      const purse = document.querySelector('#top .purse');
-      purse?.classList.remove('bump'); void (purse as HTMLElement | null)?.offsetWidth; purse?.classList.add('bump');
-    }
-  } else if (a.startsWith('mgr:')) {
-    const id = a.slice(4) as RestaurantId;
-    if (game.buyManager(id)) { note.banner(pixelIcon('captain'), 'MANAGER HIRED', RESTAURANTS[id].name, 'rare'); ui.open = null; }
-  } else if (a.startsWith('upRestaurant:')) {
-    const [, id, n] = a.split(':') as [string, RestaurantId, string];
-    const before = restaurantTier(game.restaurants[id]?.level ?? 1);
-    const got = game.upgradeRestaurantBulk(id, n === 'max' ? Infinity : Number(n));
-    if (got) {
-      const tier = restaurantTier(game.restaurants[id]!.level);
-      if (tier > before) {
-        // A milestone: close the card so the transformation and fireworks show.
-        ui.open = null;
-        scene.townPuff(id, true);
-        note.banner(pixelIcon('star'), RESTAURANTS[id].name.toUpperCase(), `Now a ${TIER_NAMES[tier]}! x2 speed`, 'rare');
-      } else scene.townPuff(id, false);
-    }
-  }
   else if (a === 'buyPierSection') { if (game.buyPierSection()) note.banner(pixelIcon('anchor'), 'PIER EXTENDED', `${game.pierSpots} spots`); }
   else if (a.startsWith('budget:')) game.setManagerBudget(Number(a.slice(7)));
   else if (a === 'hire') { if (game.hireHand()) note.banner(pixelIcon('crew'), 'HIRED', HAND_NAMES[game.hands.length - 1]!); }
@@ -204,9 +136,8 @@ function onAction(a: Action): void {
   }
   else if (a.startsWith('send:')) game.sendBoat(Number(a.slice(5)));
   else if (a.startsWith('collect:')) {
-    const i = Number(a.slice(8)), had = !!game.boats[i]?.haul, paid = game.collectHaul(i);
+    const paid = game.collectHaul(Number(a.slice(8)));
     if (paid) note.banner(pixelIcon('boat'), 'HAUL SOLD', `$${paid.toLocaleString()}`);
-    else if (had) note.banner(pixelIcon('factory'), 'HAUL', 'Sent to the plant', 'plain');
   } else if (a.startsWith('crew:')) { if (game.hireCrew(Number(a.slice(5)))) note.banner(pixelIcon('crew'), 'HIRED', 'A new deckhand'); }
   else if (a.startsWith('track:')) ui.trackSel = a.slice(6) as TrackId;
   else if (a.startsWith('upgrade:')) {
@@ -217,9 +148,8 @@ function onAction(a: Action): void {
     game.setGround(Number(i), id);
   } else if (a === 'sendAll') game.boats.forEach((_, i) => game.sendBoat(i));
   else if (a === 'collectAll') {
-    const had = game.boats.some((b) => b.haul), paid = game.boats.reduce((s, _, i) => s + game.collectHaul(i), 0);
+    const paid = game.boats.reduce((s, _, i) => s + game.collectHaul(i), 0);
     if (paid) note.banner(pixelIcon('boat'), 'HAULS SOLD', `$${paid.toLocaleString()}`);
-    else if (had) note.banner(pixelIcon('factory'), 'HAULS', 'Sent to the plant', 'plain');
   } else if (a === 'buyBerth') { if (game.buyBerth()) note.banner(pixelIcon('anchor'), 'NEW BERTH', `Room for ${game.berthCount} boats`); }
   else if (a === 'buyWarehouse') { if (game.buyWarehouse()) note.banner(pixelIcon('trap'), 'WAREHOUSE', `${game.offlineHours} hours`); }
   else if (a.startsWith('buyHarbor:')) {
@@ -237,7 +167,7 @@ function onAction(a: Action): void {
     const paid = game.claim(ui.pick);
     if (paid) note.banner(pixelIcon('coin'), 'COLLECTED', `$${paid.toLocaleString()}`);
   }
-  else if (a === 'close') ui.open = ui.open === 'boat' || ui.open === 'shipyard' || ui.open === 'harborup' || ui.open === 'ledger' ? 'harbor' : ui.open === 'hand' || ui.open === 'pierstaff' ? 'pier' : ui.open === 'line' ? 'plant' : null;
+  else if (a === 'close') ui.open = ui.open === 'boat' || ui.open === 'shipyard' || ui.open === 'harborup' || ui.open === 'ledger' ? 'harbor' : ui.open === 'hand' || ui.open === 'pierstaff' ? 'pier' : null;
   else if (a === 'sellAll') { const n = game.sellAll(); if (n) note.banner(pixelIcon('coin'), 'SOLD', `$${n.toLocaleString()}`); }
   else if (a.startsWith('sellFish:')) {
     const f = fishById(a.slice(9));
@@ -312,7 +242,6 @@ function announceHarbor(): void {
     note.log(`letter:${text}`, pixelIcon('letter'), 'A letter from H.', 'plain');
     dirty = true;
   }
-  for (const n of game.contractNews.splice(0)) note.banner(pixelIcon('anchor'), 'CONTRACT DONE', `$${n.toLocaleString()}`, 'rare');
   if (game.sellerNews) { note.log('seller', pixelIcon('coin'), `Fish Seller sold your bag $${game.sellerNews.toLocaleString()}`, 'plain'); game.sellerNews = 0; }
   for (const n of game.fleetNews.splice(0)) {
     const name = game.boatName(n.boat), b = game.boats[n.boat]!;
@@ -320,7 +249,7 @@ function announceHarbor(): void {
     else if (n.event === 'school') note.banner(pixelIcon('boat'), `${name.toUpperCase()}: LUCKY SCHOOL`, 'Double haul!', 'rare');
     else if (n.event === 'sighting') note.banner(pixelIcon('star'), `${name.toUpperCase()}: TROPHY`, 'A giant on the line!', 'rare');
     if (n.paid) note.log(`sold:${n.boat}`, pixelIcon('boat'), `${name} sold $${n.paid.toLocaleString()}`, 'plain');
-    else if (!n.event && b.haul) note.banner(pixelIcon('boat'), `${name.toUpperCase()} IS BACK`, `$${game.haulValue(b).toLocaleString()}`, 'rare');
+    else if (!n.event) note.banner(pixelIcon('boat'), `${name.toUpperCase()} IS BACK`, `$${game.haulValue(b).toLocaleString()}`, 'rare');
   }
   game.hands.forEach((h, i) => {
     const starved = game.handStarved(h);
@@ -388,10 +317,7 @@ function frame(now: number): void {
   announceAchievements();
   scene.update(dt);
   sampleRates(now);
-  note.view = scene.mode;
-  for (const f of scene.townFloats.splice(0)) note.float(f.text, f.x, f.y, f.tone, 'town');
-  if (hustling) game.hustle(hustling);
-  ui.update(dt, game, scene.place, scene.walking, scene.mode === 'town', scene.townSpots());
+  ui.update(dt, game, scene.place, scene.walking);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
