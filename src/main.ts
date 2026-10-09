@@ -29,8 +29,10 @@ const save = () => {
 setInterval(save, 2000);
 addEventListener('pagehide', save);
 
+// Arriving at a shop opens it: the market only if there's something to sell.
 scene.onArrive = (p) => {
-  if (p === 'market') { ui.open = 'market'; ui.tab = game.bag.length ? 'sell' : 'gear'; }
+  if (p === 'market' && game.bag.length) ui.open = 'market';
+  if (p === 'tackle') ui.open = 'tackle';
 };
 
 canvas.addEventListener('click', (e) => {
@@ -48,7 +50,7 @@ const primaryAction = (): Action =>
   game.lines.some((l) => l.type === 'bite') ? 'reel'
     : game.lines.some((l) => l.type === 'idle' || l.type === 'result') ? 'cast' : 'reel';
 
-// Keyboard: A/D or arrows walk, Space casts / reels, E opens the market.
+// Keyboard: A/D or arrows walk, Space casts / reels, E opens the shop you're at, T trains.
 const held = new Set<string>();
 addEventListener('keydown', (e) => {
   if (['KeyA', 'KeyD', 'ArrowLeft', 'ArrowRight'].includes(e.code)) { held.add(e.code); e.preventDefault(); }
@@ -56,7 +58,8 @@ addEventListener('keydown', (e) => {
     e.preventDefault();
     if (scene.place === 'dock' && !ui.open) onAction(primaryAction());
   }
-  if (e.code === 'KeyE' && scene.place === 'market') onAction(ui.open ? 'close' : 'market');
+  if (e.code === 'KeyE' && (scene.place === 'market' || scene.place === 'tackle')) onAction(ui.open ? 'close' : scene.place);
+  if (e.code === 'KeyT') onAction(ui.open === 'training' ? 'close' : 'training');
   if (e.code === 'Escape') onAction('close');
 });
 addEventListener('keyup', (e) => held.delete(e.code));
@@ -65,12 +68,14 @@ addEventListener('blur', () => held.clear());
 function onAction(a: Action): void {
   if (a === 'cast') game.cast();
   else if (a === 'reel') game.reel();
-  else if (a === 'market') { ui.open = 'market'; ui.tab = game.bag.length ? 'sell' : 'gear'; }
-  else if (a === 'journal') ui.open = ui.open === 'journal' ? null : 'journal';
+  else if (a === 'market' || a === 'tackle' || a === 'training' || a === 'journal' || a === 'settings') ui.open = ui.open === a ? null : a;
   else if (a === 'close') ui.open = null;
-  else if (a.startsWith('tab:')) ui.tab = a.slice(4) as UI['tab'];
   else if (a === 'sellAll') { const n = game.sellAll(); if (n) ui.say(`Sold everything for <b>$${n.toLocaleString()}</b>`, 2, 'good'); }
-  else if (a.startsWith('sell:')) game.sell(Number(a.slice(5)));
+  else if (a.startsWith('sellFish:')) {
+    const f = fishById(a.slice(9));
+    const n = game.sellSpecies(f.id);
+    if (n) ui.say(`Sold your <b>${f.name}</b> for <b>$${n.toLocaleString()}</b>`, 2, 'good');
+  }
   else if (a.startsWith('buy:')) {
     const kind = a.slice(4) as GearKind;
     const next = game.nextGear(kind);

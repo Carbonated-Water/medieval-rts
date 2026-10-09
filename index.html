@@ -70,10 +70,19 @@
       #sheet .head { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 6px; background: #f3e4c0; border-bottom: 2px solid #d8c090; }
       #sheet h2 { margin: 0; font-size: 19px; }
       #sheet .x { min-width: 40px; min-height: 36px; border: 2px solid var(--wood); border-radius: 10px; background: #fff; font-size: 16px; }
-      #sheet .tabs { display: flex; gap: 4px; padding: 8px 10px 0; background: #f3e4c0; }
-      #sheet .tab { flex: 1; min-height: 40px; border: 2px solid var(--wood); border-bottom: none; border-radius: 10px 10px 0 0; background: #e8d4a8; font-weight: 700; font-size: 14px; color: var(--ink); }
-      #sheet .tab.on { background: var(--paper); }
-      #sheet .body { padding: 10px 12px 14px; overflow-y: auto; }
+      #sheet .purse { margin-left: auto; margin-right: 10px; font-weight: 700; color: #2f7a2f; font-size: 16px; }
+      /* Market: one chip per species; a 4-wide grid fits all 20 without scrolling. */
+      #sheet .chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+      #sheet .chip { position: relative; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 4px 2px 5px; background: #fff; border: 2px solid var(--c); border-radius: 10px; font: inherit; color: var(--ink); cursor: pointer; }
+      #sheet .chip img { width: 100%; max-width: 56px; height: 26px; object-fit: contain; }
+      #sheet .chip b { font-size: 11px; line-height: 1.2; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      #sheet .chip span small { color: var(--ink); opacity: 0.6; font-weight: 400; }
+      #sheet .chip span { font-size: 12px; font-weight: 700; color: #2f7a2f; }
+      #sheet .chip .rare { position: absolute; top: -6px; right: -4px; font-style: normal; font-size: 10px; font-weight: 700; color: #fff; background: #e05ad0; border-radius: 8px; padding: 1px 4px; }
+      /* Tackle shop / training: one compact row each. */
+      #sheet .item.gear .meta small .was { opacity: 0.8; }
+      #sheet .stack { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin-top: 3px; background: #eadfc4; }
+      #sheet .stack i { display: block; }      #sheet .body { padding: 10px 12px 14px; overflow-y: auto; }
       #sheet .list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
       #sheet .item { display: flex; align-items: center; gap: 10px; padding: 6px 8px; background: #fff; border: 1px solid #e0d0a8; border-radius: 10px; }
       #sheet .item.have { background: #f2f8ec; }
@@ -100,17 +109,19 @@
       #sheet .odds .bar i { display: block; height: 100%; }
       #sheet .odds small.up { color: #2f8a3a; }
       #sheet .odds small.down { color: #a05a3a; }
-      #sheet .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; }
-      #sheet .fish { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px; background: #fff; border: 2px solid #e0d0a8; border-radius: 10px; text-align: center; font-size: 12px; }
+      #sheet .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+      #sheet .fish { display: flex; flex-direction: column; align-items: center; gap: 0; padding: 3px 2px; background: #fff; border: 2px solid #e0d0a8; border-radius: 10px; text-align: center; font-size: 11px; line-height: 1.15; }
       #sheet .fish.seen { border-color: var(--c); }
-      #sheet .fish img { width: 84px; height: 48px; }
+      #sheet .fish img { width: 100%; max-width: 56px; height: 26px; object-fit: contain; }
       #sheet .fish small { opacity: 0.7; font-size: 11px; }
+      #sheet .fish b { width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       #sheet section { margin-bottom: 12px; }
       #sheet section h3 { margin: 4px 2px 6px; font-size: 15px; }
       #sheet section h3 small { font-weight: 400; opacity: 0.6; font-size: 12px; }
       #sheet section .item + .item { margin-top: 6px; }
       #sheet .item .next { font-size: 10px; font-weight: 700; color: #fff; background: #3f8fe0; border-radius: 6px; padding: 2px 5px; }
-      #sheet .item .emoji { width: 64px; text-align: center; font-size: 26px; font-style: normal; }
+      #sheet .item .emoji { width: 64px; text-align: center; font-size: 26px; font-style: normal; white-space: nowrap; }
+      #sheet .item .emoji sub { font-size: 13px; font-weight: 700; }
       #sheet .item .swatch { width: 64px; height: 30px; display: flex; justify-content: center; }
       #sheet .item .swatch::before { content: ''; width: 26px; height: 30px; border-radius: 6px; border: 1px solid rgba(0, 0, 0, 0.3); }
       #sheet .item .swatch.shirt::before { background: linear-gradient(var(--c) 55%, var(--d) 55%); }
@@ -131,8 +142,8 @@
       #sheet .item.golden { background: #fff8de; border-color: #e0b84a; }
       #sheet .item.shiny { background: #fbf0ff; border-color: #c48ae0; }
       #sheet .item.giant { background: #eef6ff; border-color: #8ab8e8; }
-      #sheet .vmarks { display: flex; gap: 4px; margin-top: 2px; }
-      #sheet .vmark { font-style: normal; font-size: 12px; width: 18px; height: 18px; line-height: 18px; border-radius: 50%; background: #eee; color: #bbb; }
+      #sheet .vmarks { display: flex; gap: 2px; margin-top: 1px; }
+      #sheet .vmark { font-style: normal; font-size: 9px; width: 13px; height: 13px; line-height: 13px; border-radius: 50%; background: #eee; color: #bbb; }
       #sheet .vmark.got { background: var(--c); color: #fff; }
       #action .hint.small { font-size: 12px; padding: 4px 10px; }
     </style>

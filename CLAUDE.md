@@ -8,6 +8,19 @@ no runtime dependencies.
 **Read `plan.md` (scope) and `changelog.md` (latest state) before
 changing anything.** Earlier games are git tags `rts-v1` and `hex-v1`.
 
+## Guiding principles (from the user, 2026-10-09)
+
+**Simplicity will drive this game to greatness.**
+
+- **One place, one job.** Every building and every panel does exactly one
+  thing: the Fish Market only sells fish, the Tackle Shop only sells gear,
+  Training only raises skills, the Journal only shows the collection,
+  Settings holds dev mode / start over. A new feature gets its own place;
+  it never becomes a tab inside someone else's.
+- **Nothing scrolls.** Every panel fits on a 360×640 phone. If it doesn't
+  fit, there is too much in it: cut, group or split it, don't add a
+  scrollbar. (Check with the body's scrollHeight vs clientHeight.)
+
 ## Rules
 
 - **One game, kept small.** Anything under "Not yet" in `plan.md` needs

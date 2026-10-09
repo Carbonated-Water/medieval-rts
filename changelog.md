@@ -4,6 +4,24 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  One place, one job: Tackle Shop split from the Fish Market
+  WHAT: The market's Sell / Gear / Skills tabs are gone. Fish Market (left)
+        only sells fish: a 4-wide grid with one chip per species (×count,
+        total), tap to sell that kind (Game.sellSpecies) or Sell all. New
+        Tackle Shop stall (right, blue awning, rods + tackle box) only sells
+        gear: one row per line, next upgrade only. Training opens from the
+        "💪 Fishing" badge anywhere. Journal is just the collection (4×5,
+        one row per tier); dev mode + start over moved to a new ⚙ Settings
+        panel. Dock moved to the middle. E opens the shop you stand at, T
+        trains. Fixed plan.md holder prices mangled by the shell.
+  WHY:  User: the gear tab was overloaded and needed scrolling; wanted a
+        separate tackle shop and a market that only buys fish, and made
+        "separation of responsibilities" + "simplicity" guiding principles
+        (now in CLAUDE.md). Checked: every panel fits without scrolling at
+        390×844 and 360×640, even with all 20 species in the bag.
+
+---
+
 2026-10-09  Multiple lines (rod holders) + rare variants
   WHAT: Game.line → Game.lines[]. New gear line "Rod Holders" (1 → 4
         lines: $500 / $6,000 / $35,000). Cast throws every line out of the

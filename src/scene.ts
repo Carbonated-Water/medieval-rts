@@ -2,7 +2,10 @@ import { BOOTS, CLOTHES, RODS, TIERS, VARIANTS, type FishDef, type Variant } fro
 import { drawFish } from './fishart';
 import type { Game } from './game';
 
-export type Place = 'market' | 'dock';
+export type Place = 'market' | 'tackle' | 'dock';
+
+/** Where each place sits along the path, as a fraction of the screen width. */
+const PLACE_X: Record<Place, number> = { market: 0.17, dock: 0.5, tackle: 0.84 };
 
 /** Key positions, recomputed from the canvas size every frame (CSS px). */
 interface Layout {
@@ -13,6 +16,7 @@ interface Layout {
   riverBottom: number;
   path: number; // y the player walks along
   marketX: number;
+  tackleX: number;
   dockX: number;
   dockEnd: number; // y of the dock's far end (where you fish)
   bobbers: { x: number; y: number }[]; // where each line's bobber lands
@@ -59,7 +63,7 @@ export class Scene {
   get place(): Place | null {
     if (this.route.length) return null;
     if (this.onDock >= 1) return 'dock';
-    if (Math.abs(this.px - 0.2) < 0.04 && this.onDock === 0) return 'market';
+    if (this.onDock === 0) for (const p of ['market', 'tackle'] as const) if (Math.abs(this.px - PLACE_X[p]) < 0.04) return p;
     return null;
   }
 
@@ -72,13 +76,15 @@ export class Scene {
   /** What's at a screen point. */
   hit(x: number, y: number): Place | 'ground' {
     const L = this.L;
-    if (Math.abs(x - L.marketX) < L.w * 0.14 && y > L.path - L.h * 0.22 && y < L.path + 30) return 'market';
+    const nearShop = y > L.path - L.h * 0.22 && y < L.path + 30;
+    if (nearShop && Math.abs(x - L.marketX) < L.w * 0.14) return 'market';
+    if (nearShop && Math.abs(x - L.tackleX) < L.w * 0.14) return 'tackle';
     if (y < L.riverBottom + 10 && y > L.skyBottom) return 'dock';
     return 'ground';
   }
 
   walkTo(place: Place | 'ground', groundX?: number): void {
-    const target = place === 'market' ? 0.2 : place === 'dock' ? 0.62 : Math.max(0.06, Math.min(0.94, (groundX ?? 0) / this.L.w));
+    const target = place === 'ground' ? Math.max(0.06, Math.min(0.94, (groundX ?? 0) / this.L.w)) : PLACE_X[place];
     this.route = [];
     if (this.onDock > 0) this.route.push({ dock: 0 });
     this.route.push({ x: target });
@@ -190,14 +196,15 @@ export class Scene {
     this.canvas.style.width = `${w}px`;
     this.canvas.style.height = `${h}px`;
     const riverTop = h * 0.36, riverBottom = h * 0.66;
-    const dockX = w * 0.62;
+    const dockX = w * PLACE_X.dock;
     this.L = {
       w, h,
       skyBottom: h * 0.24,
       riverTop,
       riverBottom,
       path: h * 0.76,
-      marketX: w * 0.2,
+      marketX: w * PLACE_X.market,
+      tackleX: w * PLACE_X.tackle,
       dockX,
       dockEnd: riverTop + (riverBottom - riverTop) * 0.42,
       // One spot per line: right, left, then further out right and left of the dock.
@@ -222,7 +229,8 @@ export class Scene {
     this.drawRiver();
     this.drawNearBank();
     this.drawDock();
-    this.drawMarket();
+    this.drawShop(this.L.marketX, 'FISH MARKET', ['#e0503a', '#fff4e0'], '#c0402c', 'fish');
+    this.drawShop(this.L.tackleX, 'TACKLE SHOP', ['#2f6fd6', '#f0f6ff'], '#1f4f9c', 'tackle');
     this.drawHolders();
     this.drawLines();
     this.drawPlayer();
@@ -382,21 +390,39 @@ export class Scene {
     ctx.strokeRect(x, top, w, L.riverBottom + L.h * 0.03 - top);
   }
 
-  private drawMarket(): void {
+  /** A market stall: counter, goods, striped awning, sign. One per shop. */
+  private drawShop(cx: number, sign: string, stripe: [string, string], trim: string, goods: 'fish' | 'tackle'): void {
     const { ctx, L } = this;
-    const w = Math.max(120, L.w * 0.2), h = Math.max(110, L.h * 0.16);
-    const x = L.marketX - w / 2, base = L.path - 6;
-    // Counter with fish crates.
+    const w = Math.max(116, L.w * 0.2), h = Math.max(106, L.h * 0.16);
+    const x = cx - w / 2, base = L.path - 6;
+    // Counter.
     ctx.fillStyle = '#8a5a32';
     ctx.fillRect(x, base - h * 0.42, w, h * 0.42);
     ctx.fillStyle = '#a8703e';
     ctx.fillRect(x - 4, base - h * 0.46, w + 8, h * 0.07);
-    for (let i = 0; i < 3; i++) {
-      const cx = x + w * (0.2 + i * 0.3);
-      ctx.fillStyle = '#c89a62';
-      ctx.fillRect(cx - w * 0.11, base - h * 0.56, w * 0.22, h * 0.12);
-      ctx.fillStyle = ['#9fc3d8', '#f0a868', '#c8d0a0'][i]!;
-      ctx.beginPath(); ctx.ellipse(cx, base - h * 0.57, w * 0.08, h * 0.03, 0, 0, Math.PI * 2); ctx.fill();
+    if (goods === 'fish') {
+      // Crates of fish.
+      for (let i = 0; i < 3; i++) {
+        const gx = x + w * (0.2 + i * 0.3);
+        ctx.fillStyle = '#c89a62';
+        ctx.fillRect(gx - w * 0.11, base - h * 0.56, w * 0.22, h * 0.12);
+        ctx.fillStyle = ['#9fc3d8', '#f0a868', '#c8d0a0'][i]!;
+        ctx.beginPath(); ctx.ellipse(gx, base - h * 0.57, w * 0.08, h * 0.03, 0, 0, Math.PI * 2); ctx.fill();
+      }
+    } else {
+      // Rods leaning on the counter, and a tackle box.
+      ['#c8b060', '#e0e0e0', '#303438', '#70d8e8'].forEach((c, i) => {
+        ctx.strokeStyle = c;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(x + w * (0.12 + i * 0.09), base - h * 0.46);
+        ctx.lineTo(x + w * (0.2 + i * 0.09), base - h * 0.95);
+        ctx.stroke();
+      });
+      ctx.fillStyle = '#2f6fd6';
+      ctx.fillRect(x + w * 0.58, base - h * 0.6, w * 0.3, h * 0.14);
+      ctx.fillStyle = '#f0c020';
+      ctx.fillRect(x + w * 0.7, base - h * 0.62, w * 0.06, h * 0.04);
     }
     // Posts.
     ctx.fillStyle = '#5a3e24';
@@ -405,7 +431,7 @@ export class Scene {
     // Striped awning.
     const stripes = 6;
     for (let i = 0; i < stripes; i++) {
-      ctx.fillStyle = i % 2 ? '#fff4e0' : '#e0503a';
+      ctx.fillStyle = stripe[i % 2]!;
       ctx.beginPath();
       ctx.moveTo(x - 10 + (i * (w + 20)) / stripes, base - h);
       ctx.lineTo(x - 10 + ((i + 1) * (w + 20)) / stripes, base - h);
@@ -413,20 +439,20 @@ export class Scene {
       ctx.quadraticCurveTo(x - 10 + ((i + 0.5) * (w + 20)) / stripes, base - h + 22, x - 10 + (i * (w + 20)) / stripes, base - h + 14);
       ctx.fill();
     }
-    ctx.fillStyle = '#c0402c';
+    ctx.fillStyle = trim;
     ctx.fillRect(x - 10, base - h - 8, w + 20, 9);
     // Sign, sized to its text.
     ctx.font = '700 13px Georgia, serif';
-    const sw = ctx.measureText('FISH MARKET').width + 18, sh = 20;
+    const sw = ctx.measureText(sign).width + 18, sh = 20;
     ctx.fillStyle = '#f7e7c2';
     ctx.strokeStyle = '#5a3e24';
     ctx.lineWidth = 2;
-    ctx.fillRect(L.marketX - sw / 2, base - h - 32, sw, sh);
-    ctx.strokeRect(L.marketX - sw / 2, base - h - 32, sw, sh);
+    ctx.fillRect(cx - sw / 2, base - h - 32, sw, sh);
+    ctx.strokeRect(cx - sw / 2, base - h - 32, sw, sh);
     ctx.fillStyle = '#5a3e24';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('FISH MARKET', L.marketX, base - h - 22);
+    ctx.fillText(sign, cx, base - h - 22);
   }
 
   /** Player's feet position. */

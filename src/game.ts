@@ -288,6 +288,11 @@ export class Game {
     return price;
   }
 
+  /** Sell every catch of one species (all variants). */
+  sellSpecies(fishId: string): number {
+    return this.bag.filter((c) => c.fish === fishId).reduce((s, c) => s + this.sell(c.id), 0);
+  }
+
   sellAll(): number {
     const total = this.bagValue();
     this.money += total;

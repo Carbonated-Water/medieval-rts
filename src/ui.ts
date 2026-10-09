@@ -6,12 +6,12 @@ import { fishIcon } from './fishart';
 import { fishById, type Game } from './game';
 import type { Place } from './scene';
 
-export type Action =
-  | 'cast' | 'reel' | 'market' | 'journal' | 'close' | 'reset' | 'toggleDev'
-  | 'sellAll' | `sell:${number}` | `buy:${GearKind}` | `train:${SkillId}`
-  | 'tab:sell' | 'tab:gear' | 'tab:skills';
+/** One panel per job: the market sells fish, the tackle shop sells gear, training raises skills. */
+export type Panel = 'market' | 'tackle' | 'training' | 'journal' | 'settings';
 
-type Tab = 'sell' | 'gear' | 'skills';
+export type Action =
+  | 'cast' | 'reel' | 'close' | 'reset' | 'toggleDev' | Panel
+  | 'sellAll' | `sellFish:${string}` | `buy:${GearKind}` | `train:${SkillId}`;
 const GEAR_ORDER: GearKind[] = ['rod', 'holders', 'bait', 'clothes', 'boots'];
 const money = (n: number) => `$${n.toLocaleString('en-US')}`;
 const pct = (x: number) => `${Math.round(x * 100)}%`;
@@ -23,7 +23,7 @@ export const variantTag = (v: Variant) => `<span class="tier variant ${v}" style
 function gearIcon(kind: GearKind, level: number): string {
   if (kind === 'rod') return `<i class="rod" style="--c:${RODS[level]!.color}"></i>`;
   if (kind === 'bait') return `<i class="emoji">${['🍞', '🪱', '🦗', '✨', '🌟'][level]}</i>`;
-  if (kind === 'holders') return `<i class="emoji">${'🎣'.repeat(HOLDERS[level]!.lines)}</i>`;
+  if (kind === 'holders') return `<i class="emoji">🎣<sub>×${HOLDERS[level]!.lines}</sub></i>`;
   if (kind === 'clothes') return `<i class="swatch shirt" style="--c:${CLOTHES[level]!.shirt};--d:${CLOTHES[level]!.trousers}"></i>`;
   return `<i class="swatch boot" style="--c:${BOOTS[level]!.color ?? '#f0c8a0'}"></i>`;
 }
@@ -38,8 +38,7 @@ export class UI {
   private sheet = document.getElementById('sheet')!;
   private toast = document.getElementById('toast')!;
   private last = { top: '', action: '', sheet: '' };
-  open: 'market' | 'journal' | null = null;
-  tab: Tab = 'sell';
+  open: Panel | null = null;
   private toastUntil = 0;
   private time = 0;
 
@@ -64,12 +63,13 @@ export class UI {
     this.set('top', this.top,
       `<span class="pill money">${money(game.money)}</span>` +
       `<span class="pill" style="--c:${TIERS[rod.tier].color}"><i class="dot"></i>${rod.name}</span>` +
-      `<span class="pill">Fishing ${game.skill}</span>` +
+      `<button class="pill btn" data-act="training" aria-label="training">💪 Fishing ${game.skill}</button>` +
       (game.dev ? `<span class="pill dev">DEV ×${DEV_MULTIPLIER}</span>` : '') +
-      `<button class="pill btn" data-act="journal" aria-label="journal">📖 ${Object.keys(game.journal).length}/${FISH.length}</button>`);
+      `<button class="pill btn" data-act="journal" aria-label="journal">📖 ${Object.keys(game.journal).length}/${FISH.length}</button>` +
+      '<button class="pill btn" data-act="settings" aria-label="settings">⚙</button>');
 
     this.set('action', this.action, this.actionHtml(game, place, walking));
-    this.set('sheet', this.sheet, this.open === 'market' ? this.marketHtml(game) : this.open === 'journal' ? this.journalHtml(game) : '');
+    this.set('sheet', this.sheet, this.open ? this.panelHtml(this.open, game) : '');
     this.sheet.classList.toggle('show', this.open !== null);
   }
 
@@ -77,8 +77,9 @@ export class UI {
     const bag = game.bag.length;
     const bagLine = bag ? `<div class="bagline">🐟 ${bag} fish · worth ${money(game.bagValue())}</div>` : '';
     if (walking) return `${bagLine}<div class="hint">Walking…</div>`;
-    if (place === 'market') return `${bagLine}<button class="big" data-act="market">Open market</button>`;
-    if (place !== 'dock') return `${bagLine}<div class="hint">Tap the <b>river</b> to fish · tap the <b>market</b> to sell</div>`;
+    if (place === 'market') return `${bagLine}<button class="big" data-act="market">🐟 Sell fish</button>`;
+    if (place === 'tackle') return `${bagLine}<button class="big" data-act="tackle">🎣 Browse gear</button>`;
+    if (place !== 'dock') return `${bagLine}<div class="hint">Tap the <b>river</b> to fish · <b>market</b> to sell · <b>tackle shop</b> for gear</div>`;
     // Priority: a bite beats everything; then lines to throw; otherwise wait.
     const biting = game.lines.filter((l) => l.type === 'bite').length;
     const out = game.lines.filter((l) => l.type === 'idle' || l.type === 'result').length;
@@ -91,56 +92,64 @@ export class UI {
     return `${bagLine}<button class="big wait" data-act="reel">Wait for a bite…</button>${many ? '<div class="hint small">Tap a bobber with a <b>!</b> to reel that line</div>' : ''}`;
   }
 
+  private panelHtml(panel: Panel, game: Game): string {
+    const [title, body] =
+      panel === 'market' ? ['Fish Market', this.marketHtml(game)]
+        : panel === 'tackle' ? ['Tackle Shop', this.tackleHtml(game)]
+          : panel === 'training' ? ['Training', this.trainingHtml(game)]
+            : panel === 'journal' ? [`Fish Journal · ${Object.keys(game.journal).length}/${FISH.length}`, this.journalHtml(game)]
+              : ['Settings', this.settingsHtml(game)];
+    return `<div class="card ${panel}"><div class="head"><h2>${title}</h2><span class="purse">${money(game.money)}</span>
+      <button class="x" data-act="close" aria-label="close">✕</button></div><div class="body">${body}</div></div>`;
+  }
+
+  /** Sells fish, nothing else. One chip per species so it never needs scrolling. */
   private marketHtml(game: Game): string {
-    const tabs = (['sell', 'gear', 'skills'] as Tab[]).map((t) =>
-      `<button class="tab ${this.tab === t ? 'on' : ''}" data-act="tab:${t}">${{ sell: 'Sell fish', gear: 'Gear', skills: 'Skills' }[t]}</button>`).join('');
-    const body = this.tab === 'sell' ? this.sellHtml(game) : this.tab === 'gear' ? this.gearHtml(game) : this.skillsHtml(game);
-    return `<div class="card"><div class="head"><h2>Fish Market</h2><button class="x" data-act="close" aria-label="close">✕</button></div>
-      <div class="tabs">${tabs}</div><div class="body">${body}</div></div>`;
-  }
-
-  private sellHtml(game: Game): string {
     if (game.bag.length === 0) return '<p class="empty">Your bag is empty. Go catch something!</p>';
-    const bonus = game.haggling ? ` <small>(haggling +${pct(game.haggling * HAGGLE_PER_LEVEL)})</small>` : '';
+    const groups = new Map<string, { n: number; value: number; rare: number }>();
+    for (const c of game.bag) {
+      const g = groups.get(c.fish) ?? { n: 0, value: 0, rare: 0 };
+      g.n++; g.value += game.priceOf(c); if (c.variant) g.rare++;
+      groups.set(c.fish, g);
+    }
+    const chips = FISH.filter((f) => groups.has(f.id)).map((f) => {
+      const g = groups.get(f.id)!;
+      return `<button class="chip" data-act="sellFish:${f.id}" style="--c:${TIERS[f.tier].color}">${g.rare ? `<i class="rare">✦${g.rare}</i>` : ''}
+        <img src="${fishIcon(f)}" alt=""><b>${f.name}</b><span><small>×${g.n} ·</small> ${money(g.value)}</span></button>`;
+    }).join('');
+    const bonus = game.haggling ? ` · haggling +${pct(game.haggling * HAGGLE_PER_LEVEL)}` : '';
     return `<button class="wide go" data-act="sellAll">Sell all ${game.bag.length} for ${money(game.bagValue())}</button>
-      ${bonus ? `<p class="note">${bonus}</p>` : ''}
-      <div class="list">${[...game.bag].reverse().map((c) => {
-        const f = fishById(c.fish);
-        return `<div class="item ${c.variant ?? ''}"><img src="${fishIcon(f, false, 96, 56, c.variant)}" alt=""><div class="meta"><b>${c.variant ? `${VARIANTS[c.variant].name} ` : ''}${f.name}</b>
-          <span class="tags">${tierTag(f.tier)}${c.variant ? variantTag(c.variant) : ''}</span><small>${c.kg} kg</small></div>
-          <button data-act="sell:${c.id}">${money(game.priceOf(c))}</button></div>`;
-      }).join('')}</div>`;
+      <div class="chips">${chips}</div><p class="note">Tap a fish to sell just that kind${bonus}.</p>`;
   }
 
-  /** Each gear line shows only what you have and the very next upgrade. */
-  private gearHtml(game: Game): string {
-    return GEAR_ORDER.map((kind) => {
+  /** Sells gear, nothing else. One row per gear line, showing only the next upgrade. */
+  private tackleHtml(game: Game): string {
+    return `<div class="list">${GEAR_ORDER.map((kind) => {
       const lvl = game.gearLevel(kind);
-      const cur = GEAR[kind].levels[lvl]!;
       const next = game.nextGear(kind);
-      const tier = (l: number) => (kind === 'rod' ? tierTag(RODS[l]!.tier) : '');
-      const nextRow = next
-        ? `<div class="item"><span class="next">Next</span>${gearIcon(kind, next.level)}<div class="meta"><b>${next.name}</b>${tier(next.level)}<small>${next.blurb}</small></div>
-            <button data-act="buy:${kind}" ${game.money < next.price ? 'disabled' : ''}>${money(next.price)}</button></div>`
-        : '<p class="maxed">Fully upgraded!</p>';
-      return `<section><h3>${GEAR[kind].title} <small>${lvl + 1}/${GEAR[kind].levels.length}</small></h3>
-        <div class="item have">${gearIcon(kind, lvl)}<div class="meta"><b>${cur.name}</b>${tier(lvl)}<small>${cur.blurb}</small></div><span class="owned">Equipped</span></div>
-        ${nextRow}</section>`;
-    }).join('') + '<p class="note">A fish one tier above your rod can still bite — it snaps the line unless your Strength lands it.</p>';
+      const shown = next ? next.level : lvl;
+      const have = GEAR[kind].levels[lvl]!.name;
+      const btn = next
+        ? `<button data-act="buy:${kind}" ${game.money < next.price ? 'disabled' : ''}>${money(next.price)}</button>`
+        : '<span class="owned">Max</span>';
+      return `<div class="item gear">${gearIcon(kind, shown)}<div class="meta">
+        <b>${next ? next.name : have} ${kind === 'rod' ? tierTag(RODS[shown]!.tier) : ''}</b>
+        <small>${next ? `${next.blurb} <span class="was">(have: ${have})</span>` : 'Fully upgraded'}</small></div>${btn}</div>`;
+    }).join('')}</div>`;
   }
 
-  private skillsHtml(game: Game): string {
+  /** Raises the fisher's skills, nothing else. */
+  private trainingHtml(game: Game): string {
     const ids: SkillId[] = ['fishing', 'reflexes', 'haggling', 'strength'];
-    return ids.map((id) => {
+    return `<div class="list">${ids.map((id) => {
       const def = SKILLS[id];
       const lvl = game.level(id);
       const cost = game.nextSkillCost(id);
-      const effect = this.skillEffect(game, id, lvl, cost !== null);
       const btn = cost === null ? '<span class="owned">Max</span>'
         : `<button data-act="train:${id}" ${game.money < cost ? 'disabled' : ''}>${money(cost)}</button>`;
-      return `<section><div class="item skillrow"><div class="meta"><b>${def.name} <small>Lv ${lvl}/${def.max}</small></b>
-        <small>${def.blurb}</small>${effect}</div>${btn}</div></section>`;
-    }).join('');
+      return `<div class="item skillrow"><div class="meta"><b>${def.name} <small>Lv ${lvl}/${def.max}</small></b>
+        ${this.skillEffect(game, id, lvl, cost !== null)}</div>${btn}</div>`;
+    }).join('')}</div>`;
   }
 
   /** "now → next" line for a skill; Fishing gets the full odds table. */
@@ -150,31 +159,32 @@ export class UI {
     if (id === 'haggling') return arrow(`Prices +${pct(lvl * HAGGLE_PER_LEVEL)}`, `+${pct((lvl + 1) * HAGGLE_PER_LEVEL)}`);
     if (id === 'strength') return arrow(`${pct(game.strengthChance())} to land too-strong fish`, pct(game.strengthChance() + STRENGTH_PER_LEVEL));
     const now = game.tierOdds();
-    const after = canTrain ? game.tierOdds(lvl + 1) : null;
-    const rows = ([1, 2, 3, 4, 5] as Tier[]).filter((t) => t <= game.rodTier).map((t) => {
-      const p = now[t] ?? 0, q = after?.[t];
-      return `<div class="odds"><span>${tierTag(t)}</span><div class="bar"><i style="width:${(p * 100).toFixed(1)}%;background:${TIERS[t].color}"></i></div>
-        <b>${(p * 100).toFixed(1)}%</b>${q !== undefined ? `<small class="${q > p ? 'up' : 'down'}">→ ${(q * 100).toFixed(1)}%</small>` : ''}</div>`;
-    }).join('');
-    return `<div class="oddslist">${rows}</div>`;
+    const best = game.rodTier as Tier;
+    const stack = ([1, 2, 3, 4, 5] as Tier[]).filter((tier) => (now[tier] ?? 0) > 0)
+      .map((tier) => `<i style="flex:${now[tier]};background:${TIERS[tier].color}" title="${TIERS[tier].name} ${pct(now[tier]!)}"></i>`).join('');
+    const after = canTrain ? ` <span class="upc">→ ${((game.tierOdds(lvl + 1)[best] ?? 0) * 100).toFixed(1)}%</span>` : '';
+    return `<small class="effect">${TIERS[best].name} fish ${((now[best] ?? 0) * 100).toFixed(1)}%${after}</small><div class="stack">${stack}</div>`;
   }
 
+  /** The collection, nothing else: one row per tier, four species each. */
   private journalHtml(game: Game): string {
     const cells = FISH.map((f) => {
       const j = game.journal[f.id];
-      // Variant badges: lit up once caught, faint otherwise.
       const marks = VARIANT_ORDER.map((v) =>
         `<i class="vmark ${j?.variants?.[v] ? 'got' : ''}" style="--c:${VARIANTS[v].color}" title="${VARIANTS[v].name}">${VARIANT_MARK[v]}</i>`).join('');
       return j
-        ? `<div class="fish seen" style="--c:${TIERS[f.tier].color}"><img src="${fishIcon(f)}" alt=""><b>${f.name}</b><small>×${j.count} · best ${j.bestKg} kg</small><span class="vmarks">${marks}</span></div>`
+        ? `<div class="fish seen" style="--c:${TIERS[f.tier].color}" title="best ${j.bestKg} kg"><img src="${fishIcon(f)}" alt=""><b>${f.name}</b><small>×${j.count}</small><span class="vmarks">${marks}</span></div>`
         : `<div class="fish" style="--c:${TIERS[f.tier].color}"><img src="${fishIcon(f, true)}" alt=""><b>???</b><small>${TIERS[f.tier].name}</small></div>`;
     }).join('');
-    return `<div class="card"><div class="head"><h2>Fish Journal · ${Object.keys(game.journal).length}/${FISH.length}</h2><button class="x" data-act="close" aria-label="close">✕</button></div>
-      <div class="body"><p class="note">Rare variants found: <b>${game.variantsFound()}/${FISH.length * VARIANT_ORDER.length}</b> — ${VARIANT_ORDER.map(variantTag).join(' ')}</p>
-      <div class="grid">${cells}</div>
-      <p class="note">Lifetime earnings: ${money(game.earned)}</p>
+    return `<p class="note">Rare variants found <b>${game.variantsFound()}/${FISH.length * VARIANT_ORDER.length}</b> · ${VARIANT_ORDER.map(variantTag).join(' ')}</p>
+      <div class="grid">${cells}</div>`;
+  }
+
+  /** Game settings, nothing else. */
+  private settingsHtml(game: Game): string {
+    return `<p class="note">Lifetime earnings: ${money(game.earned)}</p>
       <button class="wide toggle ${game.dev ? 'on' : ''}" data-act="toggleDev">Dev mode: ${game.dev ? 'ON' : 'OFF'} · fish sell for ${DEV_MULTIPLIER}×</button>
-      <button class="wide danger" data-act="reset">Start over</button></div></div>`;
+      <button class="wide danger" data-act="reset">Start over</button>`;
   }
 
   private set(key: keyof UI['last'], el: HTMLElement, html: string): void {

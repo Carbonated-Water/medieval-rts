@@ -290,6 +290,17 @@ describe('multiple lines', () => {
   });
 });
 
+describe('market', () => {
+  it('sells one species at a time', () => {
+    const g = new Game({ money: 0 });
+    g.bag.push({ id: 1, fish: 'carp', kg: 2, value: 7 }, { id: 2, fish: 'perch', kg: 1, value: 3 }, { id: 3, fish: 'carp', kg: 3, value: 9, variant: 'golden' });
+    const got = g.sellSpecies('carp');
+    expect(got).toBe(g.money);
+    expect(got).toBeGreaterThan(0);
+    expect(g.bag.map((c) => c.fish)).toEqual(['perch']);
+  });
+});
+
 describe('rare variants', () => {
   it('roll at roughly their chances', () => {
     const g = new Game({}, rng(17));
