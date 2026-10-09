@@ -4,6 +4,10 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Fish Tree: pricier and richer
+  WHAT: Tree fish worth x2.5, tree Pearl costs x3 (630 for the whole tree).
+  WHY:  The user wanted the tree more expensive but more rewarding.
+
 2026-10-09  Fishing Co. navigation: tabs, boat arrows, back vs close
   WHAT: FLEET / LEDGER / HARBOR tabs on the Fishing Co. (replacing the OPEN
         rows; a summary line keeps fleet $/min, berths, staff, offline hours).

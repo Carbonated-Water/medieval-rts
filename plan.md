@@ -163,12 +163,13 @@ arrows walk, Space casts / reels, E opens the building you stand at.
   them; the user found two pulls on one page confusing). 50 fish, 5 tier
   tabs, each a constellation: river side (you and your fishermen) and sea
   side (a boat type, from a ground and deeper). Root, two branches, two tips;
-  costs tier + 0/1/2 Pearls (210 total). Any fish of a tier opens the next.
+  costs 3 x (tier + 0/1/2) Pearls (630 total). Any fish of a tier opens the next.
 - New fish share their tier's bites with the old ones (tier weight scaled
   by original rarity / current rarity), so unlocks never crowd out rarer
   tiers; they're worth more than the originals, so each tier speeds up its
-  stage of a run: twig +78%, bamboo +60%, fiberglass +50%, carbon +62%,
-  mythril +110%; a Net Boat at the Coast x2.4 with tier 1, at Open Sea x5 with all five.
+  stage of a run (after the x2.5 value / x3 cost fudge): twig x3.8, bamboo
+  x3.3, fiberglass x3.2, carbon x3.4, mythril x4.6; a Net Boat at the Coast x4.6
+  with tier 1, at Open Sea x12 with all five.
 - Rule (tested): every tree fish is worth more than every original fish of
   its tier on its side (river fish vs river; sea fish vs every boat).
 - Achievements: a FISH TREE trophy tab (20: unlocks, full tiers, new river
