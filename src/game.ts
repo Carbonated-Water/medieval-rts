@@ -1,5 +1,6 @@
 import {
-  ACHIEVEMENTS, AUTO, BAITS, BITE_WAIT, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, GEAR, HAGGLE_PER_LEVEL, HOLDERS, MAX_GROUND_WORMS,
+  ACHIEVEMENTS, AUTO, BAITS, BOAT_PRICE, COMPANY_PRICE, COMPANY_UNLOCK_EARNED, CREW_COST, CREW_HAUL, CREW_MAX, CREW_SPEED,
+  LETTERS, NETS, SEA_FISH, TRIP_SECONDS, BITE_WAIT, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, GEAR, HAGGLE_PER_LEVEL, HOLDERS, MAX_GROUND_WORMS,
   MIN_BITE_WAIT, REEL_WINDOW, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, START_WORMS, STRENGTH_PER_LEVEL, TIERS,
   TOO_STRONG_WEIGHT, VARIANTS, VARIANT_ORDER, WORMS_PER_PICK, WORM_SPAWN_SECONDS, WORM_SPOTS, baitById,
   type AchStat, type AchievementDef, type BaitId, type FishDef, type GearKind, type SkillId, type Tier, type Variant,
@@ -12,6 +13,14 @@ export interface Catch {
   /** Base price (weight, clothes and variant included); Haggling and dev mode apply at sale. */
   value: number;
   variant?: Variant;
+}
+
+/** One company boat: its net, crew, the trip it's on, and the haul waiting at the pier. */
+export interface Boat {
+  net: number;
+  crew: number;
+  trip: { t: number; dur: number } | null;
+  haul: { fish: string; n: number; value: number }[] | null;
 }
 
 export interface JournalEntry { count: number; bestKg: number; variants?: Partial<Record<Variant, number>> }
@@ -42,6 +51,10 @@ export interface SaveData {
   earned: number;
   /** Achievement ids whose reward has been collected. */
   claimed: string[];
+  /** The Fishing Company: bought or not, letters already delivered, its boats. */
+  company: boolean;
+  letters: number;
+  boats: Boat[];
 }
 
 const CAST_SECONDS = 0.6;
@@ -90,6 +103,9 @@ export class Game {
   /** One entry per line in the water (length = lineCount). */
   lines: Line[] = [{ type: 'idle' }];
   claimed: string[] = [];
+  company = false;
+  letters = 0;
+  boats: Boat[] = [];
   private nextId = 1;
   /** Autofisher reaction time picked for each line's current bite. */
   private autoReact: (number | undefined)[] = [];
@@ -102,6 +118,8 @@ export class Game {
       if (!save.baits && oldBait) this.baits[BAITS[Math.min(oldBait, BAITS.length - 1)]!.id] = 25;
     }
     if (!BAITS.some((b) => b.id === this.baitSel)) this.baitSel = 'worm';
+    // Saves already past the reveal skip the earlier letters and get just the last one.
+    if (!this.company && this.earned >= COMPANY_UNLOCK_EARNED) this.letters = Math.max(this.letters, LETTERS.length - 1);
     this.rod = clamp(this.rod, 0, RODS.length - 1);
     this.holders = clamp(this.holders, 0, HOLDERS.length - 1);
     this.syncLines();
@@ -325,6 +343,7 @@ export class Game {
 
   tick(dt: number): void {
     this.spawnWorms(dt);
+    this.tickBoats(dt);
     this.lines.forEach((line, i) => {
       if (line.type === 'idle') return;
       line.t += dt;
@@ -442,6 +461,122 @@ export class Game {
     return true;
   }
 
+  // ---------- the Fishing Company ----------
+
+  /** The old harbor is for sale once you've earned enough (and stays revealed once bought). */
+  get companyRevealed(): boolean {
+    return this.company || this.earned >= COMPANY_UNLOCK_EARNED;
+  }
+
+  /** Letters from the harbor's owner that are now due; each is returned once. */
+  takeLetters(): string[] {
+    const out: string[] = [];
+    while (this.letters < LETTERS.length && this.earned >= LETTERS[this.letters]!.at) out.push(LETTERS[this.letters++]!.text);
+    return out;
+  }
+
+  buyCompany(): boolean {
+    if (this.company || !this.companyRevealed || this.money < COMPANY_PRICE) return false;
+    this.money -= COMPANY_PRICE;
+    this.company = true;
+    this.letters = LETTERS.length;
+    return true;
+  }
+
+  /** Phase 1: one boat. */
+  get canBuyBoat(): boolean {
+    return this.company && this.boats.length < 1;
+  }
+
+  buyBoat(): boolean {
+    if (!this.canBuyBoat || this.money < BOAT_PRICE) return false;
+    this.money -= BOAT_PRICE;
+    this.boats.push({ net: 0, crew: 0, trip: null, haul: null });
+    return true;
+  }
+
+  nextCrewCost(i: number): number | null {
+    const b = this.boats[i];
+    return b && b.crew < CREW_MAX ? CREW_COST[b.crew]! : null;
+  }
+
+  hireCrew(i: number): boolean {
+    const cost = this.nextCrewCost(i);
+    if (cost === null || this.money < cost) return false;
+    this.money -= cost;
+    this.boats[i]!.crew++;
+    return true;
+  }
+
+  nextNet(i: number): { level: number; name: string; price: number; fish: number } | null {
+    const b = this.boats[i];
+    const level = (b?.net ?? 99) + 1;
+    return b && NETS[level] ? { level, ...NETS[level]! } : null;
+  }
+
+  upgradeNet(i: number): boolean {
+    const next = this.nextNet(i);
+    if (!next || this.money < next.price) return false;
+    this.money -= next.price;
+    this.boats[i]!.net = next.level;
+    return true;
+  }
+
+  tripSeconds(b: Boat): number {
+    return TRIP_SECONDS * (1 - CREW_SPEED * b.crew);
+  }
+
+  haulSize(b: Boat): number {
+    return Math.round(NETS[b.net]!.fish * (1 + CREW_HAUL * b.crew));
+  }
+
+  /** Send a boat out (only when it's at the pier with nothing to unload). */
+  sendBoat(i: number): boolean {
+    const b = this.boats[i];
+    if (!b || b.trip || b.haul) return false;
+    b.trip = { t: 0, dur: this.tripSeconds(b) };
+    return true;
+  }
+
+  /** Sell a boat's haul straight from the harbor. Returns the money. */
+  collectHaul(i: number): number {
+    const b = this.boats[i];
+    if (!b?.haul) return 0;
+    const raw = b.haul.reduce((s, h) => s + h.value, 0);
+    const paid = Math.round(raw * (1 + HAGGLE_PER_LEVEL * this.haggling) * (this.dev ? DEV_MULTIPLIER : 1));
+    b.haul = null;
+    this.money += paid;
+    this.earned += paid;
+    return paid;
+  }
+
+  /** What a haul sells for right now. */
+  haulValue(b: Boat): number {
+    const raw = (b.haul ?? []).reduce((s, h) => s + h.value, 0);
+    return Math.round(raw * (1 + HAGGLE_PER_LEVEL * this.haggling) * (this.dev ? DEV_MULTIPLIER : 1));
+  }
+
+  /** A net full of sea fish, grouped by kind. */
+  private rollHaul(b: Boat): { fish: string; n: number; value: number }[] {
+    const out = new Map<string, { fish: string; n: number; value: number }>();
+    for (let k = this.haulSize(b); k > 0; k--) {
+      const f = this.pick(SEA_FISH, (x) => TIERS[x.tier].weight * x.rarity);
+      const e = out.get(f.id) ?? { fish: f.id, n: 0, value: 0 };
+      e.n++;
+      e.value += Math.round(f.price * (0.6 + this.rng() * 0.8));
+      out.set(f.id, e);
+    }
+    return SEA_FISH.filter((f) => out.has(f.id)).map((f) => out.get(f.id)!);
+  }
+
+  private tickBoats(dt: number): void {
+    for (const b of this.boats) {
+      if (!b.trip) continue;
+      b.trip.t += dt;
+      if (b.trip.t >= b.trip.dur) { b.trip = null; b.haul = this.rollHaul(b); }
+    }
+  }
+
   // ---------- achievements ----------
 
   /** The number an achievement measures. */
@@ -488,6 +623,7 @@ export class Game {
       clothes: this.clothes, boots: this.boots,
       skill: this.skill, reflexes: this.reflexes, haggling: this.haggling, strength: this.strength, dev: this.dev,
       bag: this.bag, journal: this.journal, nextId: this.nextId, earned: this.earned, claimed: this.claimed,
+      company: this.company, letters: this.letters, boats: this.boats,
     };
   }
 }

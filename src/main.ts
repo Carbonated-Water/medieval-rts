@@ -1,4 +1,4 @@
-import { ACHIEVEMENTS, DEV_MULTIPLIER, RODS, SKILLS, VARIANTS, baitById, type BaitId, type GearKind, type SkillId } from './data';
+import { ACHIEVEMENTS, DEV_MULTIPLIER, LETTERS, RODS, SKILLS, VARIANTS, baitById, type BaitId, type GearKind, type SkillId } from './data';
 import { Game, fishById, type Line, type SaveData } from './game';
 import { Scene, WORM_SPOT_X } from './scene';
 import './ui.css';
@@ -44,6 +44,8 @@ scene.onArrive = (p) => {
 
 canvas.addEventListener('click', (e) => {
   if (ui.open) return;
+  // The harbor across the river opens its panel from anywhere.
+  if (scene.hitHarbor(e.clientX, e.clientY)) { ui.open = 'harbor'; return; }
   // Tapping a worm walks over to dig it up (it's picked up on the way past).
   const worm = scene.hitWorm(e.clientX, e.clientY);
   if (worm) { scene.walkTo('ground', worm.x); return; }
@@ -80,8 +82,20 @@ function onAction(a: Action): void {
     if (!game.cast() && !game.activeBait) { const at = scene.fisherScreen(); note.float('NO BAIT', at.x, at.y, 'bad'); }
   }
   else if (a === 'reel') game.reel();
-  else if (a === 'market' || a === 'tackle' || a === 'baitshop' || a === 'pouch' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'inbox' || a === 'settings') ui.open = ui.open === a ? null : a;
+  else if (a === 'market' || a === 'tackle' || a === 'baitshop' || a === 'pouch' || a === 'harbor' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'inbox' || a === 'settings') ui.open = ui.open === a ? null : a;
   else if (a.startsWith('bait:')) game.selectBait(a.slice(5) as BaitId);
+  else if (a === 'buyCompany') {
+    if (game.buyCompany()) { ui.open = null; note.clearBanners(); note.banner(pixelIcon('boat'), 'THE FISHING CO.', 'is yours', 'rare'); }
+  } else if (a === 'buyBoat') { if (game.buyBoat()) note.banner(pixelIcon('boat'), 'BOUGHT', 'Net Boat'); }
+  else if (a.startsWith('send:')) game.sendBoat(Number(a.slice(5)));
+  else if (a.startsWith('collect:')) {
+    const paid = game.collectHaul(Number(a.slice(8)));
+    if (paid) note.banner(pixelIcon('boat'), 'HAUL SOLD', `$${paid.toLocaleString()}`);
+  } else if (a.startsWith('crew:')) { if (game.hireCrew(Number(a.slice(5)))) note.banner(pixelIcon('crew'), 'HIRED', 'A new deckhand'); }
+  else if (a.startsWith('net:')) {
+    const i = Number(a.slice(4)), next = game.nextNet(i);
+    if (next && game.upgradeNet(i)) note.banner(pixelIcon('net'), 'BOUGHT', next.name);
+  }
   else if (a.startsWith('buyBait:')) {
     const [, id, n] = a.split(':') as [string, BaitId, string];
     if (game.buyBait(id, Number(n))) note.banner(pixelIcon(BAIT_ICON[id], 3), 'BOUGHT', `${n} x ${baitById(id).name}`, 'plain');
@@ -162,11 +176,27 @@ function announceLine(line: Extract<Line, { type: 'result' }>, slot: number): vo
   }
 }
 
+/** The harbor's story beats: letters, the reveal, and boats coming home. */
+const hauls = game.boats.map((b) => !!b.haul);
+function announceHarbor(): void {
+  for (const text of game.takeLetters()) {
+    const reveal = game.letters === LETTERS.length;
+    note.banner(pixelIcon('letter'), reveal ? 'THE OLD HARBOR' : 'A LETTER', reveal ? 'is for sale' : 'from H.', reveal ? 'rare' : 'plain');
+    note.log(`letter:${text}`, pixelIcon('letter'), 'A letter from H.', 'plain');
+    dirty = true;
+  }
+  game.boats.forEach((b, i) => {
+    if (b.haul && !hauls[i]) note.banner(pixelIcon('boat'), 'BOAT IS BACK', `$${game.haulValue(b).toLocaleString()}`, 'rare');
+    hauls[i] = !!b.haul;
+  });
+}
+
 /** Banner for newly completed achievements (ones already done at load stay quiet). */
 const done = new Set(ACHIEVEMENTS.filter((a) => game.achieved(a)).map((a) => a.id));
 let achCheck = 0;
 function announceAchievements(): void {
   if (++achCheck % 15) return; // a few times a second is plenty
+  announceHarbor();
   for (const a of ACHIEVEMENTS) {
     if (done.has(a.id) || !game.achieved(a)) continue;
     done.add(a.id);

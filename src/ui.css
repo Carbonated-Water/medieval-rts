@@ -91,6 +91,14 @@ button { font: inherit; color: inherit; cursor: pointer; padding: 0; border: 0; 
 #sheet .row .slot .badge.count { right: -4px; bottom: -4px; }
 #sheet .row .btn + .btn { margin-left: -2px; }
 
+/* Harbor: progress to the reveal, letters, a haul's catch. */
+#sheet .row.letter p { flex: 1; margin: 0; font: 16px/1.35 'Kenney Mini'; color: var(--ink); }
+#notes .line span { max-width: 60vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#sheet .bar.wide { flex: 1; width: auto; height: 12px; }
+#sheet .haul { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 4px 8px; background: var(--parch-light); box-shadow: inset 0 0 0 2px var(--parch-dark); font: 16px/1 'Kenney Mini'; }
+#sheet .haul span { display: inline-flex; align-items: center; gap: 2px; }
+#sheet .haul img { width: 36px; height: 21px; object-fit: contain; }
+
 /* Slot grids: market (sell a kind), journal, trophies. */
 #sheet .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 6px; padding: 8px; background: var(--parch); box-shadow: inset 0 0 0 2px var(--parch-dark), 0 2px 0 #6b4a2c; }
 #sheet .cell { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; }

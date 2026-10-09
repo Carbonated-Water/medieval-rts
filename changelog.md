@@ -4,6 +4,29 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  The Fishing Company, phase 1: teaser, reveal, boats
+  WHAT: data: COMPANY_UNLOCK_EARNED 25k, COMPANY_PRICE 100k, LETTERS (5k,
+        10k, 20k, reveal at 25k), SEA_FISH (6), boat / crew / net tables.
+        game: company, letters, boats (net, crew, trip, haul) with
+        takeLetters, buyCompany, buyBoat, hireCrew, upgradeNet, sendBoat,
+        collectHaul, trips advanced in tick; saves past 25k skip to the last
+        letter. pixelart: harbor office (boarded / for sale / FISH CO.),
+        boat with visible crew (and a silhouette for the teaser ship), icons
+        lock, letter, boat, crew, net; '?' and '.' glyphs. scene: far-bank
+        harbor + pier, drifting mystery ship, boats sailing out and back
+        with a "!" when a haul is in, zoom-out layout (wider river, smaller
+        pixels on big screens) behind a fade when the company is bought.
+        ui: Old Harbor / Fishing Co. panel. 50 tests.
+  WHY:  User: after $25k earnings, unlock a fishing company bought for
+        $100k; the map zooms out and the river widens; boats, crew, nets
+        (lobster and swordfish later); tease it creatively without saying
+        what it is. Chose: mystery harbor + letters, timed trips, lifetime
+        earnings, phased build.
+  Balance: sea fish x3 from the first draft so a fully kitted boat (~$223k
+        invested) is worth ~$2.9k/min, about doubling late-game income.
+
+---
+
 2026-10-09  Fix: Start over didn't wipe the game
   WHAT: Start over removed the save and reloaded, but the pagehide autosave
         (any action had set dirty) wrote the old game straight back. A

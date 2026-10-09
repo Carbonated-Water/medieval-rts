@@ -194,6 +194,44 @@ export const DEV_MULTIPLIER = 20;
 
 export const START_MONEY = 0;
 
+// ---------- the Fishing Company (late game) ----------
+
+/** Lifetime earnings that reveal the old harbor is for sale, and what it costs. */
+export const COMPANY_UNLOCK_EARNED = 25000;
+export const COMPANY_PRICE = 100000;
+/** Cryptic letters from the harbor's owner (shown once each). The last one is the reveal. */
+export const LETTERS: { at: number; text: string }[] = [
+  { at: 5000, text: 'Fine catches lately. The old harbor has been quiet for years. - H.' },
+  { at: 10000, text: 'I have seen you on that dock. You fish like my father did. - H.' },
+  { at: 20000, text: 'I am getting too old for boats. Keep earning. We will talk. - H.' },
+  { at: COMPANY_UNLOCK_EARNED, text: 'The old harbor and its boats are yours for 100,000. - H.' },
+];
+
+/** Sea fish brought in by the company's boats (sold straight from the harbor). */
+export const SEA_FISH: FishDef[] = [
+  { id: 'herring', name: 'Herring', tier: 1, price: 18, kg: 0.3, rarity: 1.3, colors: ['#8aa0b0', '#e8eef2', '#5a7080'], shape: 3.6 },
+  { id: 'mackerel', name: 'Mackerel', tier: 1, price: 27, kg: 0.6, rarity: 1, colors: ['#3a7a8a', '#e8f0e8', '#20404a'], shape: 3.8 },
+  { id: 'cod', name: 'Cod', tier: 2, price: 70, kg: 5, rarity: 1.1, colors: ['#9a8a60', '#efe6c8', '#6a5a38'], shape: 3.2 },
+  { id: 'seabass', name: 'Sea Bass', tier: 2, price: 110, kg: 3, rarity: 0.8, colors: ['#7a8a94', '#e4ecf0', '#4a5a64'], shape: 2.8 },
+  { id: 'halibut', name: 'Halibut', tier: 3, price: 360, kg: 20, rarity: 0.9, colors: ['#6a5a48', '#f0ece0', '#4a3a28'], shape: 2.2 },
+  { id: 'tuna', name: 'Bluefin Tuna', tier: 4, price: 1500, kg: 200, rarity: 0.7, colors: ['#2a3a6a', '#d8e0ea', '#f0c030'], shape: 3.4 },
+];
+
+/** Boat trips: base length, and what each crew member adds. */
+export const TRIP_SECONDS = 90;
+export const CREW_MAX = 4;
+/** Each crew member: this many more fish per haul, and trips this much shorter. */
+export const CREW_HAUL = 0.25;
+export const CREW_SPEED = 0.1;
+export const CREW_COST = [4000, 8000, 14000, 22000];
+export const BOAT_PRICE = 20000;
+/** Nets: fish per haul before crew. Bought in order. */
+export const NETS: { name: string; price: number; fish: number }[] = [
+  { name: 'Hand Net', price: 0, fish: 8 },
+  { name: 'Drift Net', price: 15000, fish: 14 },
+  { name: 'Trawl Net', price: 40000, fish: 22 },
+];
+
 // ---------- achievements (one-time cash reward, claimed in the trophy panel) ----------
 
 /** What an achievement measures; Game.stat() computes each from saved data. */

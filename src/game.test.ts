@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ACHIEVEMENTS, AUTO, BAITS, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_MAX, VARIANTS,
+  ACHIEVEMENTS, AUTO, BAITS, BOAT_PRICE, BOOTS, COMPANY_PRICE, COMPANY_UNLOCK_EARNED, CREW_COST, LETTERS, NETS, SEA_FISH, TRIP_SECONDS, CLOTHES, DEV_MULTIPLIER, FISH, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_MAX, VARIANTS,
   MAX_GROUND_WORMS, START_WORMS, STRENGTH_PER_LEVEL, WORM_SPAWN_SECONDS, skillCost,
 } from './data';
 import { Game, fishById, type Line } from './game';
@@ -448,5 +448,82 @@ describe('bait', () => {
     const g = new Game({ bait: 3 } as never);
     expect(g.baitCount(BAITS[3]!.id)).toBe(25);
     expect(SKILLS.fishing.max).toBe(25);
+  });
+});
+
+describe('fishing company', () => {
+  it('letters arrive once each as earnings grow; the last one reveals the harbor', () => {
+    const g = new Game({ earned: 0 });
+    expect(g.takeLetters()).toEqual([]);
+    g.earned = 12000;
+    expect(g.takeLetters()).toEqual([LETTERS[0]!.text, LETTERS[1]!.text]);
+    expect(g.takeLetters()).toEqual([]);
+    expect(g.companyRevealed).toBe(false);
+    g.earned = COMPANY_UNLOCK_EARNED;
+    expect(g.companyRevealed).toBe(true);
+    expect(g.takeLetters()).toEqual([LETTERS[2]!.text, LETTERS[3]!.text]);
+  });
+
+  it('saves already past the reveal only get the last letter', () => {
+    const g = new Game({ earned: 400000 });
+    expect(g.takeLetters()).toEqual([LETTERS[LETTERS.length - 1]!.text]);
+  });
+
+  it("can't be bought before the reveal or without the money", () => {
+    expect(new Game({ money: 1e9, earned: 1000 }).buyCompany()).toBe(false);
+    expect(new Game({ money: COMPANY_PRICE - 1, earned: 30000 }).buyCompany()).toBe(false);
+    const g = new Game({ money: COMPANY_PRICE, earned: 30000 });
+    expect(g.buyCompany()).toBe(true);
+    expect(g.money).toBe(0);
+    expect(g.company).toBe(true);
+  });
+
+  it('a boat, crew and nets: bigger hauls, shorter trips', () => {
+    const g = new Game({ money: 1e7, earned: 30000 }, rng(12));
+    expect(g.buyBoat()).toBe(false); // no company yet
+    g.buyCompany();
+    expect(g.buyBoat()).toBe(true);
+    expect(g.money).toBe(1e7 - COMPANY_PRICE - BOAT_PRICE);
+    expect(g.buyBoat()).toBe(false); // phase 1: one boat
+    const b = g.boats[0]!;
+    expect(g.haulSize(b)).toBe(NETS[0]!.fish);
+    expect(g.tripSeconds(b)).toBe(TRIP_SECONDS);
+    expect(g.nextCrewCost(0)).toBe(CREW_COST[0]);
+    while (g.hireCrew(0));
+    while (g.upgradeNet(0));
+    expect(b.crew).toBe(4);
+    expect(b.net).toBe(NETS.length - 1);
+    expect(g.haulSize(b)).toBe(NETS[NETS.length - 1]!.fish * 2);
+    expect(g.tripSeconds(b)).toBeCloseTo(TRIP_SECONDS * 0.6);
+  });
+
+  it('a trip comes back with sea fish that sell from the harbor', () => {
+    const g = new Game({ money: 1e6, earned: 30000 }, rng(13));
+    g.buyCompany();
+    g.buyBoat();
+    expect(g.sendBoat(0)).toBe(true);
+    expect(g.sendBoat(0)).toBe(false); // already out
+    tick(g, TRIP_SECONDS - 1);
+    expect(g.boats[0]!.haul).toBeNull();
+    tick(g, 2);
+    const haul = g.boats[0]!.haul!;
+    expect(haul.reduce((s, h) => s + h.n, 0)).toBe(NETS[0]!.fish);
+    expect(haul.every((h) => SEA_FISH.some((f) => f.id === h.fish))).toBe(true);
+    expect(g.sendBoat(0)).toBe(false); // unload first
+    const money = g.money, earned = g.earned, value = g.haulValue(g.boats[0]!);
+    expect(g.collectHaul(0)).toBe(value);
+    expect(g.money).toBe(money + value);
+    expect(g.earned).toBe(earned + value);
+    expect(g.sendBoat(0)).toBe(true);
+  });
+
+  it('round-trips through save data, and old saves have no company', () => {
+    const g = new Game({ money: 1e6, earned: 30000 }, rng(14));
+    g.buyCompany(); g.buyBoat(); g.hireCrew(0); g.sendBoat(0); tick(g, 5);
+    const copy = new Game(JSON.parse(JSON.stringify(g.save())));
+    expect(copy.save()).toEqual(g.save());
+    const old = new Game({ money: 5 });
+    expect(old.company).toBe(false);
+    expect(old.boats).toEqual([]);
   });
 });

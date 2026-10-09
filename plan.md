@@ -91,6 +91,29 @@ variants, achievements and purchases. The log panel keeps the last 8.
 DOM interface on top. Tap the river or a shop to walk there; A/D or
 arrows walk, Space casts / reels, E opens the building you stand at.
 
+## The Fishing Company (late game, phase 1 done 2026-10-09)
+
+- **Teaser** (before $25k lifetime earnings): a boarded-up harbor office
+  ("?" sign, padlock) on the far bank with a pier; a dark ship silhouette
+  drifts along the far bank (20 s every 45 s). Tapping it shows only
+  "Someone is watching you..." and a progress bar. Letters from "H." at
+  $5k / $10k / $20k (banner + log; full text in the harbor panel).
+- **Reveal** at $25k: last letter, banner "The old harbor is for sale", the
+  office turns to wood with a FOR SALE sign. Panel lists boats, crew, nets
+  and two locked "???" rows ("something with claws / with a sword").
+- **Buy for $100,000**: fade, then the view zooms out: river 46% of the
+  screen (sky and foreground squeezed), one pixel scale smaller on big
+  screens. Office becomes FISH CO.; tapping it opens Fishing Co. from
+  anywhere (it's across the river).
+- **Net Boat** $20,000 (one in phase 1): send on a trip (90 s, -10% per
+  crew), returns with a net of sea fish (8 / 14 / 22 per net, +25% per
+  crew) sold straight from the harbor (Haggling and dev mode apply).
+  Crew 4 max ($4k/8k/14k/22k), nets Hand / Drift $15k / Trawl $40k. Sea
+  fish: Herring, Mackerel, Cod, Sea Bass, Halibut, Bluefin Tuna (~$60/fish
+  on average). Full kit ~= $2.9k/min with prompt resends.
+- **Phase 2 (next):** lobster traps and swordfish longline as new boat
+  types, more boats.
+
 ## Roadmap (agreed order, 2026-10-09)
 
 1. ~~Multiple lines + rare variants~~ (done)

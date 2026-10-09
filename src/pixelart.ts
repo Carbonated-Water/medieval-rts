@@ -65,7 +65,7 @@ const GLYPHS: Record<string, string[]> = {
   F: ['###', '#..', '##.', '#..', '#..'], H: ['#.#', '#.#', '###', '#.#', '#.#'], I: ['###', '.#.', '.#.', '.#.', '###'],
   K: ['#.#', '#.#', '##.', '#.#', '#.#'], L: ['#..', '#..', '#..', '#..', '###'], M: ['#...#', '##.##', '#.#.#', '#...#', '#...#'],
   O: ['.#.', '#.#', '#.#', '#.#', '.#.'], R: ['##.', '#.#', '##.', '#.#', '#.#'], S: ['.##', '#..', '.#.', '..#', '##.'],
-  T: ['###', '.#.', '.#.', '.#.', '.#.'], ' ': ['.', '.', '.', '.', '.'],
+  T: ['###', '.#.', '.#.', '.#.', '.#.'], ' ': ['.', '.', '.', '.', '.'], '?': ['##.', '..#', '.#.', '...', '.#.'], '.': ['.', '.', '.', '.', '#'],
 };
 const textWidth = (s: string) => [...s].reduce((w, ch) => w + GLYPHS[ch]![0]!.length + 1, -1);
 function text(ctx: Ctx, s: string, x: number, y: number, color: string): void {
@@ -270,6 +270,60 @@ export function baitShopCanvas(): HTMLCanvasElement {
   }));
 }
 
+export type HarborState = 'boarded' | 'forsale' | 'open';
+
+/** The harbor office on the far bank: boarded up (teaser), for sale (revealed), or the Fishing Co. */
+export function harborCanvas(state: HarborState): HTMLCanvasElement {
+  const W = 44, H = 34;
+  return outline(makeCanvas(W, H, (ctx) => {
+    const wallTop = 14;
+    const wall = state === 'boarded' ? PAL.greyDark : PAL.dirt;
+    rect(ctx, 3, wallTop, W - 6, H - wallTop - 1, wall);
+    for (let y = wallTop + 2; y < H - 1; y += 3) rect(ctx, 3, y, W - 6, 1, state === 'boarded' ? '#5f6578' : PAL.dirtDark);
+    // Grey slate roof.
+    for (let y = 0; y < 8; y++) rect(ctx, 1 + y, 6 + y, W - 2 - y * 2, 1, y % 3 === 2 ? '#5a6a7a' : '#7a8a9a');
+    // Door: planks nailed across and a padlock, or open.
+    const dx = W - 15;
+    rect(ctx, dx, H - 13, 8, 12, state === 'open' ? '#2a2018' : PAL.dirtDeep);
+    if (state === 'boarded') {
+      for (let k = 0; k < 8; k++) { px(ctx, dx + k, H - 12 + k, PAL.sand); px(ctx, dx + 7 - k, H - 12 + k, PAL.sand); }
+      rect(ctx, dx + 2, H - 7, 4, 3, PAL.gold);
+      px(ctx, dx + 3, H - 9, PAL.greyMid); px(ctx, dx + 4, H - 9, PAL.greyMid);
+    }
+    // Window (dark when boarded).
+    rect(ctx, 7, wallTop + 4, 8, 6, PAL.outline);
+    rect(ctx, 8, wallTop + 5, 6, 4, state === 'boarded' ? '#30343e' : PAL.waterLight);
+    if (state === 'boarded') rect(ctx, 6, wallTop + 6, 10, 2, PAL.sand);
+    sign(ctx, W / 2, 0, state === 'boarded' ? '?' : state === 'forsale' ? 'FOR SALE' : 'FISH CO.');
+  }));
+}
+
+/** A company boat: hull, cabin, net boom, and one little head per crew member. */
+export function boatCanvas(crew: number, silhouette = false): HTMLCanvasElement {
+  const W = 40, H = 24;
+  const c = (col: string) => (silhouette ? '#2b3a4a' : col);
+  const canvas = makeCanvas(W, H, (ctx) => {
+    // Hull: red below the waterline stripe, white above.
+    for (let y = 0; y < 7; y++) rect(ctx, 2 + Math.floor(y / 2), 15 + y, W - 4 - Math.floor(y / 2) * 2 - (y > 3 ? 2 : 0), 1, c(y < 3 ? PAL.white : PAL.red));
+    rect(ctx, 2, 17, W - 4, 1, c(PAL.waterDeeper));
+    // Cabin and window.
+    rect(ctx, 22, 8, 11, 7, c(PAL.white));
+    rect(ctx, 21, 7, 13, 2, c(PAL.waterDeep));
+    rect(ctx, 25, 10, 5, 3, c(PAL.waterLight));
+    // Mast and net boom with a hanging net.
+    rect(ctx, 12, 1, 1, 14, c(PAL.dirtDeep));
+    for (let k = 0; k < 9; k++) px(ctx, 12 - k, 1 + k, c(PAL.dirtDark));
+    for (let y = 9; y < 15; y++) for (let x = 3; x < 7; x++) if ((x + y) % 2 === 0) px(ctx, x, y, c(PAL.sand));
+    // Crew: a straw hat and a face each, on deck.
+    for (let k = 0; k < crew; k++) {
+      const x = 15 + k * 3 - (k >= 2 ? 10 : 0);
+      rect(ctx, x, 12, 2, 2, c(PAL.skin));
+      rect(ctx, x - 1 + (k % 2), 11, 3, 1, c(PAL.goldLight));
+    }
+  });
+  return outline(canvas, silhouette ? '#1d2834' : PAL.outline);
+}
+
 /** One stretch of dock planks (tiles vertically). */
 export function plankCanvas(w: number): HTMLCanvasElement {
   return makeCanvas(w, 4, (ctx) => {
@@ -353,6 +407,11 @@ const ICON_ROWS = {
   leech: ['.oo.......', 'ovvoo.oo..', 'ovvvvovvo.', '.oovvvvvvo', '...oooooo.'],
   glow: ['...o.....', '..oUo....', '.oUUUo...', 'oUUwUUo..', 'oUUUUUo..', '.oUuUo...', '..ouo....', '...o.....', '..ooo....', '..o.o....'],
   gold: ['...o.....', '..oYo....', '.oYYyo...', 'oYYwyyo..', 'oYyyyyo..', '.oyyyo...', '..oyo....', '...o.....', '..ooo....', '..o.o....'],
+  lock: ['..ooo..', '.ok.ko.', '.ok.ko.', 'ooooooo', 'oyyyyyo', 'oyyoyyo', 'oyyoyyo', 'oyyyyyo', 'ooooooo'],
+  letter: ['ooooooooooo', 'owowwwwwowo', 'owwowwwowwo', 'owwwowowwwo', 'owwwwowwwwo', 'owwwwrwwwwo', 'owwwwwwwwwo', 'ooooooooooo'],
+  boat: ['.....o.....', '.....ok....', '.....okk...', '.....okkk..', '.....o.....', 'ooooooooooo', 'orwwwwwwwro', '.orrrrrrro.', '..ooooooo..'],
+  crew: ['..ooo..', '.oYYYo.', 'oooooooo'.slice(0, 7), '.osso..'.slice(0, 7), '.ossso.', '..ooo..', '.orrro.', 'orrrrro', 'ooooooo'],
+  net: ['o.o.o.o.o', '.o.o.o.o.', 'o.o.o.o.o', '.o.o.o.o.', 'o.o.o.o.o', '.o.o.o.o.', 'o.o.o.o.o'],
   fish: ['...ooo....', 'o.oUUUo...', 'oouUUUUo..', 'ouuuuuowo.', 'oouuuuuoo.', 'o.ouuuo...', '...ooo....'],
 };
 export type IconName = keyof typeof ICON_ROWS;

@@ -78,6 +78,11 @@ export class Notices {
     if (this.banners.length > 3) this.banners.splice(0, this.banners.length - 3);
   }
 
+  /** Drop banners still waiting (e.g. a "for sale" teaser once it's been bought). */
+  clearBanners(): void {
+    this.banners = [];
+  }
+
   /** Expire lines and advance the banner queue; call once per frame. */
   update(): void {
     const now = performance.now();

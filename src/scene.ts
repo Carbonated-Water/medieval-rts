@@ -4,7 +4,7 @@ import tilesUrl from './assets/kenney/tiles.png';
 import { BOOTS, CLOTHES, RODS, TIERS, VARIANTS, type FishDef, type Variant } from './data';
 import type { Game } from './game';
 import {
-  HAND, PAL, alertCanvas, baitShopCanvas, bobberCanvas, fishCanvas, fisherCanvas, holderCanvas, plankCanvas, schoolCanvas, stallCanvas, type Pose,
+  HAND, PAL, alertCanvas, baitShopCanvas, boatCanvas, bobberCanvas, harborCanvas, fishCanvas, fisherCanvas, holderCanvas, plankCanvas, schoolCanvas, stallCanvas, type Pose,
 } from './pixelart';
 
 export type Place = 'market' | 'school' | 'bait' | 'tackle' | 'dock';
@@ -28,6 +28,7 @@ interface Layout {
   baitX: number;
   dockX: number;
   dockEnd: number; // y of the dock's far end (where you fish)
+  harborX: number; // the harbor office on the far bank
   bobbers: { x: number; y: number }[]; // where each line's bobber lands
 }
 
@@ -104,6 +105,14 @@ export class Scene {
   private fx = new Graphics(); // shadows, ripples, lines, rings
   private rodLine = new Graphics();
   private wormFx = new Graphics();
+  private harbor = new Sprite();
+  private ship = new Sprite();
+  private boatSprites: Sprite[] = [];
+  private boatAlerts: Sprite[] = [];
+  private builtCompany = false;
+  /** Seconds into the zoom-out fade (null when not fading). */
+  private fading: number | null = null;
+  private fadeEl?: HTMLDivElement;
   private bobbers: Sprite[] = [];
   private alerts: Sprite[] = [];
   private holders: Sprite[] = [];
@@ -133,21 +142,27 @@ export class Scene {
   /** Pick the pixel scale and world size for this screen. */
   private measure(): void {
     const w = innerWidth, h = innerHeight;
-    this.scale = Math.max(2, Math.round(Math.min(w, h) / 240));
+    const company = this.game.company;
+    this.builtCompany = company;
+    // Owning the company zooms out: a wider river, less sky and foreground, and on big screens smaller pixels.
+    const base = Math.max(2, Math.round(Math.min(w, h) / 240));
+    this.scale = company ? Math.max(2, base - 1) : base;
     const vw = Math.ceil(w / this.scale), vh = Math.ceil(h / this.scale);
-    const riverTop = Math.round(vh * 0.36), riverBottom = Math.round(vh * 0.66);
+    const F = company ? { sky: 0.14, top: 0.22, bottom: 0.68, path: 0.775 } : { sky: 0.24, top: 0.36, bottom: 0.66, path: 0.76 };
+    const riverTop = Math.round(vh * F.top), riverBottom = Math.round(vh * F.bottom);
     const dockX = Math.round(vw * PLACE_X.dock);
     this.V = {
       w: vw, h: vh,
-      skyBottom: Math.round(vh * 0.24),
+      skyBottom: Math.round(vh * F.sky),
       riverTop, riverBottom,
-      path: Math.round(vh * 0.76),
+      path: Math.round(vh * F.path),
       marketX: Math.round(vw * PLACE_X.market),
       tackleX: Math.round(vw * PLACE_X.tackle),
       schoolX: Math.round(vw * PLACE_X.school),
       baitX: Math.round(vw * PLACE_X.bait),
       dockX,
-      dockEnd: Math.round(riverTop + (riverBottom - riverTop) * 0.42),
+      dockEnd: Math.round(riverTop + (riverBottom - riverTop) * (company ? 0.6 : 0.42)),
+      harborX: Math.round(vw * 0.86),
       // One spot per line: right, left, then further out right and left of the dock.
       bobbers: [
         [Math.max(28, vw * 0.2), 0.3], [-Math.max(28, vw * 0.2), 0.3],
@@ -165,7 +180,7 @@ export class Scene {
     const k = (v: number) => v * s;
     return {
       w: k(V.w), h: k(V.h), skyBottom: k(V.skyBottom), riverTop: k(V.riverTop), riverBottom: k(V.riverBottom), path: k(V.path),
-      marketX: k(V.marketX), tackleX: k(V.tackleX), schoolX: k(V.schoolX), baitX: k(V.baitX), dockX: k(V.dockX), dockEnd: k(V.dockEnd),
+      marketX: k(V.marketX), tackleX: k(V.tackleX), schoolX: k(V.schoolX), baitX: k(V.baitX), dockX: k(V.dockX), dockEnd: k(V.dockEnd), harborX: k(V.harborX),
       bobbers: V.bobbers.map((b) => ({ x: k(b.x), y: k(b.y) })),
     };
   }
@@ -207,6 +222,16 @@ export class Scene {
     tiling(this.tile(73), 0, V.riverTop, V.w, V.riverBottom - V.riverTop);
     this.waterTop = tiling(this.tile(33), 0, V.riverTop - 6, V.w, TILE);
     add(new Graphics()).rect(0, V.riverBottom - 14, V.w, 14).fill({ color: PAL.waterDeep, alpha: 0.35 });
+    // The old harbor on the far bank, with a short pier.
+    const pier = add(new Graphics());
+    pier.rect(V.harborX - 34, V.riverTop - 2, 30, 3).fill(PAL.sand).rect(V.harborX - 34, V.riverTop + 1, 30, 1).fill(PAL.dirtDark);
+    for (let x = V.harborX - 32; x < V.harborX - 4; x += 8) pier.rect(x, V.riverTop + 1, 2, 5).fill(PAL.dirtDeep);
+    this.harbor = add(new Sprite());
+    this.harbor.anchor.set(0.5, 1);
+    this.harbor.position.set(V.harborX, V.riverTop + 1);
+    this.ship = add(new Sprite(this.cached('ship', () => boatCanvas(0, true))));
+    this.ship.anchor.set(0.5, 1);
+    this.ship.alpha = 0.75;
     // Shadows, ripples and lines are redrawn every frame on top of the water.
     add(this.fx);
     // Near bank: grass-topped dirt, the sandy path, then a meadow with tufts.
@@ -254,6 +279,9 @@ export class Scene {
     this.world.addChild(this.rodLine);
     this.player.anchor.set(0.5, 1);
     this.world.addChild(this.player);
+    // Company boats (sprites are retextured each frame as crew changes).
+    this.boatSprites = [0, 1, 2].map(() => { const s = add(new Sprite(), this.world); s.anchor.set(0.5, 1); s.visible = false; return s; });
+    this.boatAlerts = [0, 1, 2].map(() => { const s = add(new Sprite(this.cached('alert', alertCanvas)), this.world); s.anchor.set(0.5, 1); s.visible = false; return s; });
     for (const f of this.flying) f.sprite.destroy();
     this.flying = [];
     this.flyLayer = add(new Container(), this.world);
@@ -277,6 +305,12 @@ export class Scene {
   private wormPos(spot: number): { x: number; y: number } {
     const V = this.V;
     return { x: Math.round(WORM_SPOT_X[spot]! * V.w), y: Math.min(V.riverBottom + 20 + (spot % 2) * 6, V.path - 8) };
+  }
+
+  /** Is a screen point on the harbor (office, pier or a moored boat)? */
+  hitHarbor(cx: number, cy: number): boolean {
+    const V = this.V, x = cx / this.scale, y = cy / this.scale;
+    return Math.abs(x - (V.harborX - 12)) < 34 && y > V.riverTop - 40 && y < V.riverTop + 22;
   }
 
   /** The worm under a screen point (CSS px), or null. */
@@ -399,6 +433,8 @@ export class Scene {
     }
     this.ripples = this.ripples.filter((r) => (r.t += dt) < (r.big ? 1.2 : 0.9));
     if (!this.ready) return;
+    if (this.game.company !== this.builtCompany && this.fading === null) this.fading = 0;
+    if (this.fading !== null) this.fade(dt);
     this.trackLines();
     for (const f of this.flying) f.t += dt;
     for (const f of this.flying.filter((f) => f.t > 1.6)) f.sprite.destroy();
@@ -450,6 +486,21 @@ export class Scene {
     this.lastLines.length = this.game.lines.length;
   }
 
+  /** The zoom-out: fade to white, rebuild with the wide-river layout, fade back in. */
+  private fade(dt: number): void {
+    if (!this.fadeEl) {
+      this.fadeEl = document.createElement('div');
+      this.fadeEl.style.cssText = 'position:fixed;inset:0;background:#dff6f5;pointer-events:none;z-index:4;opacity:0';
+      document.body.appendChild(this.fadeEl);
+    }
+    const before = this.fading!;
+    this.fading = before + dt;
+    if (before < 0.6 && this.fading >= 0.6) { this.measure(); this.resize(); }
+    const k = this.fading < 0.6 ? this.fading / 0.6 : Math.max(0, 1 - (this.fading - 0.6) / 0.9);
+    this.fadeEl.style.opacity = String(k);
+    if (this.fading >= 1.5) { this.fading = null; this.fadeEl.style.opacity = '0'; }
+  }
+
   private newShadow(x: number): Shadow {
     return { x, y: 0.15 + Math.random() * 0.7, speed: (Math.random() < 0.5 ? -1 : 1) * (0.02 + Math.random() * 0.05), size: 0.6 + Math.random() * 0.9 };
   }
@@ -480,9 +531,44 @@ export class Scene {
       g.ellipse(r.x, r.y + 1, rx, Math.max(1, Math.round(rx / 3))).stroke({ color: PAL.white, width: 1, alpha: 1 - k });
     }
     this.drawWorms();
+    this.drawHarbor(g);
     this.drawLines(g);
     this.drawPlayer();
     this.drawFlyingFish(g);
+  }
+
+  /** The harbor office (by state), the mystery ship before the company, and the company's boats. */
+  private drawHarbor(g: Graphics): void {
+    const V = this.V, game = this.game;
+    const state = game.company ? 'open' : game.companyRevealed ? 'forsale' : 'boarded';
+    this.harbor.texture = this.cached(`harbor:${state}`, () => harborCanvas(state));
+    // Teaser: a dark ship drifts along the far bank now and then (20 s across, every 45 s).
+    const cycle = this.time % 45;
+    this.ship.visible = !game.company && cycle < 20;
+    if (this.ship.visible) this.ship.position.set(Math.round(-30 + (cycle / 20) * (V.w + 60)), V.riverTop + 4);
+    // Boats: moored at the pier, or sailing off to the left and back.
+    const pierX = V.harborX - 22, y = V.riverTop + 12;
+    this.boatSprites.forEach((s, i) => {
+      const b = game.boats[i];
+      const alert = this.boatAlerts[i]!;
+      s.visible = !!b;
+      alert.visible = false;
+      if (!b) return;
+      s.texture = this.cached(`boat:${b.crew}`, () => boatCanvas(b.crew));
+      let x = pierX - i * 44;
+      if (b.trip) {
+        const p = b.trip.t / b.trip.dur, far = -40;
+        if (p < 0.15) x = x + (far - x) * (p / 0.15);
+        else if (p > 0.85) x = far + (x - far) * ((p - 0.85) / 0.15);
+        else s.visible = false;
+        s.scale.x = p < 0.5 ? -1 : 1; // facing the way it's going
+      } else s.scale.x = 1;
+      s.position.set(Math.round(x), y + Math.round(Math.sin(this.time * 2 + i)));
+      if (s.visible && b.trip && (b.trip.t / b.trip.dur < 0.15 || b.trip.t / b.trip.dur > 0.85)) {
+        g.rect(Math.round(x) + (s.scale.x < 0 ? 18 : -22), y - 1, 4, 1).fill({ color: PAL.white, alpha: 0.8 }); // wake
+      }
+      if (b.haul) { alert.visible = true; alert.position.set(Math.round(x), y - 24 + Math.round(Math.sin(this.time * 6))); }
+    });
   }
 
   /** A little dirt mound with a pink worm wiggling out of it, per worm hole. */
