@@ -1,76 +1,117 @@
 /**
- * Facebook-style notifications: every event pops in as its own card, cards
- * stack (newest on top, at most MAX_SHOWN) and fade after a few seconds, and
- * the kept ones go to a short history the 🔔 panel shows.
+ * In-game feedback, the way pixel games do it instead of notification cards:
+ * - float: short text that rises from a point in the world ("+$132") and fades;
+ * - log: a small pickup log bottom-left, at most LOG_LINES, where repeats
+ *   merge ("Perch x3") and lines fade on their own;
+ * - banner: one plaque at a time under the top bar for the special moments
+ *   (new fish, rare variant, achievement, purchase).
+ * Log lines and banners are kept in a short history for the bell panel.
  */
-export type NoticeKind = 'info' | 'good' | 'bad' | 'rare';
+export type Tone = 'plain' | 'good' | 'rare' | 'bad';
 
-export interface Notice {
-  id: number;
-  html: string;
-  /** Picture on the left: an image URL, or an emoji. */
-  icon?: string;
-  kind: NoticeKind;
-  at: number; // performance.now() when it arrived
-}
+export interface Entry { icon: string; html: string; tone: Tone; at: number; count: number }
 
-const MAX_SHOWN = 4;
-/** History length: as many rows as the 🔔 panel fits without scrolling. */
+const LOG_LINES = 3;
+const LOG_SECONDS = 4;
+const BANNER_SECONDS = 2.6;
+/** History length: as many rows as the bell panel fits without scrolling. */
 export const HISTORY = 8;
 
 export class Notices {
-  history: Notice[] = [];
+  history: Entry[] = [];
   unread = 0;
-  private nextId = 1;
-  private shown: { n: Notice; el: HTMLElement; until: number }[] = [];
+  private logEl: HTMLElement;
+  private bannerEl: HTMLElement;
+  private lines: { key: string; el: HTMLElement; entry: Entry; until: number }[] = [];
+  private banners: { icon: string; label: string; title: string; tone: Tone }[] = [];
+  private bannerUntil = 0;
 
-  constructor(private stack: HTMLElement) {
-    // Tap a card to dismiss it early.
-    stack.addEventListener('click', (e) => {
-      const el = (e.target as HTMLElement).closest('.note-card') as HTMLElement | null;
-      const s = this.shown.find((x) => x.el === el);
-      if (s) s.until = 0;
-    });
+  constructor(private root: HTMLElement) {
+    this.logEl = document.createElement('div');
+    this.logEl.className = 'log';
+    this.bannerEl = document.createElement('div');
+    this.bannerEl.className = 'banner';
+    root.append(this.logEl);
+    document.body.appendChild(this.bannerEl);
   }
 
-  /** Show a card. `keep` = also log it in the 🔔 history. */
-  push(html: string, opts: { icon?: string; kind?: NoticeKind; seconds?: number; keep?: boolean } = {}): void {
-    const n: Notice = { id: this.nextId++, html, icon: opts.icon, kind: opts.kind ?? 'info', at: performance.now() };
-    if (opts.keep !== false) {
-      this.history.unshift(n);
-      this.history.length = Math.min(this.history.length, HISTORY);
-      this.unread++;
-    }
+  /** Text rising from a screen point (CSS px). */
+  float(text: string, x: number, y: number, tone: Tone = 'good'): void {
     const el = document.createElement('div');
-    el.className = `note-card ${n.kind}`;
-    el.innerHTML = cardHtml(n);
-    this.stack.prepend(el);
-    this.shown.unshift({ n, el, until: n.at + (opts.seconds ?? 5) * 1000 });
-    // Too many: the oldest leave early.
-    for (const s of this.shown.slice(MAX_SHOWN)) s.until = Math.min(s.until, n.at);
+    el.className = `float ${tone}`;
+    el.textContent = text;
+    el.style.left = `${Math.round(x)}px`;
+    el.style.top = `${Math.round(y)}px`;
+    this.root.appendChild(el);
+    setTimeout(() => el.remove(), 1300);
   }
 
-  /** Expire cards; call once per frame. `top` = y just below the top bar. */
-  update(top: number): void {
-    this.stack.style.top = `${top}px`;
+  /** A pickup-log line. Lines with the same key merge into one with a count. */
+  log(key: string, icon: string, html: string, tone: Tone = 'plain'): void {
     const now = performance.now();
-    for (const s of this.shown) {
-      if (now < s.until || s.el.classList.contains('out')) continue;
-      s.el.classList.add('out');
-      setTimeout(() => s.el.remove(), 300);
+    const same = this.lines.find((l) => l.key === key && now < l.until);
+    if (same) {
+      same.entry.count++;
+      same.entry.at = now;
+      same.until = now + LOG_SECONDS * 1000;
+      same.el.innerHTML = lineHtml(same.entry);
+      same.el.classList.remove('bump');
+      void same.el.offsetWidth; // restart the bump animation
+      same.el.classList.add('bump');
+      return;
     }
-    this.shown = this.shown.filter((s) => now < s.until + 300);
+    const entry: Entry = { icon, html, tone, at: now, count: 1 };
+    this.remember(entry);
+    const el = document.createElement('div');
+    el.className = `line ${tone}`;
+    el.innerHTML = lineHtml(entry);
+    this.logEl.appendChild(el);
+    this.lines.push({ key, el, entry, until: now + LOG_SECONDS * 1000 });
+    // Too many: the oldest leave now.
+    for (const l of this.lines.slice(0, -LOG_LINES)) l.until = Math.min(l.until, now);
+  }
+
+  /** A plaque under the top bar for special moments; queued one at a time. */
+  banner(icon: string, label: string, title: string, tone: Tone = 'good'): void {
+    this.remember({ icon, html: `<b>${label}</b> ${title}`, tone, at: performance.now(), count: 1 });
+    this.banners.push({ icon, label, title, tone });
+    if (this.banners.length > 3) this.banners.splice(0, this.banners.length - 3);
+  }
+
+  /** Expire lines and advance the banner queue; call once per frame. */
+  update(): void {
+    const now = performance.now();
+    for (const l of this.lines) {
+      if (now < l.until || l.el.classList.contains('out')) continue;
+      l.el.classList.add('out');
+      setTimeout(() => l.el.remove(), 300);
+    }
+    this.lines = this.lines.filter((l) => now < l.until + 300);
+    if (now >= this.bannerUntil) {
+      const next = this.banners.shift();
+      if (next) {
+        this.bannerEl.className = `banner show ${next.tone}`;
+        this.bannerEl.innerHTML = `<img src="${next.icon}" alt=""><div><small>${next.label}</small><b>${next.title}</b></div>`;
+        this.bannerUntil = now + BANNER_SECONDS * 1000;
+      } else if (this.bannerEl.classList.contains('show')) {
+        this.bannerEl.classList.remove('show');
+      }
+    }
   }
 
   markRead(): void {
     this.unread = 0;
   }
+
+  private remember(e: Entry): void {
+    this.history.unshift(e);
+    this.history.length = Math.min(this.history.length, HISTORY);
+    this.unread++;
+  }
 }
 
-export function cardHtml(n: Notice, ago?: string): string {
-  const icon = !n.icon ? '' : n.icon.startsWith('data:') || n.icon.includes('/')
-    ? `<img class="ic" src="${n.icon}" alt="">` : `<span class="ic emoji">${n.icon}</span>`;
-  return `${icon}<div class="txt">${n.html}</div>${ago ? `<small class="ago">${ago}</small>` : ''}`;
+export function lineHtml(e: Entry): string {
+  return `<img src="${e.icon}" alt=""><span>${e.html}</span>${e.count > 1 ? `<i class="n">x${e.count}</i>` : ''}`;
 }
 
 export function timeAgo(at: number): string {

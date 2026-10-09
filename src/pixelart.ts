@@ -299,3 +299,50 @@ export function pixelFishIcon(f: FishDef, silhouette = false, w = 96, h = 56, va
   }
   return url;
 }
+
+// ---------- UI icons (replace emojis; same palette and outline as the sprites) ----------
+
+const ICON_COLORS: Record<string, string> = {
+  o: PAL.outline, y: PAL.gold, Y: PAL.goldLight, b: PAL.dirtDark, B: PAL.dirt, w: PAL.white, k: PAL.greyMid, K: PAL.greyDark,
+  r: PAL.red, p: '#fc8bb0', u: PAL.waterDeep, U: PAL.waterLight, s: PAL.skin, g: PAL.green, G: PAL.greenLight,
+};
+const ICON_ROWS = {
+  coin: ['..oooo..', '.oYYYyo.', 'oYYyyyyo', 'oYyYyyyo', 'oYyYyyyo', 'oyyyyyyo', '.oyyyyo.', '..oooo..'],
+  trophy: ['oo.oooo.oo', 'oyoYyyyoyo', 'oyoYyyyoyo', '.ooYyyyoo.', '..oyyyyo..', '...oyyo...', '....oo....', '...oyyo...', '..oooooo..', '..oyyyyo..', '..oooooo..'],
+  book: ['.oooo.oooo.', 'owwwwowwwwo', 'owkkwowkkwo', 'owwwwowwwwo', 'owkkwowkkwo', 'owwwwowwwwo', 'orrrrorrrro', '.oooo.oooo.'],
+  bell: ['....o....', '...oyo...', '..oYyyo..', '.oYyyyyo.', '.oYyyyyo.', '.oYyyyyo.', 'oYyyyyyyo', 'ooooooooo', '...oyo...', '....o....'],
+  menu: ['ooooooooo', 'owwwwwwwo', 'ooooooooo', '.........', 'ooooooooo', 'owwwwwwwo', 'ooooooooo', '.........', 'ooooooooo', 'owwwwwwwo', 'ooooooooo'],
+  rod: ['.........o', '........ok', '.......ok.', '......ok..', '.....ok...', '....oB....', '..koBb....', '.kKobb....', '..kbb.....', '.obb......', 'obb.......'],
+  holder: ['.o...o...o', 'ok..ok..ok', 'ok..ok..ok', 'ok..ok..ok', 'ok..ok..ok', 'ok..ok..ok', 'ob..ob..ob', 'oBBBBBBBBo', 'obbbbbbbbo', 'oooooooooo'],
+  auto: ['....o....', '...oyo...', '.ooooooo.', 'okkkkkkko', 'okUkkkUko', 'okkkkkkko', 'okkoookko', '.ooooooo.', '..okkko..', '.ookkkoo.'],
+  bait: ['.oo.......', 'oppo..oo..', 'opo.oppo..', 'oppoppo...', '.oppoo....', '..oo......'],
+  shirt: ['.ooo..ooo.', 'orrrooorro', 'orrrrrrrro', '.oorrrroo.', '..orrrro..', '..orrrro..', '..orrrro..', '..oooooo..'],
+  boot: ['.oooo....', '.oBBo....', '.oBBo....', '.oBBo....', '.oBBo....', '.oBBBooo.', '.oBBBBBBo', '.obbbbbbo', '.oooooooo'],
+  hook: ['...ooo...', '..okkko..', '...oko...', '...oko...', '...oko...', 'o..oko...', 'oo.oko...', 'okokko...', '.okkoo...', '..oo.....'],
+  bolt: ['....ooo.', '...oyyo.', '..oyyo..', '.oyyyooo', 'ooooyyyo', '...oyyo.', '..oyyo..', '..oyo...', '.oyo....', '.oo.....'],
+  bag: ['...ooo...', '..oBBBo..', '...oBo...', '..oBBBo..', '.oBBBBBo.', 'oBByyyBBo', 'oBByBBBBo', 'oBBByyBBo', 'oBBBBByBo', 'oBByyyBBo', '.oBBBBBo.', '..ooooo..'],
+  fist: ['..oo......', '.osso.....', '.osso..oo.', '.osso.osso', '.ossoossso', '.osssssso.', '..oSssso..', '..osssso..', '...oooo...'],
+  close: ['oo...oo', 'owo.owo', '.owowo.', '..owo..', '.owowo.', 'owo.owo', 'oo...oo'],
+  check: ['......oo', '.....ogo', 'oo..ogo.', 'ogoogo..', '.oggo...', '..oo....'],
+  star: ['....o....', '...oyo...', 'oooyYyooo', 'oyyYYYyyo', '.oyyyyyo.', '..oyyyo..', '.oyyoyyo.', '.oyo.oyo.', '.oo...oo.'],
+  fish: ['...ooo....', 'o.oUUUo...', 'oouUUUUo..', 'ouuuuuowo.', 'oouuuuuoo.', 'o.ouuuo...', '...ooo....'],
+};
+export type IconName = keyof typeof ICON_ROWS;
+
+const iconUrls = new Map<string, string>();
+/** A UI icon as a crisp data URL, `scale` screen pixels per art pixel. */
+export function pixelIcon(name: IconName, scale = 3): string {
+  const key = `${name}:${scale}`;
+  let url = iconUrls.get(key);
+  if (!url) {
+    const rows = ICON_ROWS[name];
+    url = makeCanvas(rows[0]!.length * scale, rows.length * scale, (ctx) => {
+      rows.forEach((row, y) => [...row].forEach((ch, x) => {
+        if (ch === '.') return;
+        rect(ctx, x * scale, y * scale, scale, scale, ch === 'S' ? PAL.skinDark : ICON_COLORS[ch]!);
+      }));
+    }).toDataURL();
+    iconUrls.set(key, url);
+  }
+  return url;
+}

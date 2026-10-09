@@ -4,6 +4,28 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  UI revamp: wood & parchment pixel style
+  WHAT: All menus and feedback redone. New src/ui.css (index.html's inline
+        CSS removed): Kenney Pixel UI Pack wood frame (CC0) for panels, flat
+        2px bevels for rows / slots / buttons, Kenney Pixel + Mini fonts
+        (CC0), all in src/assets/ui with licences. pixelart.ts gained
+        pixelIcon(): coin, book, trophy, bell, menu, rod, holder, robot,
+        worm, shirt, boot, hook, bolt, bag, fist, close, check, star, fish,
+        replacing every emoji (achievement data no longer has icons; the UI
+        maps them by stat). Shops use slot rows with level pips and coin
+        price buttons; market / journal / trophies are slot grids (trophies
+        have a detail strip, tap to inspect or collect). notify.ts rewritten:
+        float (+$ rising from the fisherman, Scene.fisherScreen), a 3-line
+        pickup log that merges repeats, one banner at a time for firsts,
+        rare variants, achievements, purchases. Gear blurbs shortened to
+        game labels ("Speed +75%"). Every panel still fits 360x640.
+  WHY:  User: menus and the mobile notifications "look very AI" (cards,
+        emojis, clutter); asked to revamp them the way other games do.
+        Mocked three directions (wood, dark minimal, arcade) over the real
+        game; user chose wood & parchment + floating +$ and a small log.
+
+---
+
 2026-10-09  Deployed
   WHAT: Pushed 83775dc..10a67a5 (gear/skills/dev, lines + variants, shop
         split, school/autofisher/achievements, notifications, pixel art)

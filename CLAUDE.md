@@ -22,6 +22,14 @@ changing anything.** Earlier games are git tags `rts-v1` and `hex-v1`.
   fit, there is too much in it: cut, group or split it, don't add a
   scrollbar. (Check with the body's scrollHeight vs clientHeight.)
 
+- **It must not look AI-made.** The UI is wood & parchment pixel art like
+  Stardew Valley: Kenney's wood frame, flat 2px bevels (no rounded corners,
+  gradients or soft shadows), Kenney Pixel / Mini fonts, pixel icons from
+  `pixelIcon()` (never emoji), short game labels ("Speed +75%", "SELL ALL")
+  instead of sentences, no em dashes in player text. Feedback is in-world:
+  +$ floats from the fisherman, a 3-line pickup log merges repeats, and only
+  firsts / rare variants / achievements / purchases get a banner.
+
 ## Rules
 
 - **One game, kept small.** Anything under "Not yet" in `plan.md` needs

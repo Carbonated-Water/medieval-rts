@@ -1,0 +1,147 @@
+/*
+ * Wood & parchment pixel UI. Every edge is a 2px step so it matches the
+ * world's 2x pixels: Kenney's riveted wood frame for panels, flat bevels
+ * (box-shadow) for rows, slots and buttons, Kenney Pixel / Mini fonts.
+ * No rounded corners, gradients or soft shadows.
+ */
+@font-face { font-family: 'Kenney Pixel'; src: url('./assets/ui/kenney-pixel.ttf') format('truetype'); }
+@font-face { font-family: 'Kenney Mini'; src: url('./assets/ui/kenney-mini.ttf') format('truetype'); }
+
+:root {
+  --ink: #4a3220; --ink-soft: #8a6a48; --cream: #fbe9b8; --shade: #2e1f12;
+  --parch: #e9d7a7; --parch-dark: #b8955f; --parch-light: #f6e9c4;
+  --slot: #d9c08a; --go: #6aa84f; --go-light: #8fd16b; --go-dark: #3f7a2c;
+  --red: #dd442c; --red-light: #fc683b; --red-dark: #7e3125; --gold: #f4b41b; --outline: #434a5f;
+}
+body { font-family: 'Kenney Pixel', monospace; color: var(--ink); -webkit-user-select: none; user-select: none; -webkit-font-smoothing: none; }
+#scene { position: fixed; inset: 0; display: block; cursor: pointer; }
+img { image-rendering: pixelated; }
+button { font: inherit; color: inherit; cursor: pointer; padding: 0; border: 0; background: none; }
+
+/* Building blocks. */
+.plaque { background: var(--parch); box-shadow: inset 0 0 0 2px var(--parch-dark), 0 0 0 2px var(--outline), 0 4px 0 2px rgba(46, 31, 18, 0.45); }
+.slot { display: grid; place-items: center; background: var(--slot); box-shadow: inset 2px 2px 0 var(--parch-dark), inset -2px -2px 0 var(--parch-light); position: relative; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 4px 12px; min-height: 40px;
+  font: 32px/1 'Kenney Pixel'; color: #fff; text-shadow: 2px 2px 0 var(--go-dark);
+  background: var(--go); box-shadow: inset 0 2px 0 var(--go-light), inset 0 -4px 0 var(--go-dark), 0 0 0 2px var(--outline);
+}
+.btn:active:not(:disabled) { transform: translateY(2px); box-shadow: inset 0 2px 0 var(--go-dark), 0 0 0 2px var(--outline); }
+.btn:disabled { background: #a89a86; color: #e4dccd; text-shadow: none; box-shadow: inset 0 -4px 0 #7e7262, 0 0 0 2px var(--outline); cursor: default; }
+.btn.red { background: var(--red); text-shadow: 2px 2px 0 var(--red-dark); box-shadow: inset 0 2px 0 var(--red-light), inset 0 -4px 0 var(--red-dark), 0 0 0 2px var(--outline); }
+.btn.plain { background: var(--parch); color: var(--ink); text-shadow: none; box-shadow: inset 0 2px 0 var(--parch-light), inset 0 -4px 0 var(--parch-dark), 0 0 0 2px var(--outline); }
+.btn.wide { width: 100%; }
+.cash { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.badge { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 3px; font: 16px/18px 'Kenney Mini'; color: #fff; background: var(--red); box-shadow: 0 0 0 2px var(--outline); text-align: center; font-style: normal; }
+.pips { display: inline-flex; gap: 2px; flex: none; }
+.pips i { width: 6px; height: 8px; background: var(--parch-light); box-shadow: inset 0 0 0 2px var(--parch-dark); }
+.pips i.on { background: var(--go); box-shadow: inset 0 0 0 2px var(--go-dark); }
+.bar { width: 60px; height: 8px; background: var(--parch-light); box-shadow: inset 0 0 0 2px var(--parch-dark); flex: none; }
+.bar i { display: block; height: 100%; background: var(--go); box-shadow: inset 0 0 0 2px var(--go-dark); }
+
+/* Top bar: coins on the left, icon buttons on the right. */
+#top { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 10px); left: 10px; right: 10px; display: flex; align-items: center; gap: 8px; z-index: 15; pointer-events: none; }
+#top .purse { display: flex; align-items: center; gap: 6px; padding: 4px 10px 4px 6px; font: 32px/1 'Kenney Pixel'; }
+#top .dev { padding: 4px 6px; font: 16px/1 'Kenney Mini'; color: #fff; background: var(--red); box-shadow: 0 0 0 2px var(--outline); }
+#top .grow { flex: 1; }
+#top .slot { width: 44px; height: 44px; pointer-events: auto; box-shadow: inset 2px 2px 0 var(--parch-light), inset -2px -2px 0 var(--parch-dark), 0 0 0 2px var(--outline); background: var(--parch); }
+
+/* The big context button and the bag plaque above it. */
+#action { position: fixed; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); display: flex; flex-direction: column; align-items: center; gap: 12px; z-index: 5; pointer-events: none; }
+#action > * { pointer-events: auto; }
+#action .big { min-width: 200px; min-height: 60px; font-size: 40px; padding: 6px 24px; }
+#action .big img { margin-right: 4px; }
+#action .bite { animation: throb 0.5s steps(2) infinite; }
+@keyframes throb { 50% { transform: translateY(-2px); } }
+#action .bag { display: flex; align-items: center; gap: 10px; padding: 2px 10px 2px 6px; font: 32px/1 'Kenney Pixel'; }
+#action .bag span { display: inline-flex; align-items: center; gap: 4px; }
+#action .hint { padding: 6px 12px; font: 32px/1 'Kenney Pixel'; }
+
+/* Panels: Kenney wood frame, parchment rows inside. */
+#sheet { position: fixed; inset: 0; display: none; align-items: flex-end; justify-content: center; background: rgba(20, 14, 8, 0.55); z-index: 10; }
+#sheet.show { display: flex; }
+#sheet .panel {
+  width: min(calc(100% - 16px), 520px); max-height: 88vh; margin-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); box-sizing: border-box;
+  display: flex; flex-direction: column; border: 32px solid transparent; border-image: url('./assets/ui/frame.png') 16 fill / 32px stretch;
+}
+#sheet .head { display: flex; align-items: center; gap: 8px; margin: -18px -20px 12px -20px; }
+#sheet h2 { margin: 0; flex: 1; font: 40px/1 'Kenney Pixel'; color: var(--cream); text-shadow: 2px 2px 0 var(--shade); white-space: nowrap; }
+#sheet .head .cash { font: 32px/1 'Kenney Pixel'; color: var(--cream); text-shadow: 2px 2px 0 var(--shade); }
+#sheet .xbtn { width: 36px; height: 36px; display: grid; place-items: center; background: var(--red); box-shadow: inset 0 2px 0 var(--red-light), inset 0 -4px 0 var(--red-dark), 0 0 0 2px var(--outline); }
+#sheet .body { display: flex; flex-direction: column; gap: 6px; margin: 0 -20px -18px -20px; overflow: hidden; }
+#sheet .row { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 6px; background: var(--parch); box-shadow: inset 0 0 0 2px var(--parch-dark), 0 2px 0 #6b4a2c; }
+#sheet .row .slot { width: 44px; height: 44px; flex: none; }
+#sheet .meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+#sheet .meta b { font: 32px/0.8 'Kenney Pixel'; font-weight: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#sheet .meta .sub { display: flex; align-items: center; gap: 8px; min-width: 0; }
+#sheet small, #sheet .small { font: 16px/1 'Kenney Mini'; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#sheet .up { color: var(--go-dark); }
+#sheet .row .btn { flex: none; padding: 4px 8px; }
+#sheet .maxed { min-width: 72px; text-align: center; font: 32px/1 'Kenney Pixel'; color: var(--go-dark); }
+#sheet .note { margin: 4px 2px 0; font: 16px/1.3 'Kenney Mini'; color: var(--cream); text-shadow: 2px 2px 0 var(--shade); }
+#sheet .empty { margin: 8px 2px 14px; font: 32px/1 'Kenney Pixel'; color: var(--cream); text-shadow: 2px 2px 0 var(--shade); }
+
+/* Slot grids: market (sell a kind), journal, trophies. */
+#sheet .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 6px; padding: 8px; background: var(--parch); box-shadow: inset 0 0 0 2px var(--parch-dark), 0 2px 0 #6b4a2c; }
+#sheet .cell { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; }
+#sheet .cell .slot { width: 100%; aspect-ratio: 5 / 3; max-height: 44px; }
+#sheet .cell .slot img { max-width: 90%; max-height: 90%; }
+#sheet .cell .slot .n { position: absolute; right: -4px; bottom: -6px; padding: 1px 3px; font: 16px/1 'Kenney Mini'; font-style: normal; color: #fff; background: var(--outline); }
+#sheet .cell .slot .rare { position: absolute; left: 3px; top: 3px; width: 6px; height: 6px; background: var(--gold); box-shadow: 0 0 0 2px var(--outline); }
+#sheet .cell .price { font: 16px/1 'Kenney Mini'; color: var(--ink); display: inline-flex; align-items: center; gap: 2px; }
+#sheet .cell .slot.dim img { opacity: 0.5; }
+#sheet .vm { display: flex; gap: 2px; }
+#sheet .vm i { width: 6px; height: 6px; background: var(--parch-light); box-shadow: inset 0 0 0 1px var(--parch-dark); }
+#sheet .vm i.got { background: var(--c); box-shadow: inset 0 0 0 1px var(--outline); }
+#sheet .trophy.locked img { filter: grayscale(1); opacity: 0.45; }
+#sheet .trophy.ready { background: #ffe58a; box-shadow: inset 2px 2px 0 #fff3b8, inset -2px -2px 0 #c89a10, 0 0 0 2px var(--gold); animation: ready 0.8s steps(2) infinite; }
+@keyframes ready { 50% { box-shadow: inset 2px 2px 0 #fff3b8, inset -2px -2px 0 #c89a10, 0 0 0 2px var(--outline); } }
+#sheet .trophy.claimed { background: #cfe3b0; box-shadow: inset 2px 2px 0 #9fbf7c, inset -2px -2px 0 #e9f4d8; }
+#sheet .trophy.sel { outline: 2px solid var(--outline); outline-offset: 2px; }
+#sheet .trophy .tick { position: absolute; right: 2px; bottom: 2px; }
+#sheet .detail { display: flex; align-items: center; gap: 10px; }
+#sheet .detail .meta b { font-size: 32px; }
+#sheet .log-row { gap: 8px; font: 32px/1 'Kenney Pixel'; padding: 2px 8px 2px 4px; }
+#sheet .log-row img { width: 48px; height: 28px; object-fit: contain; }
+#sheet .log-row span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#sheet .log-row .n { font-style: normal; color: var(--ink-soft); }
+#sheet .log-row.rare { background: #ffe58a; }
+#sheet .log-row.bad { color: var(--red-dark); }
+
+/* Feedback: floating numbers, the pickup log, one banner at a time. */
+#notes { position: fixed; inset: 0; pointer-events: none; z-index: 8; }
+#notes .float {
+  position: absolute; transform: translate(-50%, 0); font: 32px/1 'Kenney Pixel'; white-space: nowrap;
+  color: var(--gold); text-shadow: 2px 0 var(--outline), -2px 0 var(--outline), 0 2px var(--outline), 0 -2px var(--outline);
+  animation: rise 1.2s steps(12) forwards;
+}
+#notes .float.rare { color: #ffe58a; font-size: 40px; }
+#notes .float.bad { color: #ffb0a0; }
+#notes .float.plain { color: #fff; }
+@keyframes rise { to { transform: translate(-50%, -48px); opacity: 0; } }
+#notes .log { position: absolute; left: 10px; bottom: calc(env(safe-area-inset-bottom, 0px) + 150px); display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+#notes .line {
+  display: flex; align-items: center; gap: 6px; padding: 2px 10px 2px 4px; font: 32px/1 'Kenney Pixel';
+  background: var(--parch); box-shadow: inset 0 0 0 2px var(--parch-dark), 0 0 0 2px var(--outline);
+  animation: slide-in 0.2s steps(4); transition: opacity 0.3s;
+}
+#notes .line img { width: 48px; height: 28px; object-fit: contain; }
+#notes .line .n { font-style: normal; color: var(--ink-soft); }
+#notes .line.rare { background: #ffe58a; }
+#notes .line.bad { color: var(--red-dark); }
+#notes .line.out { opacity: 0; }
+#notes .line.bump { animation: bump 0.2s steps(2); }
+@keyframes slide-in { from { transform: translateX(-24px); opacity: 0; } }
+@keyframes bump { 50% { transform: translateX(4px); } }
+.banner {
+  position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 70px); transform: translate(-50%, -12px); opacity: 0;
+  display: flex; align-items: center; gap: 10px; padding: 6px 14px 6px 8px; z-index: 30; max-width: calc(100% - 20px);
+  background: var(--parch); box-shadow: inset 0 0 0 2px var(--parch-dark), 0 0 0 2px var(--outline), 0 4px 0 2px rgba(46, 31, 18, 0.45);
+  transition: opacity 0.15s steps(3), transform 0.15s steps(3);
+}
+.banner.show { opacity: 1; transform: translate(-50%, 0); }
+.banner.rare { background: #ffe58a; box-shadow: inset 0 0 0 2px #c89a10, 0 0 0 2px var(--outline), 0 4px 0 2px rgba(46, 31, 18, 0.45); }
+.banner img { max-height: 32px; }
+.banner div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.banner small { font: 16px/1 'Kenney Mini'; color: var(--red-dark); letter-spacing: 1px; }
+.banner b { font: 32px/0.8 'Kenney Pixel'; font-weight: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

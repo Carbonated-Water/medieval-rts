@@ -72,8 +72,14 @@ water and bank; code-drawn pixel sprites in the same palette for the
 straw-hat fisher (walk / cast poses, outfit and boots by gear), all 20 fish
 (+ Golden / Shiny / silhouette), the red Fish Market, blue Tackle Shop,
 log-cabin School, dock, bobbers and "!" alerts. The HUD uses the same pixel
-fish. Catches, snaps and achievements pop up as stacking notification cards
-(🔔 keeps the last 8).
+fish.
+
+UI (since 2026-10-09): wood & parchment pixel style (see CLAUDE.md). Top
+bar: coin plaque + icon buttons (journal, trophies, log, menu). Panels use
+Kenney's riveted wood frame with parchment rows and item slots; levels show
+as pips. Catches: +$ floats up from the fisherman, a pickup log bottom-left
+(max 3 lines, repeats merge "x3"), and a banner only for new fish, rare
+variants, achievements and purchases. The log panel keeps the last 8.
 DOM interface on top. Tap the river or a shop to walk there; A/D or
 arrows walk, Space casts / reels, E opens the building you stand at.
 

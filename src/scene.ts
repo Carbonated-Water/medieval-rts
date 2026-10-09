@@ -265,6 +265,12 @@ export class Scene {
     return this.route.length > 0;
   }
 
+  /** Just above the fisherman's head, in CSS pixels. */
+  fisherScreen(): { x: number; y: number } {
+    const f = this.feet();
+    return { x: f.x * this.scale, y: (f.y - 30) * this.scale };
+  }
+
   /** Player's feet, in world pixels. */
   private feet(): { x: number; y: number } {
     const V = this.V;

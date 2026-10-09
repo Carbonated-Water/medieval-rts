@@ -1,8 +1,9 @@
-import { ACHIEVEMENTS, DEV_MULTIPLIER, RODS, SKILLS, TIERS, type GearKind, type SkillId, type Tier } from './data';
+import { ACHIEVEMENTS, DEV_MULTIPLIER, RODS, SKILLS, VARIANTS, type GearKind, type SkillId } from './data';
 import { Game, fishById, type Line, type SaveData } from './game';
 import { Scene } from './scene';
-import { pixelFishIcon as fishIcon } from './pixelart';
-import { UI, variantTag, type Action } from './ui';
+import './ui.css';
+import { pixelFishIcon as fishIcon, pixelIcon } from './pixelart';
+import { ACH_ICON, GEAR_ICON, SKILL_ICON, UI, type Action } from './ui';
 
 const SAVE_KEY = 'riverside-fishing-v1';
 
@@ -21,6 +22,7 @@ if (new URLSearchParams(location.search).get('dev') === '1') game.dev = true;
 const canvas = document.getElementById('scene') as HTMLCanvasElement;
 const scene = new Scene(canvas, game);
 const ui = new UI(onAction);
+const note = ui.notices;
 
 let dirty = false;
 const save = () => {
@@ -71,30 +73,30 @@ function onAction(a: Action): void {
   if (a === 'cast') game.cast();
   else if (a === 'reel') game.reel();
   else if (a === 'market' || a === 'tackle' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'inbox' || a === 'settings') ui.open = ui.open === a ? null : a;
-  else if (a === 'claimAll' || a.startsWith('claim:')) {
-    const paid = game.claim(a === 'claimAll' ? undefined : a.slice(6));
-    if (paid) ui.say(`🏆 Collected <b>$${paid.toLocaleString()}</b>`, 2, 'good');
+  else if (a === 'claimAll') { const paid = game.claim(); if (paid) note.banner(pixelIcon('coin'), 'COLLECTED', `$${paid.toLocaleString()}`); }
+  else if (a.startsWith('trophy:')) {
+    // Tap a trophy: show it; if it's ready, collect it too.
+    ui.pick = a.slice(7);
+    const paid = game.claim(ui.pick);
+    if (paid) note.banner(pixelIcon('coin'), 'COLLECTED', `$${paid.toLocaleString()}`);
   }
   else if (a === 'close') ui.open = null;
-  else if (a === 'sellAll') { const n = game.sellAll(); if (n) ui.say(`Sold everything for <b>$${n.toLocaleString()}</b>`, 2, 'good'); }
+  else if (a === 'sellAll') { const n = game.sellAll(); if (n) note.banner(pixelIcon('coin'), 'SOLD', `$${n.toLocaleString()}`); }
   else if (a.startsWith('sellFish:')) {
     const f = fishById(a.slice(9));
     const n = game.sellSpecies(f.id);
-    if (n) ui.say(`Sold your <b>${f.name}</b> for <b>$${n.toLocaleString()}</b>`, 2, 'good');
+    if (n) note.banner(fishIcon(f, false, 48, 28), `SOLD ${f.name.toUpperCase()}`, `$${n.toLocaleString()}`);
   }
   else if (a.startsWith('buy:')) {
     const kind = a.slice(4) as GearKind;
     const next = game.nextGear(kind);
-    if (next && game.buyGear(kind)) {
-      const extra = kind === 'rod' ? ` ${TIERS[RODS[next.level]!.tier].name} fish can be landed now.` : ` ${next.blurb}`;
-      ui.say(`Bought <b>${next.name}</b>!${extra}`, 3, 'good');
-    }
+    if (next && game.buyGear(kind)) note.banner(pixelIcon(GEAR_ICON[kind]), 'BOUGHT', next.name);
   } else if (a.startsWith('train:')) {
     const id = a.slice(6) as SkillId;
-    if (game.train(id)) ui.say(`${SKILLS[id].name} is now level <b>${game.level(id)}</b>`, 2, 'good');
+    if (game.train(id)) note.banner(pixelIcon(SKILL_ICON[id]), 'TRAINED', `${SKILLS[id].name} ${game.level(id)}`);
   } else if (a === 'toggleDev') {
     game.dev = !game.dev;
-    ui.say(game.dev ? `Dev mode ON — fish sell for <b>${DEV_MULTIPLIER}×</b>` : 'Dev mode OFF', 2);
+    note.banner(pixelIcon('coin'), 'DEV MODE', game.dev ? `On, prices x${DEV_MULTIPLIER}` : 'Off', 'plain');
   } else if (a === 'reset') {
     if (confirm('Start over? Your money, gear, skills and journal will be wiped.')) {
       localStorage.removeItem(SAVE_KEY);
@@ -106,9 +108,10 @@ function onAction(a: Action): void {
 }
 
 /**
- * Announce how casts ended: one notification card per line, so with several
- * lines every catch (fish, weight, value) stays readable in the stack.
- * Misses only show while you fish by hand, and aren't kept in 🔔.
+ * Feedback for finished casts, the way pixel games do it: the money floats
+ * up from the fisherman, the fish goes in the pickup log (repeats merge),
+ * and only firsts and rare variants get a banner. Misses just float a word,
+ * and only while you fish by hand.
  */
 const lastKeys: string[] = [];
 function announce(): void {
@@ -116,32 +119,36 @@ function announce(): void {
     const key = line.type === 'result' ? `result:${line.outcome}:${line.caught?.id ?? ''}` : line.type;
     const fresh = key !== lastKeys[slot] && line.type === 'result';
     lastKeys[slot] = key;
-    if (fresh) { dirty = true; announceLine(line); }
+    if (fresh) { dirty = true; announceLine(line, slot); }
   });
   lastKeys.length = game.lines.length;
 }
 
-function announceLine(line: Extract<Line, { type: 'result' }>): void {
+function announceLine(line: Extract<Line, { type: 'result' }>, slot: number): void {
   const f = line.fish;
-  const tier = (t: Tier) => `<span class="tier" style="--c:${TIERS[t].color}">${TIERS[t].name}</span>`;
+  const at = scene.fisherScreen();
+  const x = at.x + (slot % 2 ? -1 : 1) * Math.min(slot, 2) * 18; // lines side by side don't overlap
   if (line.outcome === 'caught' && f && line.caught) {
-    const c = line.caught;
-    const first = game.journal[f.id]!.count === 1;
-    const strong = line.strong ? ' 💪' : '';
-    const variant = c.variant ? `${variantTag(c.variant)} ` : '';
-    ui.say(`${variant}${first ? '<span class="new">NEW!</span> ' : ''}<b>${f.name}</b>${strong} ${tier(f.tier)}<br><small>${c.kg} kg</small> · <b class="cash">$${game.priceOf(c).toLocaleString()}</b>`,
-      c.variant || first ? 7 : 5, c.variant ? 'rare' : 'good', fishIcon(f, false, 96, 56, c.variant));
+    const c = line.caught, v = c.variant;
+    const name = v ? `${VARIANTS[v].name} ${f.name}` : f.name;
+    const pic = fishIcon(f, false, 48, 28, v);
+    note.float(`+$${game.priceOf(c).toLocaleString()}`, x, at.y, v ? 'rare' : 'good');
+    note.log(`${f.id}:${v ?? ''}`, pic, name, v ? 'rare' : 'plain');
+    if (game.journal[f.id]!.count === 1) note.banner(pic, 'NEW FISH', f.name, 'rare');
+    else if (v) note.banner(pic, VARIANTS[v].name.toUpperCase(), f.name, 'rare');
+    if (line.strong) note.float('HELD!', x, at.y - 40, 'plain');
   } else if (line.outcome === 'snapped' && f) {
     const need = RODS.find((r) => r.tier >= f.tier)!;
-    ui.say(`Snap! A <b>${f.name}</b> ${tier(f.tier)} broke your line<br><small>you need a <b>${need.name}</b></small>`, 5, 'bad', fishIcon(f, true));
+    note.float('SNAP!', x, at.y, 'bad');
+    note.log('snap', fishIcon(f, true, 48, 28), `Snapped: needs ${need.name}`, 'bad');
   } else if (!game.auto && line.outcome === 'escaped') {
-    ui.say('Too slow — it got away…', 2.5, 'bad', '💨', false);
+    note.float('TOO SLOW', x, at.y, 'plain');
   } else if (!game.auto && line.outcome === 'scared') {
-    ui.say(`Too early! You scared ${game.lineCount > 1 ? 'one' : 'it'} off.`, 2.5, 'bad', '🙀', false);
+    note.float('TOO EARLY', x, at.y, 'plain');
   }
 }
 
-/** Toast newly completed achievements (ones already done at load stay quiet). */
+/** Banner for newly completed achievements (ones already done at load stay quiet). */
 const done = new Set(ACHIEVEMENTS.filter((a) => game.achieved(a)).map((a) => a.id));
 let achCheck = 0;
 function announceAchievements(): void {
@@ -150,7 +157,7 @@ function announceAchievements(): void {
     if (done.has(a.id) || !game.achieved(a)) continue;
     done.add(a.id);
     dirty = true;
-    ui.say(`Achievement: <b>${a.name}</b><br><small>${a.desc} · collect <b>$${a.reward.toLocaleString()}</b> in 🏆</small>`, 7, 'rare', a.icon);
+    note.banner(pixelIcon(ACH_ICON[a.stat]), 'ACHIEVEMENT', a.name, 'rare');
   }
 }
 

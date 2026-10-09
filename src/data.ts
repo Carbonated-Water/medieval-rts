@@ -57,49 +57,49 @@ export const FISH: FishDef[] = [
 export interface RodDef { name: string; tier: Tier; price: number; color: string; blurb: string }
 /** Index = rod level. A rod lands fish up to its tier. */
 export const RODS: RodDef[] = [
-  { name: 'Twig Rod', tier: 1, price: 0, color: '#8a6038', blurb: 'A stick and some string.' },
-  { name: 'Bamboo Rod', tier: 2, price: 100, color: '#c8b060', blurb: 'Lands Uncommon fish.' },
-  { name: 'Fiberglass Rod', tier: 3, price: 900, color: '#e0e0e0', blurb: 'Lands Rare fish.' },
-  { name: 'Carbon Rod', tier: 4, price: 5000, color: '#303438', blurb: 'Lands Epic fish.' },
-  { name: 'Mythril Rod', tier: 5, price: 25000, color: '#70d8e8', blurb: 'Lands Legendary fish.' },
+  { name: 'Twig Rod', tier: 1, price: 0, color: '#8a6038', blurb: 'A stick and string' },
+  { name: 'Bamboo Rod', tier: 2, price: 100, color: '#c8b060', blurb: 'Lands Uncommon' },
+  { name: 'Fiberglass Rod', tier: 3, price: 900, color: '#e0e0e0', blurb: 'Lands Rare' },
+  { name: 'Carbon Rod', tier: 4, price: 5000, color: '#303438', blurb: 'Lands Epic' },
+  { name: 'Mythril Rod', tier: 5, price: 25000, color: '#70d8e8', blurb: 'Lands Legendary' },
 ];
 
 // ---------- gear: each line is bought in order, one level at a time ----------
 
 export interface BaitDef { name: string; price: number; blurb: string; /** multiplies bite wait */ wait: number; /** extra rare-fish weight per tier step */ lure: number }
 export const BAIT: BaitDef[] = [
-  { name: 'Bread Crumbs', price: 0, blurb: 'Better than nothing.', wait: 1, lure: 0 },
-  { name: 'Earthworms', price: 60, blurb: 'Bites come 15% sooner.', wait: 0.85, lure: 0 },
-  { name: 'Crickets', price: 450, blurb: 'Bites 30% sooner, rare fish +5%.', wait: 0.7, lure: 0.05 },
-  { name: 'Shiny Lure', price: 3000, blurb: 'Bites 45% sooner, rare fish +12%.', wait: 0.55, lure: 0.12 },
-  { name: 'Golden Bait', price: 15000, blurb: 'Bites 60% sooner, rare fish +25%.', wait: 0.4, lure: 0.25 },
+  { name: 'Bread Crumbs', price: 0, blurb: 'Basic bait', wait: 1, lure: 0 },
+  { name: 'Earthworms', price: 60, blurb: 'Bites +15%', wait: 0.85, lure: 0 },
+  { name: 'Crickets', price: 450, blurb: 'Bites +30%', wait: 0.7, lure: 0.05 },
+  { name: 'Shiny Lure', price: 3000, blurb: 'Bites +45%', wait: 0.55, lure: 0.12 },
+  { name: 'Golden Bait', price: 15000, blurb: 'Bites +60%', wait: 0.4, lure: 0.25 },
 ];
 
 export interface ClothesDef { name: string; price: number; blurb: string; /** catches are this much heavier (and pricier) */ size: number; shirt: string; trousers: string }
 export const CLOTHES: ClothesDef[] = [
-  { name: 'Old T-Shirt', price: 0, blurb: 'Comfy, at least.', size: 0, shirt: '#e8d8b0', trousers: '#4a6aa0' },
-  { name: 'Flannel Shirt', price: 80, blurb: 'Fish are 10% bigger.', size: 0.1, shirt: '#c0402c', trousers: '#3a4a6a' },
-  { name: 'Rain Jacket', price: 600, blurb: 'Fish are 22% bigger.', size: 0.22, shirt: '#f0c020', trousers: '#3a4a6a' },
-  { name: "Angler's Vest", price: 3500, blurb: 'Fish are 36% bigger.', size: 0.36, shirt: '#6a7a3a', trousers: '#5a4a30' },
-  { name: 'Pro Waders Suit', price: 18000, blurb: 'Fish are 55% bigger.', size: 0.55, shirt: '#2a5a4a', trousers: '#2a5a4a' },
+  { name: 'Old T-Shirt', price: 0, blurb: 'Comfy', size: 0, shirt: '#e8d8b0', trousers: '#4a6aa0' },
+  { name: 'Flannel Shirt', price: 80, blurb: 'Size +10%', size: 0.1, shirt: '#c0402c', trousers: '#3a4a6a' },
+  { name: 'Rain Jacket', price: 600, blurb: 'Size +22%', size: 0.22, shirt: '#f0c020', trousers: '#3a4a6a' },
+  { name: "Angler's Vest", price: 3500, blurb: 'Size +36%', size: 0.36, shirt: '#6a7a3a', trousers: '#5a4a30' },
+  { name: 'Pro Waders Suit', price: 18000, blurb: 'Size +55%', size: 0.55, shirt: '#2a5a4a', trousers: '#2a5a4a' },
 ];
 
 export interface BootsDef { name: string; price: number; blurb: string; /** extra walking speed */ speed: number; color: string | null }
 export const BOOTS: BootsDef[] = [
-  { name: 'Bare Feet', price: 0, blurb: 'Ouch, pebbles.', speed: 0, color: null },
-  { name: 'Sandals', price: 50, blurb: 'Walk 20% faster.', speed: 0.2, color: '#a8784a' },
-  { name: 'Rubber Boots', price: 400, blurb: 'Walk 45% faster.', speed: 0.45, color: '#3f8a3a' },
-  { name: 'Hiking Boots', price: 2500, blurb: 'Walk 75% faster.', speed: 0.75, color: '#6b4526' },
-  { name: 'Seven-League Boots', price: 12000, blurb: 'Walk 110% faster.', speed: 1.1, color: '#8e44c9' },
+  { name: 'Bare Feet', price: 0, blurb: 'Barefoot', speed: 0, color: null },
+  { name: 'Sandals', price: 50, blurb: 'Speed +20%', speed: 0.2, color: '#a8784a' },
+  { name: 'Rubber Boots', price: 400, blurb: 'Speed +45%', speed: 0.45, color: '#3f8a3a' },
+  { name: 'Hiking Boots', price: 2500, blurb: 'Speed +75%', speed: 0.75, color: '#6b4526' },
+  { name: 'Seven-League Boots', price: 12000, blurb: 'Speed +110%', speed: 1.1, color: '#8e44c9' },
 ];
 
 export interface HolderDef { name: string; price: number; blurb: string; /** lines you fish at once */ lines: number }
 /** Rod holders on the dock: each adds a line in the water. */
 export const HOLDERS: HolderDef[] = [
-  { name: 'One Line', price: 0, blurb: 'Just the rod in your hands.', lines: 1 },
-  { name: 'Rod Holder', price: 500, blurb: 'Fish with 2 lines at once.', lines: 2 },
-  { name: 'Double Holder', price: 6000, blurb: 'Fish with 3 lines at once.', lines: 3 },
-  { name: 'Triple Holder', price: 35000, blurb: 'Fish with 4 lines at once.', lines: 4 },
+  { name: 'One Line', price: 0, blurb: '1 line', lines: 1 },
+  { name: 'Rod Holder', price: 500, blurb: '2 lines', lines: 2 },
+  { name: 'Double Holder', price: 6000, blurb: '3 lines', lines: 3 },
+  { name: 'Triple Holder', price: 35000, blurb: '4 lines', lines: 4 },
 ];
 
 /**
@@ -110,11 +110,11 @@ export const HOLDERS: HolderDef[] = [
 export interface AutoDef { name: string; price: number; blurb: string; recast: number; react: [number, number] }
 
 export const AUTO: AutoDef[] = [
-  { name: 'Manual', price: 0, blurb: 'You cast and reel yourself.', recast: Infinity, react: [0, 0] },
-  { name: 'Autofisher I', price: 750, blurb: 'Fishes for you on the dock. Slow hands.', recast: 2.5, react: [0.45, 1.2] },
-  { name: 'Autofisher II', price: 5000, blurb: 'Recasts sooner, reels quicker.', recast: 1.4, react: [0.35, 0.95] },
-  { name: 'Autofisher III', price: 22000, blurb: 'Rarely misses a bite.', recast: 0.7, react: [0.3, 0.75] },
-  { name: 'Autofisher IV', price: 60000, blurb: 'Recasts at once, near-perfect reels.', recast: 0.25, react: [0.25, 0.55] },
+  { name: 'Manual', price: 0, blurb: 'Fish by hand', recast: Infinity, react: [0, 0] },
+  { name: 'Autofisher I', price: 750, blurb: 'Fishes for you', recast: 2.5, react: [0.45, 1.2] },
+  { name: 'Autofisher II', price: 5000, blurb: 'Quicker hands', recast: 1.4, react: [0.35, 0.95] },
+  { name: 'Autofisher III', price: 22000, blurb: 'Rarely misses', recast: 0.7, react: [0.3, 0.75] },
+  { name: 'Autofisher IV', price: 60000, blurb: 'Never sleeps', recast: 0.25, react: [0.25, 0.55] },
 ];
 
 export type GearKind = 'rod' | 'holders' | 'auto' | 'bait' | 'clothes' | 'boots';
@@ -181,27 +181,27 @@ export const START_MONEY = 0;
 
 /** What an achievement measures; Game.stat() computes each from saved data. */
 export type AchStat = 'catches' | 'species' | 'tier' | 'giant' | 'golden' | 'shiny' | 'variants' | 'earned' | 'lines' | 'auto' | 'fishing';
-export interface AchievementDef { id: string; icon: string; name: string; desc: string; stat: AchStat; goal: number; reward: number }
+export interface AchievementDef { id: string; name: string; desc: string; stat: AchStat; goal: number; reward: number }
 
 export const ACHIEVEMENTS: AchievementDef[] = [
-  { id: 'catch1', icon: '🎣', name: 'First Catch', desc: 'Catch a fish', stat: 'catches', goal: 1, reward: 10 },
-  { id: 'catch50', icon: '🪣', name: 'Bucket Full', desc: 'Catch 50 fish', stat: 'catches', goal: 50, reward: 150 },
-  { id: 'catch250', icon: '🛶', name: 'Regular', desc: 'Catch 250 fish', stat: 'catches', goal: 250, reward: 1000 },
-  { id: 'catch1000', icon: '⚓', name: 'Old Salt', desc: 'Catch 1,000 fish', stat: 'catches', goal: 1000, reward: 5000 },
-  { id: 'species5', icon: '📘', name: 'Curious', desc: 'Find 5 species', stat: 'species', goal: 5, reward: 50 },
-  { id: 'species10', icon: '📗', name: 'Naturalist', desc: 'Find 10 species', stat: 'species', goal: 10, reward: 400 },
-  { id: 'species15', icon: '📙', name: 'Collector', desc: 'Find 15 species', stat: 'species', goal: 15, reward: 2500 },
-  { id: 'species20', icon: '📕', name: 'Master Angler', desc: 'Find all 20 species', stat: 'species', goal: 20, reward: 15000 },
-  { id: 'rare', icon: '🔵', name: 'Something Rare', desc: 'Catch a Rare fish', stat: 'tier', goal: 3, reward: 200 },
-  { id: 'epic', icon: '🟣', name: 'Epic Pull', desc: 'Catch an Epic fish', stat: 'tier', goal: 4, reward: 1500 },
-  { id: 'legend', icon: '🟠', name: 'Legend', desc: 'Catch a Legendary fish', stat: 'tier', goal: 5, reward: 8000 },
-  { id: 'giant', icon: '⬆', name: 'Big One', desc: 'Catch a Giant fish', stat: 'giant', goal: 1, reward: 100 },
-  { id: 'golden', icon: '★', name: 'Struck Gold', desc: 'Catch a Golden fish', stat: 'golden', goal: 1, reward: 500 },
-  { id: 'shiny', icon: '✦', name: 'Shiny!', desc: 'Catch a Shiny fish', stat: 'shiny', goal: 1, reward: 2500 },
-  { id: 'variants15', icon: '💎', name: 'Oddity Hunter', desc: 'Find 15 rare variants', stat: 'variants', goal: 15, reward: 4000 },
-  { id: 'earn10k', icon: '💰', name: 'Making a Living', desc: 'Earn $10,000', stat: 'earned', goal: 10000, reward: 500 },
-  { id: 'earn100k', icon: '🏦', name: 'Fish Tycoon', desc: 'Earn $100,000', stat: 'earned', goal: 100000, reward: 5000 },
-  { id: 'lines4', icon: '🎏', name: 'Four Lines Out', desc: 'Fish with 4 lines', stat: 'lines', goal: 4, reward: 2000 },
-  { id: 'auto', icon: '🤖', name: 'Hands Free', desc: 'Buy an Autofisher', stat: 'auto', goal: 1, reward: 150 },
-  { id: 'fishing10', icon: '🎓', name: 'Graduate', desc: 'Reach Fishing 10', stat: 'fishing', goal: 10, reward: 1000 },
+  { id: 'catch1', name: 'First Catch', desc: 'Catch a fish', stat: 'catches', goal: 1, reward: 10 },
+  { id: 'catch50', name: 'Bucket Full', desc: 'Catch 50 fish', stat: 'catches', goal: 50, reward: 150 },
+  { id: 'catch250', name: 'Regular', desc: 'Catch 250 fish', stat: 'catches', goal: 250, reward: 1000 },
+  { id: 'catch1000', name: 'Old Salt', desc: 'Catch 1,000 fish', stat: 'catches', goal: 1000, reward: 5000 },
+  { id: 'species5', name: 'Curious', desc: 'Find 5 species', stat: 'species', goal: 5, reward: 50 },
+  { id: 'species10', name: 'Naturalist', desc: 'Find 10 species', stat: 'species', goal: 10, reward: 400 },
+  { id: 'species15', name: 'Collector', desc: 'Find 15 species', stat: 'species', goal: 15, reward: 2500 },
+  { id: 'species20', name: 'Master Angler', desc: 'Find all 20 species', stat: 'species', goal: 20, reward: 15000 },
+  { id: 'rare', name: 'Something Rare', desc: 'Catch a Rare fish', stat: 'tier', goal: 3, reward: 200 },
+  { id: 'epic', name: 'Epic Pull', desc: 'Catch an Epic fish', stat: 'tier', goal: 4, reward: 1500 },
+  { id: 'legend', name: 'Legend', desc: 'Catch a Legendary fish', stat: 'tier', goal: 5, reward: 8000 },
+  { id: 'giant', name: 'Big One', desc: 'Catch a Giant fish', stat: 'giant', goal: 1, reward: 100 },
+  { id: 'golden', name: 'Struck Gold', desc: 'Catch a Golden fish', stat: 'golden', goal: 1, reward: 500 },
+  { id: 'shiny', name: 'Shiny!', desc: 'Catch a Shiny fish', stat: 'shiny', goal: 1, reward: 2500 },
+  { id: 'variants15', name: 'Oddity Hunter', desc: 'Find 15 rare variants', stat: 'variants', goal: 15, reward: 4000 },
+  { id: 'earn10k', name: 'Making a Living', desc: 'Earn $10,000', stat: 'earned', goal: 10000, reward: 500 },
+  { id: 'earn100k', name: 'Fish Tycoon', desc: 'Earn $100,000', stat: 'earned', goal: 100000, reward: 5000 },
+  { id: 'lines4', name: 'Four Lines Out', desc: 'Fish with 4 lines', stat: 'lines', goal: 4, reward: 2000 },
+  { id: 'auto', name: 'Hands Free', desc: 'Buy an Autofisher', stat: 'auto', goal: 1, reward: 150 },
+  { id: 'fishing10', name: 'Graduate', desc: 'Reach Fishing 10', stat: 'fishing', goal: 10, reward: 1000 },
 ];
