@@ -352,6 +352,68 @@ export const HAND_SKILL_MAX = 25;
 /** Training a fisherman from level `l` to `l + 1`. */
 export const handSkillCost = (l: number) => Math.round((60 * Math.pow(1.35, l - 1)) / 5) * 5;
 
+// ---------- the seafood empire (phase 3): town, processing plant, restaurants, export ----------
+
+/** Buying the Processing Plant (with its Freezer line) opens the empire. */
+export const PLANT_PRICE = 500000;
+
+/** Production lines. Each takes `batch` fish it accepts and makes one product worth `mult` x their value. */
+export type LineId = 'freezer' | 'cannery' | 'smokehouse' | 'kitchen';
+export interface LineDef { name: string; product: string; price: number; batch: number; secs: number; mult: number; accepts: string[] | 'any'; blurb: string }
+export const LINES: Record<LineId, LineDef> = {
+  freezer: { name: 'Freezer', product: 'Frozen Fillets', price: 0, batch: 1, secs: 2, mult: 1.4, accepts: 'any', blurb: 'Any fish the other lines skip' },
+  cannery: {
+    name: 'Cannery', product: 'Canned Fish', price: 300000, batch: 4, secs: 8, mult: 2, blurb: 'Small fish, four to a can',
+    accepts: ['herring', 'mackerel', 'cod', 'minnow', 'perch', 'bluegill', 'carp', 'bass', 'catfish', 'walleye'],
+  },
+  smokehouse: {
+    name: 'Smokehouse', product: 'Smoked Fish', price: 600000, batch: 2, secs: 10, mult: 2.4, blurb: 'Oily fish, smoked in pairs',
+    accepts: ['salmon', 'trout', 'eel', 'sturgeon', 'pike', 'zander', 'halibut', 'seabass', 'arapaima'],
+  },
+  kitchen: {
+    name: 'Kitchen', product: 'Seafood Dishes', price: 1200000, batch: 1, secs: 4, mult: 3, blurb: 'Lobster, crab, swordfish, tuna',
+    accepts: ['crab', 'lobster', 'spiny', 'kingcrab', 'mahi', 'sailfish', 'swordfish', 'marlin', 'tuna'],
+  },
+};
+/** Lines pick fish in this order, so the freezer only gets what nobody else wants. */
+export const LINE_ORDER: LineId[] = ['kitchen', 'smokehouse', 'cannery', 'freezer'];
+/** Line upgrades (levels 0..5): stations (batches at once), speed, quality (product value). */
+export type LineTrack = 'stations' | 'speed' | 'quality';
+export const LINE_TRACKS: Record<LineTrack, { name: string; blurb: string }> = {
+  stations: { name: 'Stations', blurb: 'Another batch at the same time' },
+  speed: { name: 'Speed', blurb: 'Each batch is quicker' },
+  quality: { name: 'Quality', blurb: 'Products are worth more' },
+};
+export const LINE_TRACK_MAX = 5;
+export const LINE_SPEED = 0.12;
+export const LINE_QUALITY = 0.1;
+/** Line upgrades cost this share of a base, growing per level. */
+export const LINE_UPGRADE_BASE = 150000;
+export const LINE_UPGRADE_GROWTH = 2.5;
+
+/** Restaurants on the town's lots: each sells two products steadily at a premium. */
+export type RestaurantId = 'chips' | 'grill' | 'bistro' | 'sushi';
+export interface RestaurantDef { name: string; price: number; menu: LineId[]; color: string }
+export const RESTAURANTS: Record<RestaurantId, RestaurantDef> = {
+  chips: { name: 'Fish & Chips', price: 750000, menu: ['freezer', 'cannery'], color: '#3f8fe0' },
+  grill: { name: 'Smoke & Grill', price: 2000000, menu: ['smokehouse', 'freezer'], color: '#c0602c' },
+  bistro: { name: 'Lobster Bistro', price: 5000000, menu: ['kitchen', 'smokehouse'], color: '#c03040' },
+  sushi: { name: 'Sushi Palace', price: 12000000, menu: ['kitchen', 'freezer'], color: '#2a3a4a' },
+};
+export const RESTAURANT_ORDER: RestaurantId[] = ['chips', 'grill', 'bistro', 'sushi'];
+/** Restaurant levels 1..5: products sold per minute and price premium. */
+export const RESTAURANT_MAX = 5;
+export const restaurantRate = (level: number) => 10 + 6 * (level - 1);
+export const restaurantPremium = (level: number) => 1.25 + 0.06 * (level - 1);
+export const restaurantUpgrade = (price: number, level: number) => Math.round((price * 0.6 * Math.pow(2.2, level - 1)) / 1000) * 1000;
+
+/** The Export Office: timed contracts at a premium, and wholesale for any surplus. */
+export const EXPORT_PRICE = 400000;
+export const CONTRACT_SLOTS = 3;
+export const CONTRACT_PREMIUM = 1.8;
+/** A new contract appears this often while a slot is free. */
+export const CONTRACT_EVERY = 90;
+
 // ---------- achievements (one-time cash reward, claimed in the trophy panel) ----------
 
 /** What an achievement measures; Game.stat() computes each from saved data. */

@@ -153,6 +153,26 @@ arrows walk, Space casts / reels, E opens the building you stand at.
   keeps only the Harbor Master (boats).
 - Only Legendary / rare-variant catches by fishermen float a "+$".
 
+## The seafood empire (phase 3, 2026-10-09)
+
+- **Town** screen: the TOWN button on the action bar (with the company)
+  fades to a street with the plant, the Export Office and 4 restaurant lots;
+  tap a building for its panel, RIVER goes back.
+- **Processing Plant** $500k, comes with a Freezer (any fish, x1.4). Lines:
+  Cannery $300k (small fish, 4 per can, x2), Smokehouse $600k (salmon,
+  trout, eel, pike... x2.4), Kitchen $1.2M (shellfish and big game, x3).
+  Each line: Stations (batches at once), Speed (-12%/level), Quality
+  (+10%/level). Best fish first; the freezer takes what other running lines
+  skip. Boats (per boat: MARKET / PLANT) and the pier crate (button, or the
+  Fish Seller when switched) feed the raw stock; SELL RAW empties it.
+- **Restaurants** (Fish & Chips $750k, Smoke & Grill $2M, Lobster Bistro $5M,
+  Sushi Palace $12M): each sells its menu products at 10-34/min, x1.25-1.49,
+  5 levels. **Export Office** $400k: up to 3 timed contracts at x1.8, plus
+  wholesale at value.
+- Sim (6 boats LV3, arctic): raw $125k/min, empire unupgraded x3.1, maxed x6.9.
+- HUD: $/sec under the money (You / Fishermen / Boats / Town, last minute);
+  no log line per catch (the +$ float says it); other log lines sit top-left.
+
 ## Roadmap (agreed order, 2026-10-09)
 
 1. ~~Multiple lines + rare variants~~ (done)

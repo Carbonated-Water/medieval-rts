@@ -64,13 +64,18 @@ const GLYPHS: Record<string, string[]> = {
   A: ['.#.', '#.#', '###', '#.#', '#.#'], B: ['##.', '#.#', '##.', '#.#', '##.'], C: ['.##', '#..', '#..', '#..', '.##'], E: ['###', '#..', '##.', '#..', '###'],
   F: ['###', '#..', '##.', '#..', '#..'], H: ['#.#', '#.#', '###', '#.#', '#.#'], I: ['###', '.#.', '.#.', '.#.', '###'],
   K: ['#.#', '#.#', '##.', '#.#', '#.#'], L: ['#..', '#..', '#..', '#..', '###'], M: ['#...#', '##.##', '#.#.#', '#...#', '#...#'],
-  O: ['.#.', '#.#', '#.#', '#.#', '.#.'], R: ['##.', '#.#', '##.', '#.#', '#.#'], S: ['.##', '#..', '.#.', '..#', '##.'],
+  O: ['.#.', '#.#', '#.#', '#.#', '.#.'], D: ['##.', '#.#', '#.#', '#.#', '##.'], G: ['.##', '#..', '#.#', '#.#', '.##'],
+  N: ['#..#', '##.#', '#.##', '#..#', '#..#'], P: ['##.', '#.#', '##.', '#..', '#..'], U: ['#.#', '#.#', '#.#', '#.#', '###'],
+  V: ['#.#', '#.#', '#.#', '#.#', '.#.'], W: ['#...#', '#...#', '#.#.#', '##.##', '#...#'], X: ['#.#', '#.#', '.#.', '#.#', '#.#'], Y: ['#.#', '#.#', '.#.', '.#.', '.#.'],
+  '<': ['..#', '.#.', '#..', '.#.', '..#'], '>': ['#..', '.#.', '..#', '.#.', '#..'], R: ['##.', '#.#', '##.', '#.#', '#.#'], S: ['.##', '#..', '.#.', '..#', '##.'],
   T: ['###', '.#.', '.#.', '.#.', '.#.'], ' ': ['.', '.', '.', '.', '.'], '?': ['##.', '..#', '.#.', '...', '.#.'], '.': ['.', '.', '.', '.', '#'],
 };
-const textWidth = (s: string) => [...s].reduce((w, ch) => w + GLYPHS[ch]![0]!.length + 1, -1);
+/** A letter's pixels (unknown characters draw as a space rather than breaking the sign). */
+const glyph = (ch: string) => GLYPHS[ch] ?? GLYPHS[' ']!;
+const textWidth = (s: string) => [...s].reduce((w, ch) => w + glyph(ch)[0]!.length + 1, -1);
 function text(ctx: Ctx, s: string, x: number, y: number, color: string): void {
   for (const ch of s) {
-    const g = GLYPHS[ch]!;
+    const g = glyph(ch);
     g.forEach((row, gy) => [...row].forEach((v, gx) => v === '#' && px(ctx, x + gx, y + gy, color)));
     x += g[0]!.length + 1;
   }
@@ -406,6 +411,70 @@ export function craneCanvas(): HTMLCanvasElement {
   }));
 }
 
+// ---------- the town ----------
+
+/** The Processing Plant: a brick factory with two chimneys, a loading door and a sign. */
+export function plantCanvas(): HTMLCanvasElement {
+  const W = 64, H = 50;
+  return outline(makeCanvas(W, H, (ctx) => {
+    rect(ctx, 2, 18, W - 4, H - 19, '#a04a3a');
+    for (let y = 21; y < H - 1; y += 3) for (let x = 2 + ((y / 3) % 2) * 3; x < W - 2; x += 6) rect(ctx, x, y, 1, 1, '#7a3428');
+    // Saw-tooth roof.
+    for (let k = 0; k < 4; k++) for (let y = 0; y < 6; y++) rect(ctx, 2 + k * 15, 12 + y, 15 - y * 2 + 2, 1, y < 2 ? PAL.greyMid : PAL.greyDark);
+    rect(ctx, 6, 0, 6, 14, '#7a3428'); rect(ctx, 6, 0, 6, 2, PAL.greyDark);
+    rect(ctx, 50, 4, 6, 10, '#7a3428'); rect(ctx, 50, 4, 6, 2, PAL.greyDark);
+    // Windows, loading door.
+    for (const x of [8, 20, 40, 52]) { rect(ctx, x, 24, 6, 6, PAL.outline); rect(ctx, x + 1, 25, 4, 4, PAL.goldLight); }
+    rect(ctx, 26, 32, 12, 17, PAL.greyDark);
+    for (let y = 34; y < 49; y += 3) rect(ctx, 26, y, 12, 1, PAL.greyMid);
+    sign(ctx, W / 2, 20, 'PLANT');
+  }));
+}
+
+/** The Export Office: a little office with stacked shipping containers. */
+export function exportCanvas(): HTMLCanvasElement {
+  const W = 52, H = 40;
+  return outline(makeCanvas(W, H, (ctx) => {
+    // Containers.
+    ([[0, 26, '#2f6fd6'], [0, 18, '#dd442c'], [14, 26, '#2eb082'], [36, 26, '#f4b41b'], [36, 18, '#2f6fd6']] as const).forEach(([x, y, c]) => {
+      rect(ctx, x, y, 15, 8, c);
+      for (let k = 2; k < 15; k += 3) rect(ctx, x + k, y + 1, 1, 6, shade(c, -0.25));
+    });
+    // Office.
+    rect(ctx, 16, 10, 20, 16, PAL.sand);
+    rect(ctx, 14, 8, 24, 3, PAL.dirtDeep);
+    rect(ctx, 23, 17, 6, 9, PAL.dirtDeep);
+    rect(ctx, 18, 13, 4, 4, PAL.waterLight); rect(ctx, 30, 13, 4, 4, PAL.waterLight);
+    sign(ctx, W / 2, 0, 'EXPORT');
+  }));
+}
+
+/** A restaurant front: coloured walls and awning, big window, door, its name on a sign. */
+export function restaurantCanvas(label: string, color: string): HTMLCanvasElement {
+  const W = 44, H = 40;
+  return outline(makeCanvas(W, H, (ctx) => {
+    rect(ctx, 2, 12, W - 4, H - 13, PAL.sandLight);
+    rect(ctx, 2, 12, W - 4, 3, shade(color, -0.2));
+    for (let x = 0; x < W; x++) rect(ctx, x, 15, 1, 4 + (Math.floor(x / 4) % 2), Math.floor(x / 4) % 2 ? color : PAL.white);
+    rect(ctx, 5, 22, 20, 10, PAL.outline); rect(ctx, 6, 23, 18, 8, PAL.goldLight);
+    rect(ctx, 30, 22, 9, 17, shade(color, -0.35)); px(ctx, 37, 31, PAL.gold);
+    // Little table outside.
+    rect(ctx, 6, 35, 10, 2, PAL.dirtDark); rect(ctx, 10, 37, 2, 2, PAL.dirtDark);
+    sign(ctx, W / 2, 1, label);
+  }));
+}
+
+/** An empty lot with a FOR SALE board. */
+export function lotCanvas(): HTMLCanvasElement {
+  const W = 44, H = 40;
+  return makeCanvas(W, H, (ctx) => {
+    rect(ctx, 2, 34, W - 4, 5, PAL.dirt);
+    for (let x = 4; x < W - 4; x += 5) rect(ctx, x, 35, 2, 1, PAL.dirtDark);
+    rect(ctx, 20, 22, 2, 13, PAL.dirtDark);
+    sign(ctx, 21, 14, 'FOR SALE');
+  });
+}
+
 /** One stretch of dock planks (tiles vertically). */
 export function plankCanvas(w: number): HTMLCanvasElement {
   return makeCanvas(w, 4, (ctx) => {
@@ -502,6 +571,10 @@ const ICON_ROWS = {
   storm: ['..oooo...', '.okkkkoo.', 'okkkkkkko', 'okkkkkkko', '.ooooooo.', '...oyo...', '..oyo....', '..oo.....'],
   anchor: ['...oo...', '..okko..', '...oo...', 'oooooooo', '...ok...', '...ok...', 'o..ok..o', 'ok.ok.ko', '.okkkko.', '..oooo..'],
   plus: ['..ooo..', '..ogo..', 'ooogooo', 'ogggggo', 'ooogooo', '..ogo..', '..ooo..'],
+  can: ['.oooooo.', 'okkkkkko', 'oooooooo', 'oUUUUUUo', 'oUwwwwUo', 'oUwUUwUo', 'oUUUUUUo', 'oooooooo', 'okkkkkko', '.oooooo.'],
+  smoked: ['....ooo...', '..ooBBBo..', '.oBBbbBBo.', 'oBbbBBbbBo', 'oBBbbbbBBo', '.oBBBBBBo.', '..oooooo..'],
+  dish: ['....ooo....', '...oyyyo...', '..oyYYYyo..', '.oyYrrrYyo.', 'ooooooooooo', 'owwwwwwwwwo', '.owwwwwwwo.', '..ooooooo..'],
+  factory: ['.oo....oo..', '.oko...oko.', '.oko...oko.', 'oooooooooooo'.slice(0, 11), 'orrrrrrrrro', 'oryyrrryyro', 'orrrrrrrrro', 'orrrokkorro', 'ooooooooooo'],
   fish: ['...ooo....', 'o.oUUUo...', 'oouUUUUo..', 'ouuuuuowo.', 'oouuuuuoo.', 'o.ouuuo...', '...ooo....'],
 };
 export type IconName = keyof typeof ICON_ROWS;

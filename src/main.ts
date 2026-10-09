@@ -1,9 +1,10 @@
+import { LINES, RESTAURANTS, type LineId, type LineTrack, type RestaurantId } from './data';
 import { ACHIEVEMENTS, BOATS, DEV_MULTIPLIER, HAND_NAMES, HARBOR_UPGRADES, LETTERS, TRACKS, type GroundId, type HarborUpgradeId, type TrackId, RODS, SKILLS, VARIANTS, baitById, type BaitId, type BoatType, type GearKind, type SkillId } from './data';
 import { Game, fishById, type Line, type SaveData } from './game';
 import { Scene, WORM_SPOT_X } from './scene';
 import './ui.css';
 import { pixelFishIcon as fishIcon, pixelIcon } from './pixelart';
-import { ACH_ICON, BAIT_ICON, GEAR_ICON, SKILL_ICON, UI, type Action } from './ui';
+import { ACH_ICON, BAIT_ICON, GEAR_ICON, LINE_ICON, SKILL_ICON, UI, type Action } from './ui';
 
 const SAVE_KEY = 'riverside-fishing-v1';
 
@@ -29,6 +30,20 @@ const ui = new UI(onAction);
 const note = ui.notices;
 
 let dirty = false;
+
+/** Snapshots of game.made, one a second, for the last minute: the $/sec readout is the difference. */
+const madeLog: { t: number; you: number; hands: number; boats: number; town: number }[] = [];
+function sampleRates(now: number): void {
+  const last = madeLog[madeLog.length - 1];
+  if (last && now - last.t < 1000) return;
+  madeLog.push({ t: now, ...game.made });
+  while (madeLog.length > 61) madeLog.shift();
+  const first = madeLog[0]!, end = madeLog[madeLog.length - 1]!, secs = (end.t - first.t) / 1000;
+  ui.rates = secs < 1 ? null : {
+    you: (end.you - first.you) / secs, hands: (end.hands - first.hands) / secs,
+    boats: (end.boats - first.boats) / secs, town: (end.town - first.town) / secs,
+  };
+}
 /** Set by Start over: nothing may be saved again, or the unload save would bring the old game back. */
 let wiping = false;
 const save = () => {
@@ -48,8 +63,18 @@ scene.onArrive = (p) => {
 
 canvas.addEventListener('click', (e) => {
   if (ui.open) return;
+  // In town: buildings open their panels (the action bar has the way back).
+  if (scene.mode === 'town') {
+    const hit = scene.hitTown(e.clientX, e.clientY);
+    if (hit === 'plant') ui.open = 'plant';
+    else if (hit === 'export') ui.open = 'export';
+    else if (hit) { ui.restSel = hit; ui.open = 'restaurant'; }
+    return;
+  }
+  // On the dock, tapping a bobber reels that one line (checked before the harbor, which is close by on a wide river).
+  const slot = scene.hitBobber(e.clientX, e.clientY);
+  if (slot >= 0) { game.reel(slot); return; }
   // The harbor across the river opens its panel from anywhere.
-  if (scene.hitBobber(e.clientX, e.clientY) >= 0) { game.reel(scene.hitBobber(e.clientX, e.clientY)); return; }
   if (scene.hitHarbor(e.clientX, e.clientY)) { ui.open = 'harbor'; return; }
   // Hired fishermen and the crate on the wide pier.
   const hand = scene.hitHand(e.clientX, e.clientY);
@@ -58,9 +83,6 @@ canvas.addEventListener('click', (e) => {
   // Tapping a worm walks over to dig it up (it's picked up on the way past).
   const worm = scene.hitWorm(e.clientX, e.clientY);
   if (worm) { scene.walkTo('ground', worm.x); return; }
-  // On the dock, tapping a bobber reels that one line.
-  const slot = scene.hitBobber(e.clientX, e.clientY);
-  if (slot >= 0) { game.reel(slot); return; }
   const target = scene.hit(e.clientX, e.clientY);
   if (target === 'dock' && scene.place === 'dock') return; // already there; don't put the lines away
   scene.walkTo(target, e.clientX);
@@ -91,7 +113,7 @@ function onAction(a: Action): void {
     if (!game.cast() && !game.activeBait) { const at = scene.fisherScreen(); note.float('NO BAIT', at.x, at.y, 'bad'); }
   }
   else if (a === 'reel') game.reel();
-  else if (a === 'market' || a === 'tackle' || a === 'baitshop' || a === 'pouch' || a === 'harbor' || a === 'pier' || a === 'shipyard' || a === 'harborup' || a === 'pierstaff' || a === 'ledger' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'inbox' || a === 'settings') ui.open = ui.open === a ? null : a;
+  else if (a === 'market' || a === 'tackle' || a === 'baitshop' || a === 'pouch' || a === 'harbor' || a === 'pier' || a === 'shipyard' || a === 'harborup' || a === 'pierstaff' || a === 'ledger' || a === 'plant' || a === 'export' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'inbox' || a === 'settings') ui.open = ui.open === a ? null : a;
   else if (a.startsWith('bait:')) game.selectBait(a.slice(5) as BaitId);
   else if (a === 'buyCompany') {
     if (game.buyCompany()) { ui.open = null; note.clearBanners(); note.banner(pixelIcon('boat'), 'THE FISHING CO.', 'is yours', 'rare'); }
@@ -106,6 +128,22 @@ function onAction(a: Action): void {
       if (paid) { note.banner(pixelIcon('boat'), `SOLD ${name.toUpperCase()}`, `$${paid.toLocaleString()}`); ui.open = 'harbor'; }
     }
   } else if (a.startsWith('boat:')) { ui.boatSel = Number(a.slice(5)); ui.trackSel = 'hull'; ui.open = 'boat'; }
+  else if (a === 'town' || a === 'river') scene.travel(a);
+  else if (a === 'buyPlant') { if (game.buyPlant()) note.banner(pixelIcon('factory'), 'PROCESSING PLANT', 'Send your boats here', 'rare'); }
+  else if (a.startsWith('buyLine:')) { const id = a.slice(8) as LineId; if (game.buyLine(id)) note.banner(pixelIcon(LINE_ICON[id]), 'NEW LINE', LINES[id].name); }
+  else if (a.startsWith('line:')) { ui.lineSel = a.slice(5) as LineId; ui.open = 'line'; }
+  else if (a.startsWith('lineUp:')) { const [, id, tr] = a.split(':') as [string, LineId, LineTrack]; game.upgradeLine(id, tr); }
+  else if (a.startsWith('lineToggle:')) game.toggleLine(a.slice(11) as LineId);
+  else if (a === 'sellStock') { const n = game.sellStock(); if (n) note.banner(pixelIcon('fish'), 'SOLD RAW', `$${n.toLocaleString()}`, 'plain'); }
+  else if (a === 'sellAllProducts') {
+    const n = (Object.keys(game.products) as LineId[]).reduce((s, id) => s + game.sellProducts(id), 0);
+    if (n) note.banner(pixelIcon('can'), 'WHOLESALE', `$${n.toLocaleString()}`);
+  } else if (a.startsWith('buyRestaurant:')) { const id = a.slice(14) as RestaurantId; if (game.buyRestaurant(id)) note.banner(pixelIcon('dish'), 'OPENED', RESTAURANTS[id].name, 'rare'); }
+  else if (a.startsWith('upRestaurant:')) { const id = a.slice(13) as RestaurantId; if (game.upgradeRestaurant(id)) note.banner(pixelIcon('dish'), RESTAURANTS[id].name.toUpperCase(), `Level ${game.restaurants[id]!.level}`); }
+  else if (a === 'buyExport') { if (game.buyExport()) note.banner(pixelIcon('anchor'), 'EXPORT OFFICE', 'Contracts incoming', 'rare'); }
+  else if (a.startsWith('deliver:')) { const n = game.deliverContract(Number(a.slice(8))); if (n) note.banner(pixelIcon('anchor'), 'CONTRACT DONE', `$${n.toLocaleString()}`, 'rare'); }
+  else if (a.startsWith('toPlant:')) { const i = Number(a.slice(8)); game.setBoatToPlant(i, !game.boats[i]?.toPlant); }
+  else if (a === 'crateToPlant') { const n = game.crateToPlant(); if (n) note.float(`${n} FISH TO PLANT`, innerWidth / 2, innerHeight / 2, 'plain'); }
   else if (a === 'buyPierSection') { if (game.buyPierSection()) note.banner(pixelIcon('anchor'), 'PIER EXTENDED', `${game.pierSpots} spots`); }
   else if (a.startsWith('budget:')) game.setManagerBudget(Number(a.slice(7)));
   else if (a === 'hire') { if (game.hireHand()) note.banner(pixelIcon('crew'), 'HIRED', HAND_NAMES[game.hands.length - 1]!); }
@@ -154,7 +192,7 @@ function onAction(a: Action): void {
     const paid = game.claim(ui.pick);
     if (paid) note.banner(pixelIcon('coin'), 'COLLECTED', `$${paid.toLocaleString()}`);
   }
-  else if (a === 'close') ui.open = ui.open === 'boat' || ui.open === 'shipyard' || ui.open === 'harborup' || ui.open === 'ledger' ? 'harbor' : ui.open === 'hand' || ui.open === 'pierstaff' ? 'pier' : null;
+  else if (a === 'close') ui.open = ui.open === 'boat' || ui.open === 'shipyard' || ui.open === 'harborup' || ui.open === 'ledger' ? 'harbor' : ui.open === 'hand' || ui.open === 'pierstaff' ? 'pier' : ui.open === 'line' ? 'plant' : null;
   else if (a === 'sellAll') { const n = game.sellAll(); if (n) note.banner(pixelIcon('coin'), 'SOLD', `$${n.toLocaleString()}`); }
   else if (a.startsWith('sellFish:')) {
     const f = fishById(a.slice(9));
@@ -205,10 +243,8 @@ function announceLine(line: Extract<Line, { type: 'result' }>, slot: number): vo
   const x = at.x + (slot % 2 ? -1 : 1) * Math.min(slot, 2) * 18; // lines side by side don't overlap
   if (line.outcome === 'caught' && f && line.caught) {
     const c = line.caught, v = c.variant;
-    const name = v ? `${VARIANTS[v].name} ${f.name}` : f.name;
     const pic = fishIcon(f, false, 48, 28, v);
     note.float(`+$${game.priceOf(c).toLocaleString()}`, x, at.y, v ? 'rare' : 'good');
-    note.log(`${f.id}:${v ?? ''}`, pic, name, v ? 'rare' : 'plain');
     if (game.journal[f.id]!.count === 1) note.banner(pic, 'NEW FISH', f.name, 'rare');
     else if (v) note.banner(pic, VARIANTS[v].name.toUpperCase(), f.name, 'rare');
     if (line.strong) note.float('HELD!', x, at.y - 40, 'plain');
@@ -305,7 +341,8 @@ function frame(now: number): void {
   announce();
   announceAchievements();
   scene.update(dt);
-  ui.update(dt, game, scene.place, scene.walking);
+  sampleRates(now);
+  ui.update(dt, game, scene.place, scene.walking, scene.mode === 'town');
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

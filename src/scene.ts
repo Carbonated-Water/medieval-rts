@@ -1,13 +1,17 @@
 import { Application, Container, Graphics, Sprite, Texture, TextureStyle, TilingSprite } from 'pixi.js';
 import bgUrl from './assets/kenney/backgrounds.png';
 import tilesUrl from './assets/kenney/tiles.png';
-import { BOOTS, CLOTHES, HAND_OUTFITS, RODS, TIERS, VARIANTS, type FishDef, type Variant } from './data';
+import { BOOTS, CLOTHES, HAND_OUTFITS, RESTAURANTS, RESTAURANT_ORDER, RODS, TIERS, VARIANTS, type FishDef, type RestaurantId, type Variant } from './data';
 import type { Game, Line } from './game';
 import {
-  HAND, PAL, alertCanvas, baitShopCanvas, boatCanvas, bobberCanvas, craneCanvas, harborCanvas, warehouseCanvas, fishCanvas, fisherCanvas, holderCanvas, plankCanvas, schoolCanvas, stallCanvas, type Pose,
+  HAND, PAL, alertCanvas, baitShopCanvas, boatCanvas, bobberCanvas, craneCanvas, exportCanvas, harborCanvas, lotCanvas, plantCanvas,
+  restaurantCanvas, warehouseCanvas, fishCanvas, fisherCanvas, holderCanvas, plankCanvas, schoolCanvas, stallCanvas, type Pose,
 } from './pixelart';
 
 export type Place = 'market' | 'school' | 'bait' | 'tackle' | 'dock';
+
+/** Restaurant signs (the pixel font has room for one short word). */
+const SIGNS: Record<RestaurantId, string> = { chips: 'CHIPS', grill: 'GRILL', bistro: 'BISTRO', sushi: 'SUSHI' };
 
 /** Where each place sits along the path, as a fraction of the screen width. */
 const PLACE_X: Record<Place, number> = { market: 0.17, school: 0.335, dock: 0.5, bait: 0.665, tackle: 0.84 };
@@ -119,6 +123,13 @@ export class Scene {
   private pierFx = new Graphics();
   /** Seconds into the zoom-out fade (null when not fading). */
   private fading: number | null = null;
+  /** What to do at the darkest point of the current fade (zoom-out rebuild, or switching view). */
+  private fadeAction: (() => void) | null = null;
+  /** Which view is showing: the riverbank, or the town (phase 3). */
+  mode: 'river' | 'town' = 'river';
+  private town = new Container();
+  private townFx = new Graphics();
+  private townSprites: Record<string, Sprite> = {};
   private fadeEl?: HTMLDivElement;
   private bobbers: Sprite[] = [];
   private alerts: Sprite[] = [];
@@ -142,6 +153,7 @@ export class Scene {
     this.bg = cutter(bgs, 24);
     await this.app.init({ canvas: this.canvas, width: this.V.w, height: this.V.h, antialias: false, resolution: 1, autoStart: false, background: '#dff6f5' });
     this.app.stage.addChild(this.world);
+    this.app.stage.addChild(this.town);
     this.ready = true;
     this.resize();
   }
@@ -314,9 +326,90 @@ export class Scene {
     // Company boats (sprites are retextured each frame as crew changes).
     this.boatSprites = Array.from({ length: 8 }, () => { const s = add(new Sprite(), this.world); s.anchor.set(0.5, 1); s.visible = false; return s; });
     this.boatAlerts = Array.from({ length: 8 }, () => { const s = add(new Sprite(this.cached('alert', alertCanvas)), this.world); s.anchor.set(0.5, 1); s.visible = false; return s; });
+    this.buildTown();
     for (const f of this.flying) f.sprite.destroy();
     this.flying = [];
     this.flyLayer = add(new Container(), this.world);
+  }
+
+  // ---------- the town (phase 3) ----------
+
+  /** Town layout, in world pixels: back street (plant, export), road, front street (restaurant lots). */
+  private townLayout() {
+    const V = this.V;
+    const back = Math.round(V.h * 0.5), road = back + 2, front = Math.round(V.h * 0.8);
+    const lots = RESTAURANT_ORDER.map((id, k) => ({ id, x: Math.round(V.w * (0.14 + k * 0.24)) }));
+    return { back, road, front, plantX: Math.round(V.w * 0.3), exportX: Math.round(V.w * 0.76), lots };
+  }
+
+  private buildTown(): void {
+    const V = this.V, T = this.townLayout();
+    this.town.removeChildren();
+    const add = <C extends Container>(o: C): C => { this.town.addChild(o); return o; };
+    const tiling = (canvas: HTMLCanvasElement, x: number, y: number, w: number, h: number) =>
+      add(new TilingSprite({ texture: tex(canvas), width: w, height: Math.max(0, h), x, y }));
+    tiling(this.bg(0), 0, 0, V.w, T.back);
+    tiling(strip([8, 9, 10, 11].map((i) => this.bg(i))), 0, Math.round(V.h * 0.12), V.w, 24);
+    tiling(colorKey(strip([14, 15].map((i) => this.bg(i)))), 0, T.back - 30, V.w, 24);
+    const g = add(new Graphics());
+    g.rect(0, T.back - 8, V.w, V.h - T.back + 8).fill(PAL.green);
+    g.rect(0, T.road, V.w, 22).fill('#5a5f6e').rect(0, T.road, V.w, 2).fill(PAL.greyMid).rect(0, T.road + 20, V.w, 2).fill(PAL.greyMid);
+    for (let x = 4; x < V.w; x += 16) g.rect(x, T.road + 10, 8, 2).fill(PAL.goldLight);
+    g.rect(0, T.front - 2, V.w, 6).fill(PAL.grey).rect(0, T.front + 4, V.w, 1).fill(PAL.greyMid);
+    const place = (key: string, canvas: () => HTMLCanvasElement, x: number, y: number) => {
+      const s = add(new Sprite(this.cached(key, canvas)));
+      s.anchor.set(0.5, 1);
+      s.position.set(x, y);
+      this.townSprites[key.split(':')[0]!] = s;
+      return s;
+    };
+    place('plant', plantCanvas, T.plantX, T.back);
+    place('export', exportCanvas, T.exportX, T.back);
+    for (const lot of T.lots) {
+      const r = RESTAURANTS[lot.id];
+      const s = place(`lot-${lot.id}:`, lotCanvas, lot.x, T.front);
+      s.texture = this.cached(`rest:${lot.id}`, () => restaurantCanvas(SIGNS[lot.id], r.color));
+    }
+    this.townFx = add(new Graphics());
+  }
+
+  /** The town each frame: restaurants (or empty lots), chimney smoke while lines run, "!" on export when a contract is ready. */
+  private drawTown(): void {
+    const T = this.townLayout(), g = this.townFx.clear(), game = this.game;
+    this.townSprites.plant!.alpha = game.plant ? 1 : 0.55;
+    this.townSprites.export!.alpha = game.exportOffice ? 1 : 0.55;
+    for (const lot of T.lots) {
+      const s = this.townSprites[`lot-${lot.id}`]!;
+      s.texture = this.cached(game.restaurants[lot.id] ? `rest:${lot.id}` : 'lot', () => lotCanvas());
+    }
+    // Smoke from the chimneys while anything is being processed.
+    const busy = Object.values(game.plantLines).some((l) => l && l.jobs.length);
+    if (busy) {
+      for (let k = 0; k < 6; k++) {
+        const p = (this.time * 0.4 + k / 6) % 1;
+        for (const cx of [T.plantX - 23, T.plantX + 21]) g.circle(Math.round(cx + p * 6), Math.round(T.back - 50 - p * 26), Math.round(2 + p * 4)).fill({ color: PAL.grey, alpha: 0.7 * (1 - p) });
+      }
+    }
+    if (game.contracts.some((c) => (game.products[c.line]?.n ?? 0) >= c.qty)) {
+      const y = T.back - 46 + Math.round(Math.sin(this.time * 6) * 2);
+      g.rect(T.exportX - 3, y, 7, 10).fill(PAL.outline).rect(T.exportX - 2, y + 1, 5, 8).fill(PAL.gold);
+    }
+  }
+
+  /** Switch view with the usual fade. */
+  travel(to: 'river' | 'town'): void {
+    if (this.mode === to || this.fading !== null) return;
+    this.fading = 0;
+    this.fadeAction = () => { this.mode = to; };
+  }
+
+  /** What's under a tap in the town. */
+  hitTown(cx: number, cy: number): 'plant' | 'export' | RestaurantId | null {
+    const x = cx / this.scale, y = cy / this.scale, T = this.townLayout();
+    if (Math.abs(x - T.plantX) < 32 && y > T.back - 50 && y < T.back) return 'plant';
+    if (Math.abs(x - T.exportX) < 26 && y > T.back - 40 && y < T.back) return 'export';
+    const lot = T.lots.find((l) => Math.abs(x - l.x) < 22 && y > T.front - 40 && y < T.front);
+    return lot ? lot.id : null;
   }
 
   // ---------- where things are ----------
@@ -524,7 +617,7 @@ export class Scene {
     }
     this.ripples = this.ripples.filter((r) => (r.t += dt) < (r.big ? 1.2 : 0.9));
     if (!this.ready) return;
-    if (this.game.company !== this.builtCompany && this.fading === null) this.fading = 0;
+    if (this.game.company !== this.builtCompany && this.fading === null) { this.fading = 0; this.fadeAction = () => { this.measure(); this.resize(); }; }
     if ((this.game.pierOpen !== this.builtPier || (this.builtPier && this.game.pierSpots !== this.builtSpots)) && this.fading === null) this.resize();
     if (this.game.company && this.game.berthCount !== this.builtBerths && this.fading === null) this.resize();
     if (this.fading !== null) this.fade(dt);
@@ -532,7 +625,9 @@ export class Scene {
     for (const f of this.flying) f.t += dt;
     for (const f of this.flying.filter((f) => f.t > 1.6)) f.sprite.destroy();
     this.flying = this.flying.filter((f) => f.t <= 1.6);
-    this.draw();
+    this.world.visible = this.mode === 'river';
+    this.town.visible = this.mode === 'town';
+    if (this.mode === 'river') this.draw(); else this.drawTown();
     this.app.render();
   }
 
@@ -589,7 +684,7 @@ export class Scene {
     }
     const before = this.fading!;
     this.fading = before + dt;
-    if (before < 0.6 && this.fading >= 0.6) { this.measure(); this.resize(); }
+    if (before < 0.6 && this.fading >= 0.6) { this.fadeAction?.(); this.fadeAction = null; }
     const k = this.fading < 0.6 ? this.fading / 0.6 : Math.max(0, 1 - (this.fading - 0.6) / 0.9);
     this.fadeEl.style.opacity = String(k);
     if (this.fading >= 1.5) { this.fading = null; this.fadeEl.style.opacity = '0'; }

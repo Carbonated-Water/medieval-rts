@@ -4,6 +4,21 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Phase 3: the seafood empire; $/sec readout
+  WHAT: Town screen (TOWN / RIVER on the action bar, fade). Processing Plant
+        with Freezer, Cannery, Smokehouse, Kitchen lines (stations / speed /
+        quality), raw stock and products; boats and the pier crate can send
+        catch to the plant instead of selling. Restaurants sell products at a
+        premium; Export Office posts timed contracts and buys wholesale. All
+        runs in tick, so offline too. Town art (plant with smoke, export,
+        restaurants / FOR SALE lots), can / smoked / dish / factory icons,
+        V glyph and a missing-glyph fallback (a sign crashed on 'V').
+        HUD: $/sec per source under the money; catch lines removed from the
+        log, log moved top-left.
+  WHY:  A phase after the fleet: turn the fleet's catch into a bigger
+        business. The bottom-left log covered the market on phones, and a
+        rate per source says more than a list of catches.
+
 2026-10-09  Fleet ledger and upgrade previews
   WHAT: Boats keep books (invested on purchase / upgrades / crew, earned on
         each sale, trips); old boats get an estimated cost. Game.boatRate gives
