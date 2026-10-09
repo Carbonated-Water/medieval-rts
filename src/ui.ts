@@ -1,6 +1,6 @@
 import {
-  BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, GEAR, HAGGLE_PER_LEVEL, REFLEX_PER_LEVEL, RODS, SKILLS, STRENGTH_PER_LEVEL,
-  TIERS, type GearKind, type SkillId, type Tier,
+  BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, GEAR, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, STRENGTH_PER_LEVEL,
+  TIERS, VARIANTS, VARIANT_ORDER, type GearKind, type SkillId, type Tier, type Variant,
 } from './data';
 import { fishIcon } from './fishart';
 import { fishById, type Game } from './game';
@@ -12,15 +12,18 @@ export type Action =
   | 'tab:sell' | 'tab:gear' | 'tab:skills';
 
 type Tab = 'sell' | 'gear' | 'skills';
-const GEAR_ORDER: GearKind[] = ['rod', 'bait', 'clothes', 'boots'];
+const GEAR_ORDER: GearKind[] = ['rod', 'holders', 'bait', 'clothes', 'boots'];
 const money = (n: number) => `$${n.toLocaleString('en-US')}`;
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 const tierTag = (t: Tier) => `<span class="tier" style="--c:${TIERS[t].color}">${TIERS[t].name}</span>`;
+const VARIANT_MARK: Record<Variant, string> = { giant: '⬆', golden: '★', shiny: '✦' };
+export const variantTag = (v: Variant) => `<span class="tier variant ${v}" style="--c:${VARIANTS[v].color}">${VARIANT_MARK[v]} ${VARIANTS[v].name}</span>`;
 
 /** A small picture for a gear level: rod colour bar, bait emoji, clothes/boots swatches. */
 function gearIcon(kind: GearKind, level: number): string {
   if (kind === 'rod') return `<i class="rod" style="--c:${RODS[level]!.color}"></i>`;
   if (kind === 'bait') return `<i class="emoji">${['🍞', '🪱', '🦗', '✨', '🌟'][level]}</i>`;
+  if (kind === 'holders') return `<i class="emoji">${'🎣'.repeat(HOLDERS[level]!.lines)}</i>`;
   if (kind === 'clothes') return `<i class="swatch shirt" style="--c:${CLOTHES[level]!.shirt};--d:${CLOTHES[level]!.trousers}"></i>`;
   return `<i class="swatch boot" style="--c:${BOOTS[level]!.color ?? '#f0c8a0'}"></i>`;
 }
@@ -76,14 +79,16 @@ export class UI {
     if (walking) return `${bagLine}<div class="hint">Walking…</div>`;
     if (place === 'market') return `${bagLine}<button class="big" data-act="market">Open market</button>`;
     if (place !== 'dock') return `${bagLine}<div class="hint">Tap the <b>river</b> to fish · tap the <b>market</b> to sell</div>`;
-    const line = game.line;
-    switch (line.type) {
-      case 'idle': return `${bagLine}<button class="big" data-act="cast">🎣 Cast</button>`;
-      case 'casting':
-      case 'waiting': return `${bagLine}<button class="big wait" data-act="reel">Wait for a bite…</button>`;
-      case 'bite': return `${bagLine}<button class="big bite" data-act="reel">REEL!</button>`;
-      case 'result': return `${bagLine}<button class="big" data-act="cast">🎣 Cast again</button>`;
+    // Priority: a bite beats everything; then lines to throw; otherwise wait.
+    const biting = game.lines.filter((l) => l.type === 'bite').length;
+    const out = game.lines.filter((l) => l.type === 'idle' || l.type === 'result').length;
+    const many = game.lineCount > 1;
+    if (biting) return `${bagLine}<button class="big bite" data-act="reel">REEL!${biting > 1 ? ` ×${biting}` : ''}</button>`;
+    if (out) {
+      const label = !many ? (game.fishing ? 'Cast again' : 'Cast') : out === game.lineCount ? `Cast ${out} lines` : `Cast ${out} more`;
+      return `${bagLine}<button class="big" data-act="cast">🎣 ${label}</button>`;
     }
+    return `${bagLine}<button class="big wait" data-act="reel">Wait for a bite…</button>${many ? '<div class="hint small">Tap a bobber with a <b>!</b> to reel that line</div>' : ''}`;
   }
 
   private marketHtml(game: Game): string {
@@ -101,7 +106,8 @@ export class UI {
       ${bonus ? `<p class="note">${bonus}</p>` : ''}
       <div class="list">${[...game.bag].reverse().map((c) => {
         const f = fishById(c.fish);
-        return `<div class="item"><img src="${fishIcon(f)}" alt=""><div class="meta"><b>${f.name}</b>${tierTag(f.tier)}<small>${c.kg} kg</small></div>
+        return `<div class="item ${c.variant ?? ''}"><img src="${fishIcon(f, false, 96, 56, c.variant)}" alt=""><div class="meta"><b>${c.variant ? `${VARIANTS[c.variant].name} ` : ''}${f.name}</b>
+          <span class="tags">${tierTag(f.tier)}${c.variant ? variantTag(c.variant) : ''}</span><small>${c.kg} kg</small></div>
           <button data-act="sell:${c.id}">${money(game.priceOf(c))}</button></div>`;
       }).join('')}</div>`;
   }
@@ -156,12 +162,16 @@ export class UI {
   private journalHtml(game: Game): string {
     const cells = FISH.map((f) => {
       const j = game.journal[f.id];
+      // Variant badges: lit up once caught, faint otherwise.
+      const marks = VARIANT_ORDER.map((v) =>
+        `<i class="vmark ${j?.variants?.[v] ? 'got' : ''}" style="--c:${VARIANTS[v].color}" title="${VARIANTS[v].name}">${VARIANT_MARK[v]}</i>`).join('');
       return j
-        ? `<div class="fish seen" style="--c:${TIERS[f.tier].color}"><img src="${fishIcon(f)}" alt=""><b>${f.name}</b><small>×${j.count} · best ${j.bestKg} kg</small></div>`
+        ? `<div class="fish seen" style="--c:${TIERS[f.tier].color}"><img src="${fishIcon(f)}" alt=""><b>${f.name}</b><small>×${j.count} · best ${j.bestKg} kg</small><span class="vmarks">${marks}</span></div>`
         : `<div class="fish" style="--c:${TIERS[f.tier].color}"><img src="${fishIcon(f, true)}" alt=""><b>???</b><small>${TIERS[f.tier].name}</small></div>`;
     }).join('');
     return `<div class="card"><div class="head"><h2>Fish Journal · ${Object.keys(game.journal).length}/${FISH.length}</h2><button class="x" data-act="close" aria-label="close">✕</button></div>
-      <div class="body"><div class="grid">${cells}</div>
+      <div class="body"><p class="note">Rare variants found: <b>${game.variantsFound()}/${FISH.length * VARIANT_ORDER.length}</b> — ${VARIANT_ORDER.map(variantTag).join(' ')}</p>
+      <div class="grid">${cells}</div>
       <p class="note">Lifetime earnings: ${money(game.earned)}</p>
       <button class="wide toggle ${game.dev ? 'on' : ''}" data-act="toggleDev">Dev mode: ${game.dev ? 'ON' : 'OFF'} · fish sell for ${DEV_MULTIPLIER}×</button>
       <button class="wide danger" data-act="reset">Start over</button></div></div>`;

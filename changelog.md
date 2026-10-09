@@ -4,6 +4,26 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Multiple lines (rod holders) + rare variants
+  WHAT: Game.line → Game.lines[]. New gear line "Rod Holders" (1 → 4
+        lines: $500 / $6,000 / $35,000). Cast throws every line out of the
+        water (staggered); each line bites on its own timer; the big
+        button reels every biting line, tapping a bobber reels that one;
+        reeling with nothing biting scares only the line closest to biting.
+        Scene draws holder rods on the dock, a bobber per line, "!" over
+        each bite. Rare variants rolled on every catch: Giant 5% (2.5×
+        weight/price), Golden 1.5% (×5), Shiny 0.3% (×12) — recoloured,
+        sparkling fish, tags in the bag, badges + "variants found x/60" in
+        the journal, special toasts. Old saves get 1 line.
+  WHY:  User picked Stage 1 of the roadmap: multiple lines + rare variants
+        (makes waiting into juggling; adds rare excitement and a long-tail
+        collection goal).
+  Pacing: perfect-juggling sim maxes everything in ~58 min (was 1h45 with
+        one line) and finds ~30/60 variant types in that hour. Real players
+        juggle worse; revisit prices when buildings add new sinks. 29 tests.
+
+---
+
 2026-10-09  Gear lines, more skills, dev mode, next-only upgrades
   WHAT: Market tabs are now Sell / Gear / Skills. Gear: Rod, plus new
         Bait (faster bites, slight rare boost), Clothes (bigger, pricier

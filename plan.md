@@ -30,6 +30,11 @@ at, the upgrade system and an interface. Wanted 2D graphics.
   0–10** (+0.06 s reel window each), **Haggling 0–10** (+5% sale price
   each), **Strength 0–10** (+4% chance each to land a fish one tier above
   your rod instead of snapping).
+- **Rod Holders** (gear line): 1 → 4 lines ( / ,000 / ,000). Cast
+  throws every idle line; each bites on its own; REEL! pulls in every biting
+  line, tapping a bobber reels just that one; an early press scares one line.
+- **Rare variants** on every catch: Giant 5% (2.5× weight/price), Golden 1.5%
+  (×5), Shiny 0.3% (×12). Tracked per species in the journal (x/60).
 - **Dev mode**: fish sell for 20×. Toggle in the journal or ?dev=1;
   a DEV ×20 badge shows while it's on.
 - **Fishing:** Cast → wait 2–6.5 s for a bite → the bobber dips and you
@@ -49,6 +54,15 @@ Plain Canvas 2D, everything drawn in code (sky, hills, river with fish
 shadows, dock, striped market stall, straw-hat fisher, 20 fish drawings).
 DOM interface on top. Tap the river or the market to walk there; A/D or
 arrows walk, Space casts / reels, E opens the market.
+
+## Roadmap (agreed order, 2026-10-09)
+
+1. ~~Multiple lines + rare variants~~ (done)
+2. Town begins: building plots on the bank, Smokehouse, Apprentice helper +
+   offline earnings
+3. Living market: daily demand, orders, Ice House, Aquarium
+4. Bigger world: Boathouse, Lake, Ocean, day/night, weather
+5. Endgame: retire/prestige, achievements, journal rewards, Trophy Hall
 
 ## Not yet (ask before adding)
 

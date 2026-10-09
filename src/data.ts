@@ -93,13 +93,35 @@ export const BOOTS: BootsDef[] = [
   { name: 'Seven-League Boots', price: 12000, blurb: 'Walk 110% faster.', speed: 1.1, color: '#8e44c9' },
 ];
 
-export type GearKind = 'rod' | 'bait' | 'clothes' | 'boots';
+export interface HolderDef { name: string; price: number; blurb: string; /** lines you fish at once */ lines: number }
+/** Rod holders on the dock: each adds a line in the water. */
+export const HOLDERS: HolderDef[] = [
+  { name: 'One Line', price: 0, blurb: 'Just the rod in your hands.', lines: 1 },
+  { name: 'Rod Holder', price: 500, blurb: 'Fish with 2 lines at once.', lines: 2 },
+  { name: 'Double Holder', price: 6000, blurb: 'Fish with 3 lines at once.', lines: 3 },
+  { name: 'Triple Holder', price: 35000, blurb: 'Fish with 4 lines at once.', lines: 4 },
+];
+
+export type GearKind = 'rod' | 'holders' | 'bait' | 'clothes' | 'boots';
 export const GEAR: Record<GearKind, { title: string; levels: { name: string; price: number; blurb: string }[] }> = {
   rod: { title: 'Rod', levels: RODS },
+  holders: { title: 'Rod Holders', levels: HOLDERS },
   bait: { title: 'Bait', levels: BAIT },
   clothes: { title: 'Clothes', levels: CLOTHES },
   boots: { title: 'Boots', levels: BOOTS },
 };
+
+// ---------- rare variants, rolled on every catch ----------
+
+export type Variant = 'giant' | 'golden' | 'shiny';
+export interface VariantDef { name: string; chance: number; /** weight multiplier (price follows weight) */ size: number; /** extra price multiplier */ value: number; color: string }
+/** Checked rarest first; at most one variant per fish. */
+export const VARIANTS: Record<Variant, VariantDef> = {
+  shiny: { name: 'Shiny', chance: 0.003, size: 1, value: 12, color: '#e05ad0' },
+  golden: { name: 'Golden', chance: 0.015, size: 1, value: 5, color: '#e0a820' },
+  giant: { name: 'Giant', chance: 0.05, size: 2.5, value: 1, color: '#3f8fe0' },
+};
+export const VARIANT_ORDER: Variant[] = ['shiny', 'golden', 'giant'];
 
 // ---------- skills: trained with money, level by level ----------
 

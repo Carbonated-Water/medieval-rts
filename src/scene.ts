@@ -1,4 +1,4 @@
-import { BOOTS, CLOTHES, RODS, TIERS, type FishDef } from './data';
+import { BOOTS, CLOTHES, RODS, TIERS, VARIANTS, type FishDef, type Variant } from './data';
 import { drawFish } from './fishart';
 import type { Game } from './game';
 
@@ -15,7 +15,7 @@ interface Layout {
   marketX: number;
   dockX: number;
   dockEnd: number; // y of the dock's far end (where you fish)
-  bobber: { x: number; y: number };
+  bobbers: { x: number; y: number }[]; // where each line's bobber lands
 }
 
 interface Shadow { x: number; y: number; speed: number; size: number; phase: number }
@@ -43,8 +43,8 @@ export class Scene {
   private stepping = 0; // seconds of keyboard walking left to animate
   private shadows: Shadow[] = [];
   private ripples: Ripple[] = [];
-  private flying: { fish: FishDef; t: number } | null = null;
-  private lastLine = '';
+  private flying: { fish: FishDef; variant?: Variant; t: number; slot: number }[] = [];
+  private lastLines: string[] = [];
   private clouds = Array.from({ length: 5 }, (_, i) => ({ x: i * 0.25 + Math.random() * 0.1, y: 0.05 + Math.random() * 0.14, s: 0.6 + Math.random() * 0.6 }));
   onArrive: (p: Place) => void = () => {};
 
@@ -84,7 +84,7 @@ export class Scene {
     this.route.push({ x: target });
     if (place === 'dock') this.route.push({ dock: 1 });
     this.arrival = place === 'ground' ? null : place;
-    if (this.route.length && this.game.line.type !== 'idle') this.game.stopFishing();
+    if (this.route.length && this.game.fishing) this.game.stopFishing();
   }
 
   /** Keyboard walking: -1 / +1 along the path (steps off the dock first). */
@@ -92,7 +92,7 @@ export class Scene {
     if (dir === 0) return;
     this.route = [];
     this.arrival = null;
-    if (this.game.line.type !== 'idle') this.game.stopFishing();
+    if (this.game.fishing) this.game.stopFishing();
     if (this.onDock > 0) { this.onDock = Math.max(0, this.onDock - dt * 2.5); this.walkPhase += dt * 10; return; }
     this.px = Math.max(0.06, Math.min(0.94, this.px + dir * WALK_SPEED * this.game.walkSpeed() * dt));
     this.facing = dir;
@@ -106,16 +106,14 @@ export class Scene {
     this.time += dt;
     this.stepping = Math.max(0, this.stepping - dt);
     this.walk(dt);
-    this.trackLine();
+    this.trackLines();
     for (const s of this.shadows) {
       s.x += s.speed * dt;
       if (s.x < -0.1 || s.x > 1.1) Object.assign(s, this.newShadow(s.speed > 0 ? -0.05 : 1.05));
     }
     this.ripples = this.ripples.filter((r) => (r.t += dt) < (r.big ? 1.2 : 0.9));
-    if (this.flying) {
-      this.flying.t += dt;
-      if (this.flying.t > 1.6) this.flying = null;
-    }
+    for (const f of this.flying) f.t += dt;
+    this.flying = this.flying.filter((f) => f.t <= 1.6);
     for (const c of this.clouds) {
       c.x += dt * 0.006 * c.s;
       if (c.x > 1.2) c.x = -0.2;
@@ -144,20 +142,35 @@ export class Scene {
     }
   }
 
-  /** React to fishing state changes: splashes, the caught fish leaping out. */
-  private trackLine(): void {
-    const line = this.game.line;
-    const key = line.type + (line.type === 'result' ? line.outcome : '');
-    if (key === this.lastLine) return;
-    this.lastLine = key;
-    const b = this.L.bobber;
-    if (line.type === 'waiting') this.ripples.push({ x: b.x, y: b.y, t: 0, big: false });
-    if (line.type === 'bite') this.ripples.push({ x: b.x, y: b.y, t: 0, big: true });
-    if (line.type === 'result' && line.outcome === 'caught' && line.fish) {
-      this.flying = { fish: line.fish, t: 0 };
-      this.ripples.push({ x: b.x, y: b.y, t: 0, big: true });
-    }
-    if (line.type === 'result' && line.outcome === 'snapped') this.ripples.push({ x: b.x, y: b.y, t: 0, big: true });
+  /** React to each line's state changes: splashes, caught fish leaping out. */
+  private trackLines(): void {
+    this.game.lines.forEach((line, slot) => {
+      const key = line.type + (line.type === 'result' ? line.outcome : '');
+      if (key === this.lastLines[slot]) return;
+      this.lastLines[slot] = key;
+      const b = this.L.bobbers[slot]!;
+      if (line.type === 'waiting') this.ripples.push({ x: b.x, y: b.y, t: 0, big: false });
+      if (line.type === 'bite') this.ripples.push({ x: b.x, y: b.y, t: 0, big: true });
+      if (line.type === 'result' && line.outcome === 'caught' && line.fish) {
+        this.flying.push({ fish: line.fish, variant: line.caught?.variant, t: 0, slot });
+        this.ripples.push({ x: b.x, y: b.y, t: 0, big: true });
+      }
+      if (line.type === 'result' && line.outcome === 'snapped') this.ripples.push({ x: b.x, y: b.y, t: 0, big: true });
+    });
+    this.lastLines.length = this.game.lines.length;
+  }
+
+  /** The line whose bobber is under a screen point (only lines in the water). */
+  hitBobber(x: number, y: number): number {
+    if (this.place !== 'dock') return -1;
+    let best = -1, bestD = 38;
+    this.game.lines.forEach((line, slot) => {
+      if (line.type !== 'waiting' && line.type !== 'bite') return;
+      const b = this.L.bobbers[slot]!;
+      const d = Math.hypot(b.x - x, b.y - y);
+      if (d < bestD) { bestD = d; best = slot; }
+    });
+    return best;
   }
 
   private newShadow(x: number): Shadow {
@@ -187,7 +200,14 @@ export class Scene {
       marketX: w * 0.2,
       dockX,
       dockEnd: riverTop + (riverBottom - riverTop) * 0.42,
-      bobber: { x: Math.min(w * 0.86, dockX + Math.max(90, w * 0.2)), y: riverTop + (riverBottom - riverTop) * 0.3 },
+      // One spot per line: right, left, then further out right and left of the dock.
+      bobbers: [
+        [Math.max(90, w * 0.2), 0.3], [-Math.max(90, w * 0.2), 0.3],
+        [Math.max(55, w * 0.11), 0.1], [-Math.max(55, w * 0.11), 0.1],
+      ].map(([dx, f]) => ({
+        x: Math.max(24, Math.min(w - 24, dockX + dx!)),
+        y: riverTop + (riverBottom - riverTop) * f!,
+      })),
     };
   }
 
@@ -203,7 +223,8 @@ export class Scene {
     this.drawNearBank();
     this.drawDock();
     this.drawMarket();
-    this.drawLine();
+    this.drawHolders();
+    this.drawLines();
     this.drawPlayer();
     this.drawFlyingFish();
   }
@@ -418,12 +439,27 @@ export class Scene {
     return { x: fx, y: L.path - (L.path - L.dockEnd) * this.onDock };
   }
 
-  private rodTip(): { x: number; y: number } {
-    const f = this.feet();
-    const s = this.scale();
-    const line = this.game.line;
-    const pull = line.type === 'bite' ? Math.sin(this.time * 30) * 4 : 0;
-    return { x: f.x + this.facing * 44 * s, y: f.y - 64 * s + pull };
+  /** Holder base for line `slot` (1..3) at the dock's end; slot 0 is the player's own rod. */
+  private holderBase(slot: number): { x: number; y: number } {
+    const L = this.L;
+    const half = Math.max(46, L.w * 0.07) / 2;
+    const side = slot % 2 === 1 ? -1 : 1;
+    return { x: L.dockX + side * (half - 4), y: L.dockEnd - 6 + (slot >= 2 ? 10 : 0) };
+  }
+
+  /** Where line `slot`'s fishing line leaves the rod. */
+  private rodTip(slot = 0): { x: number; y: number } {
+    const line = this.game.lines[slot];
+    const pull = line?.type === 'bite' ? Math.sin(this.time * 30) * 4 : 0;
+    if (slot === 0) {
+      const f = this.feet();
+      const s = this.scale();
+      return { x: f.x + this.facing * 44 * s, y: f.y - 64 * s + pull };
+    }
+    const base = this.holderBase(slot);
+    const b = this.L.bobbers[slot]!;
+    const dir = Math.sign(b.x - base.x) || 1;
+    return { x: base.x + dir * 30, y: base.y - 40 + pull };
   }
 
   private scale(): number {
@@ -472,80 +508,100 @@ export class Scene {
     ctx.beginPath(); ctx.ellipse(0, -65, 8, 6, 0, Math.PI, 0); ctx.fill();
     ctx.restore();
 
-    // The rod.
-    const tip = this.rodTip();
+    // The rod in hand.
+    const tip = this.rodTip(0);
     ctx.strokeStyle = RODS[this.game.rod]!.color;
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(f.x + this.facing * 15 * s, f.y - 34 * s);
     ctx.lineTo(tip.x, tip.y);
     ctx.stroke();
+  }
 
-    // "!" when something bites.
-    if (this.game.line.type === 'bite') {
-      ctx.fillStyle = '#ffdf3a';
-      ctx.strokeStyle = '#7a4a00';
-      ctx.lineWidth = 3;
-      ctx.font = `900 ${Math.round(34 * s)}px Georgia, serif`;
-      ctx.textAlign = 'center';
-      const y = f.y - 90 * s + Math.sin(this.time * 18) * 3;
-      ctx.strokeText('!', f.x, y);
-      ctx.fillText('!', f.x, y);
+  /** Extra rods standing in holders at the dock's end (one per extra line). */
+  private drawHolders(): void {
+    const { ctx } = this;
+    for (let slot = 1; slot < this.game.lineCount; slot++) {
+      const base = this.holderBase(slot);
+      const tip = this.rodTip(slot);
+      ctx.fillStyle = '#5a3e24';
+      ctx.fillRect(base.x - 3, base.y - 10, 6, 14);
+      ctx.strokeStyle = RODS[this.game.rod]!.color;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(base.x, base.y - 6);
+      ctx.lineTo(tip.x, tip.y);
+      ctx.stroke();
     }
   }
 
-  private drawLine(): void {
+  /** Every line in the water: the line, its bobber, and a "!" over it when it bites. */
+  private drawLines(): void {
     const { ctx, L } = this;
-    const line = this.game.line;
-    if (line.type === 'idle' || (line.type === 'result' && line.outcome !== 'caught' && line.t > 0.4)) return;
-    const tip = this.rodTip();
-    let bx = L.bobber.x, by = L.bobber.y;
-    if (line.type === 'casting') {
-      // Arc from the rod tip out to the water.
-      const k = Math.min(1, line.t / 0.6);
-      bx = tip.x + (L.bobber.x - tip.x) * k;
-      by = tip.y + (L.bobber.y - tip.y) * k - Math.sin(k * Math.PI) * L.h * 0.12;
-    } else if (line.type === 'waiting') {
-      by += Math.sin(this.time * 3) * 2;
-    } else if (line.type === 'bite') {
-      by += 6 + Math.sin(this.time * 25) * 4; // dipping hard
-    } else if (line.type === 'result') {
-      const k = Math.min(1, line.t / 0.5);
-      bx = L.bobber.x + (tip.x - L.bobber.x) * k;
-      by = L.bobber.y + (tip.y - L.bobber.y) * k;
-    }
-    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.moveTo(tip.x, tip.y);
-    ctx.quadraticCurveTo((tip.x + bx) / 2, Math.max(tip.y, by) + 18, bx, by);
-    ctx.stroke();
-    if (line.type !== 'result') {
+    this.game.lines.forEach((line, slot) => {
+      if (line.type === 'idle' || (line.type === 'result' && line.outcome !== 'caught' && line.t > 0.4)) return;
+      const tip = this.rodTip(slot);
+      const home = L.bobbers[slot]!;
+      let bx = home.x, by = home.y;
+      if (line.type === 'casting') {
+        // Arc from the rod tip out to the water (t < 0 = still waiting its turn).
+        const k = Math.max(0, Math.min(1, line.t / 0.6));
+        bx = tip.x + (home.x - tip.x) * k;
+        by = tip.y + (home.y - tip.y) * k - Math.sin(k * Math.PI) * L.h * 0.12;
+      } else if (line.type === 'waiting') {
+        by += Math.sin(this.time * 3 + slot) * 2;
+      } else if (line.type === 'bite') {
+        by += 6 + Math.sin(this.time * 25) * 4; // dipping hard
+      } else if (line.type === 'result') {
+        const k = Math.min(1, line.t / 0.5);
+        bx = home.x + (tip.x - home.x) * k;
+        by = home.y + (tip.y - home.y) * k;
+      }
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(tip.x, tip.y);
+      ctx.quadraticCurveTo((tip.x + bx) / 2, Math.max(tip.y, by) + 18, bx, by);
+      ctx.stroke();
+      if (line.type === 'result') return;
       ctx.fillStyle = '#fff';
       ctx.beginPath(); ctx.arc(bx, by, 5, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#e8402a';
       ctx.beginPath(); ctx.arc(bx, by, 5, Math.PI, 0); ctx.fill();
-    }
+      if (line.type === 'bite') {
+        ctx.fillStyle = '#ffdf3a';
+        ctx.strokeStyle = '#7a4a00';
+        ctx.lineWidth = 3;
+        ctx.font = '900 30px Georgia, serif';
+        ctx.textAlign = 'center';
+        const y = home.y - 22 + Math.sin(this.time * 18 + slot) * 3;
+        ctx.strokeText('!', home.x, y);
+        ctx.fillText('!', home.x, y);
+      }
+    });
   }
 
   private drawFlyingFish(): void {
-    if (!this.flying) return;
     const { ctx, L } = this;
-    const { fish, t } = this.flying;
-    const tip = this.rodTip();
-    const k = Math.min(1, t / 0.7);
-    const x = L.bobber.x + (tip.x - L.bobber.x) * k;
-    const y = L.bobber.y + (tip.y + 30 - L.bobber.y) * k - Math.sin(k * Math.PI) * L.h * 0.12;
-    const len = Math.min(L.w, L.h) * 0.12 + fish.tier * 6;
-    ctx.save();
-    ctx.globalAlpha = t > 1.3 ? Math.max(0, 1 - (t - 1.3) / 0.3) : 1;
-    // Tier-coloured sparkle ring.
-    ctx.strokeStyle = TIERS[fish.tier].color;
-    ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(x, y, len * 0.6 + Math.sin(t * 12) * 3, 0, Math.PI * 2); ctx.stroke();
-    ctx.translate(x, y);
-    ctx.rotate(Math.sin(t * 14) * 0.3);
-    drawFish(ctx, fish, 0, 0, len, -1);
-    ctx.restore();
+    for (const { fish, variant, t, slot } of this.flying) {
+      const tip = this.rodTip(slot);
+      const from = L.bobbers[slot]!;
+      const k = Math.min(1, t / 0.7);
+      const x = from.x + (tip.x - from.x) * k;
+      const y = from.y + (tip.y + 30 - from.y) * k - Math.sin(k * Math.PI) * L.h * 0.12;
+      const len = (Math.min(L.w, L.h) * 0.12 + fish.tier * 6) * (variant === 'giant' ? 1.5 : 1);
+      ctx.save();
+      ctx.globalAlpha = t > 1.3 ? Math.max(0, 1 - (t - 1.3) / 0.3) : 1;
+      // Ring in the tier colour, or the variant's colour (doubled) for rare variants.
+      ctx.strokeStyle = variant ? VARIANTS[variant].color : TIERS[fish.tier].color;
+      ctx.lineWidth = 3;
+      for (const r of variant ? [0.6, 0.78] : [0.6]) {
+        ctx.beginPath(); ctx.arc(x, y, len * r + Math.sin(t * 12) * 3, 0, Math.PI * 2); ctx.stroke();
+      }
+      ctx.translate(x, y);
+      ctx.rotate(Math.sin(t * 14) * 0.3);
+      drawFish(ctx, fish, 0, 0, len, -1, false, variant, this.time);
+      ctx.restore();
+    }
   }
 }

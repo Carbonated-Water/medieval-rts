@@ -1,16 +1,44 @@
-import { TIERS, type FishDef } from './data';
+import { TIERS, type FishDef, type Variant } from './data';
+
+/** Body / belly / fin colours, recoloured for Golden and Shiny variants. */
+function palette(f: FishDef, silhouette: boolean, variant: Variant | undefined, time: number): [string, string, string] {
+  if (silhouette) return ['#2a3a48', '#2a3a48', '#2a3a48'];
+  if (variant === 'golden') return ['#f2c033', '#fff1a8', '#c88a10'];
+  if (variant === 'shiny') {
+    const h = (time * 90) % 360;
+    return [`hsl(${h},80%,62%)`, `hsl(${(h + 60) % 360},85%,80%)`, `hsl(${(h + 180) % 360},75%,55%)`];
+  }
+  return f.colors;
+}
 
 /**
  * Draws a fish centred at (cx, cy), `len` pixels long, facing right (or
  * left with facing = -1). Shapes come from each species' colours and body
- * ratio, with a few per-species touches.
+ * ratio, with a few per-species touches. Golden and Shiny variants are
+ * recoloured and sparkle; Giant is just drawn bigger by the caller.
  */
-export function drawFish(ctx: CanvasRenderingContext2D, f: FishDef, cx: number, cy: number, len: number, facing = 1, silhouette = false): void {
+export function drawFish(
+  ctx: CanvasRenderingContext2D, f: FishDef, cx: number, cy: number, len: number,
+  facing = 1, silhouette = false, variant?: Variant, time = 0,
+): void {
   const h = len / f.shape;
-  const [body, belly, fin] = silhouette ? ['#2a3a48', '#2a3a48', '#2a3a48'] : f.colors;
+  const [body, belly, fin] = palette(f, silhouette, variant, time);
   ctx.save();
   ctx.translate(cx, cy);
   ctx.scale(facing, 1);
+
+  if (variant === 'golden' || variant === 'shiny') {
+    // Sparkles around the fish.
+    ctx.fillStyle = variant === 'golden' ? '#fff6c0' : '#ffffff';
+    for (let i = 0; i < 6; i++) {
+      const a = i * 1.05 + time * 2;
+      const r = len * (0.45 + 0.08 * Math.sin(time * 5 + i));
+      const s = Math.max(1.5, len * 0.025);
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * r, Math.sin(a) * r * 0.6, s, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
 
   if (!silhouette && f.tier === 5) {
     // Legendary glow.
@@ -107,9 +135,9 @@ export function drawFish(ctx: CanvasRenderingContext2D, f: FishDef, cx: number, 
 
 const iconCache = new Map<string, string>();
 
-/** A fish picture as a data URL, for the HUD (cached). */
-export function fishIcon(f: FishDef, silhouette = false, w = 96, h = 56): string {
-  const key = `${f.id}:${silhouette}:${w}x${h}`;
+/** A fish picture as a data URL, for the HUD (cached). Shiny icons use a fixed rainbow frame. */
+export function fishIcon(f: FishDef, silhouette = false, w = 96, h = 56, variant?: Variant): string {
+  const key = `${f.id}:${silhouette}:${w}x${h}:${variant ?? ''}`;
   let url = iconCache.get(key);
   if (!url) {
     const c = document.createElement('canvas');
@@ -118,7 +146,7 @@ export function fishIcon(f: FishDef, silhouette = false, w = 96, h = 56): string
     c.height = h * dpr;
     const ctx = c.getContext('2d')!;
     ctx.scale(dpr, dpr);
-    drawFish(ctx, f, w * 0.56, h / 2, w * 0.82, 1, silhouette);
+    drawFish(ctx, f, w * 0.56, h / 2, w * 0.82, 1, silhouette, variant, 1.3);
     url = c.toDataURL();
     iconCache.set(key, url);
   }

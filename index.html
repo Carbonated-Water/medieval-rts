@@ -122,6 +122,19 @@
       #sheet .wide.toggle { margin-top: 10px; background: #fff; color: var(--ink); border-color: var(--wood); }
       #sheet .wide.toggle.on { background: linear-gradient(#8e44c9, #6a2a9a); color: #fff; border-color: #4a1a6a; }
       .pill.dev { background: #8e44c9; color: #fff; border-color: #4a1a6a; }
+
+      /* Rare variants. */
+      .tier.variant.golden { background: linear-gradient(90deg, #c88a10, #f2c033, #c88a10); color: #3a2a00; }
+      .tier.variant.shiny { background: linear-gradient(90deg, #e05ad0, #5ab0e0, #5ae09a, #e0c05a); animation: shimmer 2s linear infinite; background-size: 200% 100%; }
+      @keyframes shimmer { to { background-position: 200% 0; } }
+      #sheet .meta .tags { display: flex; gap: 4px; flex-wrap: wrap; }
+      #sheet .item.golden { background: #fff8de; border-color: #e0b84a; }
+      #sheet .item.shiny { background: #fbf0ff; border-color: #c48ae0; }
+      #sheet .item.giant { background: #eef6ff; border-color: #8ab8e8; }
+      #sheet .vmarks { display: flex; gap: 4px; margin-top: 2px; }
+      #sheet .vmark { font-style: normal; font-size: 12px; width: 18px; height: 18px; line-height: 18px; border-radius: 50%; background: #eee; color: #bbb; }
+      #sheet .vmark.got { background: var(--c); color: #fff; }
+      #action .hint.small { font-size: 12px; padding: 4px 10px; }
     </style>
   </head>
   <body>

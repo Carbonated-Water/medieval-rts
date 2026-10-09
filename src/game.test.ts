@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  BAIT, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, HAGGLE_PER_LEVEL, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_MAX,
+  BAIT, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_MAX, VARIANTS,
   STRENGTH_PER_LEVEL, TOO_STRONG_SHARE, skillCost,
 } from './data';
 import { Game, fishById, type Line } from './game';
@@ -21,7 +21,7 @@ const tick = (g: Game, s: number) => { for (let t = 0; t < s; t += 0.02) g.tick(
 /** Cast and wait until the bobber dips. */
 const waitForBite = (g: Game) => {
   g.cast();
-  for (let i = 0; i < 2000 && g.line.type !== 'bite'; i++) g.tick(0.02);
+  for (let i = 0; i < 2000 && g.lines[0]!.type !== 'bite'; i++) g.tick(0.02);
 };
 
 describe('data', () => {
@@ -77,10 +77,11 @@ describe('fishing', () => {
   it('cast → wait → bite → reel catches the fish and bags it', () => {
     const g = new Game({ rod: 4 }, rng(3)); // top rod: nothing snaps
     waitForBite(g);
-    expect(g.line.type).toBe('bite');
-    const fish = (g.line as { fish: { id: string } }).fish;
-    expect(g.reel()).toBe('result');
-    expect(g.line).toMatchObject({ outcome: 'caught' });
+    expect(g.lines[0]!.type).toBe('bite');
+    const fish = (g.lines[0] as { fish: { id: string } }).fish;
+    g.reel();
+    expect(g.lines[0]!.type).toBe('result');
+    expect(g.lines[0]).toMatchObject({ outcome: 'caught' });
     expect(g.bag).toHaveLength(1);
     expect(g.bag[0]!.fish).toBe(fish.id);
     expect(g.journal[fish.id]!.count).toBe(1);
@@ -91,7 +92,7 @@ describe('fishing', () => {
     g.cast();
     tick(g, 0.8);
     g.reel();
-    expect(g.line).toMatchObject({ type: 'result', outcome: 'scared' });
+    expect(g.lines[0]).toMatchObject({ type: 'result', outcome: 'scared' });
     expect(g.bag).toHaveLength(0);
   });
 
@@ -99,16 +100,16 @@ describe('fishing', () => {
     const g = new Game({}, rng());
     waitForBite(g);
     tick(g, g.reelWindow() + 0.1);
-    expect(g.line).toMatchObject({ type: 'result', outcome: 'escaped' });
+    expect(g.lines[0]).toMatchObject({ type: 'result', outcome: 'escaped' });
   });
 
   it('a fish too strong for the rod snaps the line', () => {
     const g = new Game({ rod: 0 }, rng());
     g.cast();
     tick(g, 1);
-    g.line = { type: 'bite', t: 0, window: 1, fish: fishById('trout'), tooStrong: true };
+    g.lines[0] = { type: 'bite', t: 0, window: 1, fish: fishById('trout'), tooStrong: true };
     g.reel();
-    expect(g.line).toMatchObject({ outcome: 'snapped' });
+    expect(g.lines[0]).toMatchObject({ outcome: 'snapped' });
     expect(g.bag).toHaveLength(0);
   });
 });
@@ -192,9 +193,9 @@ describe('skills', () => {
       const g = new Game({ rod: 0, strength: 10 }, rng(s + 1));
       g.cast();
       tick(g, 1);
-      g.line = { type: 'bite', t: 0, window: 1, fish: fishById('trout'), tooStrong: true };
+      g.lines[0] = { type: 'bite', t: 0, window: 1, fish: fishById('trout'), tooStrong: true };
       g.reel();
-      const res = g.line as Line; // reel() changed it; TS still thinks it's the bite we set
+      const res = g.lines[0] as Line; // reel() changed it; TS still thinks it's the bite we set
       if (res.type === 'result' && res.outcome === 'caught') { landed++; expect(res.strong).toBe(true); }
     }
     expect(landed / 400).toBeCloseTo(10 * STRENGTH_PER_LEVEL, 1);
@@ -237,5 +238,81 @@ describe('market', () => {
     g.reel();
     const copy = new Game(JSON.parse(JSON.stringify(g.save())));
     expect(copy.save()).toEqual(g.save());
+  });
+});
+
+describe('multiple lines', () => {
+  it('holders add lines; cast throws every idle line', () => {
+    const g = new Game({ money: 1e9 });
+    expect(g.lines).toHaveLength(1);
+    while (g.buyGear('holders'));
+    expect(g.lines).toHaveLength(HOLDERS[HOLDERS.length - 1]!.lines);
+    expect(g.cast()).toBe(true);
+    expect(g.lines.every((l) => l.type === 'casting')).toBe(true);
+    expect(g.cast()).toBe(false); // all already out
+  });
+
+  it('each line bites on its own; the big button reels every biting line', () => {
+    const g = new Game({ holders: 2, rod: 4 }, rng(9));
+    g.cast();
+    for (let i = 0; i < 2000 && !g.lines.some((l) => l.type === 'bite'); i++) g.tick(0.02);
+    const biting = g.lines.filter((l) => l.type === 'bite').length;
+    expect(biting).toBeGreaterThan(0);
+    const waiting = g.lines.filter((l) => l.type === 'waiting' || l.type === 'casting').length;
+    g.reel();
+    expect(g.bag).toHaveLength(biting);
+    // Lines that weren't biting are untouched.
+    expect(g.lines.filter((l) => l.type === 'waiting' || l.type === 'casting')).toHaveLength(waiting);
+  });
+
+  it('reeling with nothing biting scares only one line', () => {
+    const g = new Game({ holders: 3 }, rng(4));
+    g.cast();
+    tick(g, 0.9);
+    g.reel();
+    expect(g.lines.filter((l) => l.type === 'result' && l.outcome === 'scared')).toHaveLength(1);
+    // The other three are still out (waiting, or mid-cast thanks to the stagger).
+    expect(g.lines.filter((l) => l.type === 'waiting' || l.type === 'casting')).toHaveLength(3);
+  });
+
+  it('tapping one bobber reels just that line', () => {
+    const g = new Game({ holders: 1, rod: 4 }, rng(2));
+    g.cast();
+    tick(g, 1);
+    g.lines[1] = { type: 'bite', t: 0, window: 1, fish: fishById('carp'), tooStrong: false };
+    g.reel(1);
+    expect(g.lines[1]).toMatchObject({ type: 'result', outcome: 'caught' });
+    expect(g.lines[0]!.type).toBe('waiting');
+  });
+
+  it('old saves without holders still get one line', () => {
+    expect(new Game({ money: 5 }).lines).toHaveLength(1);
+  });
+});
+
+describe('rare variants', () => {
+  it('roll at roughly their chances', () => {
+    const g = new Game({}, rng(17));
+    const n = 200000;
+    const seen: Record<string, number> = {};
+    for (let i = 0; i < n; i++) { const v = g.rollVariant(); if (v) seen[v] = (seen[v] ?? 0) + 1; }
+    expect(seen.giant! / n).toBeCloseTo(VARIANTS.giant.chance, 2);
+    expect(seen.golden! / n).toBeCloseTo(VARIANTS.golden.chance, 2);
+    expect(seen.shiny! / n).toBeCloseTo(VARIANTS.shiny.chance, 2);
+  });
+
+  it('are worth more and are logged in the journal', () => {
+    const g = new Game({ rod: 4 }, rng(23));
+    for (let i = 0; i < 3000; i++) { waitForBite(g); g.reel(); g.stopFishing(); }
+    const ratio = (v?: string) => {
+      const list = g.bag.filter((c) => c.variant === v);
+      return list.reduce((s, c) => s + c.value / fishById(c.fish).price, 0) / list.length;
+    };
+    expect(ratio('golden')).toBeGreaterThan(ratio(undefined) * 4);
+    expect(ratio('giant')).toBeGreaterThan(ratio(undefined) * 2);
+    const goldens = g.bag.filter((c) => c.variant === 'golden').length;
+    const logged = Object.values(g.journal).reduce((s, j) => s + (j.variants?.golden ?? 0), 0);
+    expect(logged).toBe(goldens);
+    expect(g.variantsFound()).toBeGreaterThan(0);
   });
 });
