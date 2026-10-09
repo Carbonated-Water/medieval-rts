@@ -4,6 +4,19 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Fix: dead clicks in busy menus
+  WHAT: Panels redraw (innerHTML) whenever money, timers or the crate change,
+        which with a running company is almost every frame; a click whose
+        button was replaced between press and release never fired (~1 in 5
+        taps on The Pier). Taps now act on pointerup, matched by the button's
+        data-act rather than the element; redraws pause while pressed; sliding
+        off cancels; release / cancel / blur on the window always reset.
+        Keyboard activation still uses click. Measured 15-16/20 -> 20/20
+        (mouse) and 20/20 touch taps with 30-400 ms holds; one tap buys once.
+  WHY:  User: 'a lot of dead clicks on some of these menus'.
+
+---
+
 2026-10-09  Fix: Sell boat did nothing for boats at sea
   WHAT: Selling was only allowed at the pier, and a boat with a Captain sails
         again the moment it returns, so its button stayed disabled. Boats can

@@ -61,10 +61,39 @@ export class UI {
   /** Upgrade track shown in the boat panel's detail strip. */
   trackSel: TrackId = 'hull';
 
+  /** A finger / mouse button is down on the interface: hold redraws so buttons don't change under it. */
+  private pressing = false;
+
+  /**
+   * Taps act on release, matched by the button's action rather than the
+   * element: the panels redraw as money and timers tick, and a plain click
+   * is lost if its button was replaced between press and release. Sliding
+   * off the button still cancels. Keyboard activation keeps using click.
+   */
   constructor(onAction: (a: Action) => void) {
+    const actOf = (el: Element | null) => {
+      const btn = el?.closest('[data-act]') as HTMLButtonElement | null;
+      return btn && !btn.disabled ? (btn.dataset.act as Action) : null;
+    };
+    let downAct: Action | null = null;
+    document.body.addEventListener('pointerdown', (e) => {
+      downAct = actOf(e.target as Element);
+      this.pressing = !!downAct;
+    });
+    // Listen on the window so a release anywhere (even off the page) ends the press.
+    addEventListener('pointerup', (e) => {
+      const act = actOf(document.elementFromPoint(e.clientX, e.clientY));
+      if (downAct && act === downAct) onAction(act);
+      downAct = null;
+      this.pressing = false;
+    });
+    const reset = () => { downAct = null; this.pressing = false; };
+    addEventListener('pointercancel', reset);
+    addEventListener('blur', reset);
     document.body.addEventListener('click', (e) => {
-      const btn = (e.target as HTMLElement).closest('[data-act]') as HTMLElement | null;
-      if (btn && !(btn as HTMLButtonElement).disabled) onAction(btn.dataset.act as Action);
+      if (e.detail !== 0) return; // pointer taps were handled on release
+      const act = actOf(e.target as Element);
+      if (act) onAction(act);
     });
   }
 
@@ -441,7 +470,7 @@ export class UI {
   }
 
   private set(key: keyof UI['last'], el: HTMLElement, html: string): void {
-    if (this.last[key] === html) return;
+    if (this.pressing || this.last[key] === html) return;
     this.last[key] = html;
     el.innerHTML = html;
   }
