@@ -4,7 +4,7 @@ import {
   SIGHTING_CHANCE, SONAR_STEP, STORM_LOSS, TRACKS, TRACK_GROWTH, TRACK_MAX, WAREHOUSE, crewCost,
   type GroundDef, type GroundId, type HarborUpgradeId, type TrackId,
   CONTRACT_EVERY, CONTRACT_PREMIUM, CONTRACT_SLOTS, EXPORT_PRICE, LINES, LINE_ORDER, LINE_QUALITY, LINE_SPEED, LINE_TRACK_MAX,
-  LINE_UPGRADE_BASE, LINE_UPGRADE_GROWTH, PLANT_PRICE, RESTAURANTS, RESTAURANT_MAX, restaurantPremium, restaurantRate, restaurantUpgrade,
+  LINE_UPGRADE_BASE, LINE_UPGRADE_GROWTH, PLANT_PRICE, RESTAURANTS, RESTAURANT_MAX, restaurantPremium, restaurantRate, restaurantUpgrade, HUSTLE, MANAGER_COST, TILL_DISHES,
   PLANT_BACKLOG_MIN, TOWN_CHAIN, type LineId, type LineTrack, type RestaurantId, type TownStep,
   HANDS_MAX, MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, SELLER_BAG, handCost, HAND_REACT, HAND_REACT_PER_LEVEL, HAND_REST, HAND_SKILL_MAX, LETTERS, handSkillCost, type BoatType, BITE_WAIT, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, GEAR, HAGGLE_PER_LEVEL, HOLDERS, MAX_GROUND_WORMS,
   MIN_BITE_WAIT, REEL_WINDOW, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, START_WORMS, STRENGTH_PER_LEVEL, TIERS,
@@ -53,6 +53,12 @@ export interface Hand {
   /** Reaction time picked for the current bite. */
   react: number | null;
 }
+
+/** A restaurant: its level, lifetime takings, what's in the till (money and dishes), and whether a manager empties it. */
+export interface Restaurant { level: number; earned: number; till?: number; tillN?: number; manager?: boolean }
+
+/** Things that happen in town, for the street scene to show (fish trucks, customers, lorries). Not saved. */
+export type TownEvent = { kind: 'fish'; n: number } | { kind: 'sale'; id: RestaurantId; paid: number } | { kind: 'wholesale'; paid: number } | { kind: 'export'; paid: number };
 
 /** A pile of something (raw fish of one kind, or one product), what it's all worth, and what the fish in it were worth raw. */
 export interface Lot { n: number; value: number; raw?: number }
@@ -107,7 +113,7 @@ export interface SaveData {
   plantLines: Partial<Record<LineId, PlantLine>>;
   stock: Record<string, Lot>;
   products: Partial<Record<LineId, Lot>>;
-  restaurants: Partial<Record<RestaurantId, { level: number; earned: number }>>;
+  restaurants: Partial<Record<RestaurantId, Restaurant>>;
   exportOffice: boolean;
   contracts: Contract[];
   hands: Hand[];
@@ -179,7 +185,7 @@ export class Game {
   plantLines: Partial<Record<LineId, PlantLine>> = {};
   stock: Record<string, Lot> = {};
   products: Partial<Record<LineId, Lot>> = {};
-  restaurants: Partial<Record<RestaurantId, { level: number; earned: number }>> = {};
+  restaurants: Partial<Record<RestaurantId, Restaurant>> = {};
   exportOffice = false;
   contracts: Contract[] = [];
   private restaurantClock: Partial<Record<RestaurantId, number>> = {};
@@ -781,6 +787,7 @@ export class Game {
       for (const h of b.haul) { this.addStock(h.fish, h.n, h.value * keep); raw += h.value * keep; }
       b.earned += Math.round(raw);
       this.made.boats += raw;
+      this.townEvent({ kind: 'fish', n: b.haul.reduce((s, h) => s + h.n, 0) });
       b.haul = null;
       return 0;
     }
@@ -1157,6 +1164,7 @@ export class Game {
 
   /** The pier crate goes to the plant (the Fish Seller does this when it has room). */
   private crateToPlant(): void {
+    if (this.crate.length) this.townEvent({ kind: 'fish', n: this.crate.length });
     for (const c of this.crate) this.addStock(c.fish, 1, c.value);
     this.crate = [];
   }
@@ -1200,9 +1208,76 @@ export class Game {
     this.made.town += Math.max(0, paid - raw);
   }
 
+  private hustleT: Partial<Record<RestaurantId, number>> = {};
+
+  /** Keep a restaurant hustling for a moment (call while it's held, or on a tap). */
+  hustle(id: RestaurantId): void {
+    if (this.restaurants[id]) this.hustleT[id] = Math.max(this.hustleT[id] ?? 0, 0.35);
+  }
+
+  hustling(id: RestaurantId): boolean {
+    return (this.hustleT[id] ?? 0) > 0;
+  }
+
+  /** The till is full: the restaurant waits until it's emptied. */
+  tillFull(id: RestaurantId): boolean {
+    const r = this.restaurants[id];
+    return !!r && !r.manager && (r.tillN ?? 0) >= TILL_DISHES;
+  }
+
+  /** Empty a restaurant's till into your money. */
+  collectTill(id: RestaurantId): number {
+    const r = this.restaurants[id];
+    const n = Math.round(r?.till ?? 0);
+    if (!r || !n) return 0;
+    r.till = 0;
+    r.tillN = 0;
+    this.money += n;
+    this.earned += n;
+    return n;
+  }
+
+  managerPrice(id: RestaurantId): number {
+    return RESTAURANTS[id].price * MANAGER_COST;
+  }
+
+  /** Hire a manager: the till empties itself from now on (what's in it now is collected). */
+  buyManager(id: RestaurantId): boolean {
+    const r = this.restaurants[id];
+    if (!r || r.manager || this.money < this.managerPrice(id)) return false;
+    this.money -= this.managerPrice(id);
+    this.collectTill(id);
+    r.manager = true;
+    return true;
+  }
+
   nextRestaurantCost(id: RestaurantId): number | null {
     const r = this.restaurants[id];
     return r && r.level < RESTAURANT_MAX ? restaurantUpgrade(RESTAURANTS[id].price, r.level) : null;
+  }
+
+  /**
+   * Up to n levels for a restaurant and what they cost; with n = Infinity, as
+   * many as you can afford right now (MAX).
+   */
+  restaurantBulk(id: RestaurantId, n: number): { n: number; cost: number } {
+    const r = this.restaurants[id];
+    let lvl = r?.level ?? RESTAURANT_MAX, cost = 0, k = 0;
+    while (k < n && lvl < RESTAURANT_MAX) {
+      const c = restaurantUpgrade(RESTAURANTS[id].price, lvl);
+      if (n === Infinity && cost + c > this.money) break;
+      cost += c; lvl++; k++;
+    }
+    return { n: k, cost };
+  }
+
+  /** Buy several levels at once; returns how many. */
+  upgradeRestaurantBulk(id: RestaurantId, n: number): number {
+    const b = this.restaurantBulk(id, n);
+    if (!b.n || b.cost > this.money) return 0;
+    this.money -= b.cost;
+    this.restaurants[id]!.level += b.n;
+    return b.n;
   }
 
   upgradeRestaurant(id: RestaurantId): boolean {
@@ -1215,6 +1290,11 @@ export class Game {
 
   /** Contracts finished by themselves this tick, for the banner. */
   contractNews: number[] = [];
+  /** What happened in town since the scene last looked (capped, so a long offline catch-up can't flood it). */
+  townNews: TownEvent[] = [];
+  private townEvent(e: TownEvent): void {
+    if (this.townNews.length < 80) this.townNews.push(e);
+  }
 
   /**
    * The town at work: lines start batches from the stock (most valuable fish
@@ -1258,6 +1338,7 @@ export class Game {
         this.townIncome(c.reward, this.takeProduct(c.line, c.qty).raw);
         this.contracts = this.contracts.filter((x) => x !== c);
         this.contractNews.push(c.reward);
+        this.townEvent({ kind: 'export', paid: c.reward });
       }
       if (this.contracts.length < CONTRACT_SLOTS && (this.contractClock += dt) >= CONTRACT_EVERY) {
         this.contractClock = 0;
@@ -1272,29 +1353,39 @@ export class Game {
         }
       }
     }
-    for (const [id, r] of Object.entries(this.restaurants) as [RestaurantId, { level: number; earned: number }][]) {
-      const every = 60 / restaurantRate(r.level);
+    for (const [id, r] of Object.entries(this.restaurants) as [RestaurantId, Restaurant][]) {
+      const hustle = (this.hustleT[id] ?? 0) > 0;
+      if (hustle) this.hustleT[id]! -= dt;
+      const every = 60 / (restaurantRate(r.level) * (hustle ? HUSTLE : 1));
       this.restaurantClock[id] = (this.restaurantClock[id] ?? 0) + dt;
       while (this.restaurantClock[id]! >= every) {
         this.restaurantClock[id]! -= every;
         const dish = RESTAURANTS[id].menu.filter((m) => (this.products[m]?.n ?? 0) > 0).sort((a, b) => this.productAvg(b) - this.productAvg(a))[0];
-        if (!dish) { this.restaurantClock[id] = 0; break; }
+        if (!dish || this.tillFull(id)) { this.restaurantClock[id] = 0; break; }
         const took = this.takeProduct(dish, 1);
         const paid = Math.round(took.value * restaurantPremium(r.level) * (this.dev ? DEV_MULTIPLIER : 1));
         r.earned += paid;
-        this.townIncome(paid, took.raw);
+        if (r.manager) this.townIncome(paid, took.raw);
+        else {
+          // Into the till: yours when you tap it.
+          r.till = (r.till ?? 0) + paid;
+          r.tillN = (r.tillN ?? 0) + 1;
+          this.made.town += Math.max(0, paid - took.raw);
+        }
+        this.townEvent({ kind: 'sale', id, paid });
       }
     }
-    // Wholesale: keep a minute of what the restaurants serve, plus what open contracts need; sell the rest at value.
+    // Wholesale: keep three minutes of what the restaurants serve (enough to hustle), plus what open contracts need; sell the rest at value.
     for (const id of LINE_ORDER) {
       const n = this.products[id]?.n ?? 0;
       if (!n) continue;
       const keep = (Object.entries(this.restaurants) as [RestaurantId, { level: number }][])
-        .filter(([rid]) => RESTAURANTS[rid].menu.includes(id)).reduce((s, [, r]) => s + restaurantRate(r.level), 0)
+        .filter(([rid]) => RESTAURANTS[rid].menu.includes(id)).reduce((s, [, r]) => s + restaurantRate(r.level) * 3, 0)
         + this.contracts.filter((c) => c.line === id).reduce((s, c) => s + c.qty, 0);
       if (n > keep) {
         const took = this.takeProduct(id, n - Math.floor(keep));
         this.townIncome(Math.round(took.value), took.raw);
+        this.townEvent({ kind: 'wholesale', paid: Math.round(took.value) });
       }
     }
   }

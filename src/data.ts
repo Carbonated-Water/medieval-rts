@@ -402,10 +402,26 @@ export const RESTAURANTS: Record<RestaurantId, RestaurantDef> = {
 };
 export const RESTAURANT_ORDER: RestaurantId[] = ['chips', 'grill', 'bistro', 'sushi'];
 /** Restaurant levels 1..5: products sold per minute and price premium. */
-export const RESTAURANT_MAX = 5;
-export const restaurantRate = (level: number) => 10 + 6 * (level - 1);
-export const restaurantPremium = (level: number) => 1.25 + 0.06 * (level - 1);
-export const restaurantUpgrade = (price: number, level: number) => Math.round((price * 0.6 * Math.pow(2.2, level - 1)) / 1000) * 1000;
+/**
+ * Restaurants level 1-100: each level is cheap and adds a little premium; at
+ * the milestones the building transforms (cart, shop, terrace, two floors,
+ * landmark) and serves twice as fast.
+ */
+export const RESTAURANT_MAX = 100;
+export const RESTAURANT_MILESTONES = [10, 25, 50, 100];
+export const TIER_NAMES = ['Food Cart', 'Shop', 'Terrace', 'Two Floors', 'Landmark'];
+export const restaurantTier = (level: number) => RESTAURANT_MILESTONES.filter((m) => level >= m).length;
+/** Dishes served per minute. */
+export const restaurantRate = (level: number) => Math.round(10 * (1 + 0.05 * (level - 1)) * Math.pow(2, restaurantTier(level)));
+/** Price multiplier on a dish's value. */
+export const restaurantPremium = (level: number) => 1.25 + 0.02 * (level - 1);
+export const restaurantUpgrade = (price: number, level: number) => Math.round((price * 0.05 * Math.pow(1.09, level - 1)) / 100) * 100;
+/** The till holds this many dishes' takings; then the restaurant waits for you (or a manager) to empty it. */
+export const TILL_DISHES = 120;
+/** A manager empties the till by itself: costs this times the restaurant. */
+export const MANAGER_COST = 1.5;
+/** Holding a restaurant hustles it: serves this many times faster. */
+export const HUSTLE = 3;
 
 /** The Export Office: timed contracts at a premium, and wholesale for any surplus. */
 export const EXPORT_PRICE = 400000;

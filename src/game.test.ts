@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_REPEAT, BOOTS, CAPTAIN_WAGE, COMPANY_PRICE, CREW_BASE, GROUNDS, HANDS_MAX, handCost, PIER_SPOTS, PIER_SECTIONS, SELLER_BAG, SHELLFISH,
   COMPANY_UNLOCK_EARNED, LETTERS, TRACK_GROWTH, TRACK_MAX, TRACK_ORDER, CLOTHES, DEV_MULTIPLIER, FISH, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_MAX, VARIANTS,
-  MAX_GROUND_WORMS, START_WORMS, STRENGTH_PER_LEVEL, WORM_SPAWN_SECONDS, skillCost,
-} from './data';
+  MAX_GROUND_WORMS, START_WORMS, STRENGTH_PER_LEVEL, WORM_SPAWN_SECONDS, skillCost, restaurantRate, restaurantUpgrade } from './data';
 import { Game, fishById, type Line } from './game';
 
 /** Deterministic RNG for tests. */
@@ -905,17 +904,53 @@ describe('seafood empire', () => {
     expect(g.money - money).toBeCloseTo(100 * 1.4 * 1.1, 0);
   });
 
-  it('restaurants sell at a premium; only the extra counts as town income', () => {
+  it('restaurants sell at a premium into the till; tapping it pays; only the extra counts as town income', () => {
     const g = empire();
     build(g, 2);
     g.products.freezer = { n: 100, value: 10000, raw: 5000 };
     const money = g.money;
     tick(g, 60);
-    expect(g.restaurants.chips!.earned).toBeGreaterThan(0);
+    const chips = g.restaurants.chips!;
+    expect(chips.earned).toBeGreaterThan(0);
+    expect(chips.till).toBe(chips.earned); // waiting in the till
+    expect(g.collectTill('chips')).toBe(chips.earned);
+    expect(chips.till).toBe(0);
     // Served at x1.25, the rest beyond a minute's worth wholesale at 100; town income = paid minus raw (50 a piece).
     const sold = 100 - (g.products.freezer?.n ?? 0);
     expect(g.made.town).toBeCloseTo(g.money - money - 50 * sold, -1);
     expect(g.money - money).toBeGreaterThan(sold * 100);
+  });
+
+  it('a full till stops sales until it is emptied; a manager empties it by itself', () => {
+    const g = empire();
+    build(g, 2);
+    g.restaurants.chips!.level = 50; // fast
+    g.products.freezer = { n: 5000, value: 500000, raw: 0 };
+    tick(g, 120);
+    expect(g.tillFull('chips')).toBe(true);
+    const earned = g.restaurants.chips!.earned;
+    tick(g, 5);
+    expect(g.restaurants.chips!.earned).toBe(earned);
+    expect(g.buyManager('chips')).toBe(true);
+    expect(g.restaurants.chips!.till).toBe(0);
+    const money = g.money;
+    g.products.freezer = { n: 5000, value: 500000, raw: 0 };
+    tick(g, 5);
+    expect(g.money).toBeGreaterThan(money);
+    expect(g.tillFull('chips')).toBe(false);
+  });
+
+  it('hustling serves faster; levels are cheap and milestones double speed', () => {
+    const run = (hustle: boolean) => {
+      const g = empire();
+      build(g, 2);
+      g.products.freezer = { n: 1000, value: 100000, raw: 0 };
+      for (let t = 0; t < 30; t += 0.02) { if (hustle) g.hustle('chips'); g.tick(0.02); }
+      return g.restaurants.chips!.tillN ?? 0;
+    };
+    expect(run(true)).toBeGreaterThan(run(false) * 2.5);
+    expect(restaurantRate(10)).toBeGreaterThan(restaurantRate(9) * 1.9);
+    expect(restaurantUpgrade(750000, 1)).toBeLessThan(750000 * 0.1);
   });
 
   it('contracts deliver themselves when there is enough', () => {

@@ -423,8 +423,10 @@ export function plantCanvas(): HTMLCanvasElement {
     for (let k = 0; k < 4; k++) for (let y = 0; y < 6; y++) rect(ctx, 2 + k * 15, 12 + y, 15 - y * 2 + 2, 1, y < 2 ? PAL.greyMid : PAL.greyDark);
     rect(ctx, 6, 0, 6, 14, '#7a3428'); rect(ctx, 6, 0, 6, 2, PAL.greyDark);
     rect(ctx, 50, 4, 6, 10, '#7a3428'); rect(ctx, 50, 4, 6, 2, PAL.greyDark);
-    // Windows, loading door.
-    for (const x of [8, 20, 40, 52]) { rect(ctx, x, 24, 6, 6, PAL.outline); rect(ctx, x + 1, 25, 4, 4, PAL.goldLight); }
+    // A long window onto the production floor (the conveyor is drawn over it), loading door.
+    rect(ctx, 5, 22, 54, 9, PAL.outline); rect(ctx, 6, 23, 52, 7, '#3d4357');
+    rect(ctx, 6, 28, 52, 1, PAL.greyMid);
+    for (let x = 8; x < 58; x += 6) rect(ctx, x, 29, 1, 1, PAL.greyDark);
     rect(ctx, 26, 32, 12, 17, PAL.greyDark);
     for (let y = 34; y < 49; y += 3) rect(ctx, 26, y, 12, 1, PAL.greyMid);
     sign(ctx, W / 2, 20, 'PLANT');
@@ -449,18 +451,183 @@ export function exportCanvas(): HTMLCanvasElement {
   }));
 }
 
-/** A restaurant front: coloured walls and awning, big window, door, its name on a sign. */
-export function restaurantCanvas(label: string, color: string): HTMLCanvasElement {
-  const W = 44, H = 40;
+/**
+ * Where things are on each restaurant look, relative to the sprite's bottom
+ * centre: the door (or the cart's hatch) customers walk to, the outside table
+ * a diner sits at (none on the cart), the window the SOLD OUT board hangs on.
+ */
+export interface RestaurantSpots { w: number; h: number; door: number; table: number | null; window: { x: number; y: number } }
+export const RESTAURANT_SPOTS: RestaurantSpots[] = [
+  { w: 34, h: 32, door: 0, table: null, window: { x: 0, y: 13 } },
+  { w: 44, h: 40, door: 12, table: -14, window: { x: -7, y: 13 } },
+  { w: 56, h: 44, door: 18, table: -24, window: { x: -1, y: 15 } },
+  { w: 56, h: 58, door: 18, table: -24, window: { x: -1, y: 15 } },
+  { w: 64, h: 66, door: 20, table: -28, window: { x: 0, y: 15 } },
+];
+
+/** Striped awning across [x, x+w) at row y. */
+function awning(ctx: Ctx, x: number, y: number, w: number, color: string): void {
+  rect(ctx, x, y, w, 2, shade(color, -0.25));
+  for (let k = 0; k < w; k++) rect(ctx, x + k, y + 2, 1, 3 + (Math.floor(k / 4) % 2), Math.floor(k / 4) % 2 ? color : PAL.white);
+}
+
+/** The ground floor of a shop: wall, awning, big lit window, door. Bottom at y0 + 22. */
+function shopFloor(ctx: Ctx, x: number, w: number, y0: number, color: string, doorX: number, winX: number, winW: number): void {
+  rect(ctx, x, y0, w, 22, PAL.sandLight);
+  awning(ctx, x - 1, y0, w + 2, color);
+  rect(ctx, winX, y0 + 8, winW, 10, PAL.outline); rect(ctx, winX + 1, y0 + 9, winW - 2, 8, PAL.goldLight);
+  rect(ctx, winX + 1, y0 + 9, winW - 2, 2, '#fff3b0');
+  rect(ctx, doorX, y0 + 8, 9, 14, shade(color, -0.35)); px(ctx, doorX + 7, y0 + 15, PAL.gold);
+}
+
+/** A café table with two stools. */
+function table(ctx: Ctx, x: number, y: number): void {
+  rect(ctx, x, y, 10, 2, PAL.dirtDark); rect(ctx, x + 4, y + 2, 2, 3, PAL.dirtDark);
+  rect(ctx, x - 3, y + 3, 2, 2, PAL.dirtDeep); rect(ctx, x + 11, y + 3, 2, 2, PAL.dirtDeep);
+}
+
+/**
+ * A restaurant at one of its five looks: 0 food cart, 1 shop, 2 shop with a
+ * terrace, 3 two floors with a balcony and a lit sign, 4 a landmark with a
+ * gold fish on the roof. Sizes in RESTAURANT_SPOTS; anchored bottom-centre.
+ */
+export function restaurantCanvas(label: string, color: string, tier = 1): HTMLCanvasElement {
+  const S = RESTAURANT_SPOTS[tier]!, W = S.w, H = S.h, B = H - 1;
   return outline(makeCanvas(W, H, (ctx) => {
-    rect(ctx, 2, 12, W - 4, H - 13, PAL.sandLight);
-    rect(ctx, 2, 12, W - 4, 3, shade(color, -0.2));
-    for (let x = 0; x < W; x++) rect(ctx, x, 15, 1, 4 + (Math.floor(x / 4) % 2), Math.floor(x / 4) % 2 ? color : PAL.white);
-    rect(ctx, 5, 22, 20, 10, PAL.outline); rect(ctx, 6, 23, 18, 8, PAL.goldLight);
-    rect(ctx, 30, 22, 9, 17, shade(color, -0.35)); px(ctx, 37, 31, PAL.gold);
-    // Little table outside.
-    rect(ctx, 6, 35, 10, 2, PAL.dirtDark); rect(ctx, 10, 37, 2, 2, PAL.dirtDark);
-    sign(ctx, W / 2, 1, label);
+    if (tier === 0) {
+      // Food cart: umbrella, counter, wheels, name on the front.
+      rect(ctx, 16, 7, 2, 12, PAL.greyDark);
+      for (let y = 0; y < 6; y++) rect(ctx, 6 - y, 2 + y, 22 + y * 2, 1, y % 2 ? color : PAL.white);
+      for (let x = 1; x < 33; x += 6) rect(ctx, x, 8, 3, 1, color);
+      rect(ctx, 3, 17, 28, 9, PAL.sandLight); rect(ctx, 3, 17, 28, 2, shade(color, -0.2));
+      rect(ctx, 6, 14, 8, 3, PAL.greyMid); rect(ctx, 20, 15, 6, 2, PAL.gold);
+      text(ctx, label.slice(0, 5), 17 - Math.floor(textWidth(label.slice(0, 5)) / 2), 20, PAL.dirtDeep);
+      for (const x of [8, 25]) { rect(ctx, x - 2, B - 5, 5, 5, PAL.outline); rect(ctx, x - 1, B - 4, 3, 3, PAL.greyMid); }
+      return;
+    }
+    if (tier === 1) {
+      shopFloor(ctx, 2, W - 4, H - 23, color, 30, 5, 20);
+      table(ctx, 5, H - 6);
+      sign(ctx, W / 2, H - 31, label);
+      return;
+    }
+    // Tiers 2-4: shop on the right, terrace on the left.
+    const shopX = tier === 4 ? 18 : 16, ground = H - 23;
+    // Terrace: low fence, a big umbrella over the table.
+    rect(ctx, 1, B - 5, shopX - 2, 1, PAL.dirtDark);
+    for (let x = 1; x < shopX - 1; x += 3) rect(ctx, x, B - 5, 1, 5, PAL.dirtDark);
+    rect(ctx, 8, ground + 2, 1, 14, PAL.greyDark);
+    for (let y = 0; y < 4; y++) rect(ctx, 6 - y * 2, ground - 1 + y, 6 + y * 4, 1, y % 2 ? PAL.white : color);
+    table(ctx, 3, B - 4);
+    shopFloor(ctx, shopX, W - shopX - 1, ground, color, W - 13, shopX + 4, W - shopX - 20);
+    if (tier === 2) {
+      // Flower boxes under the window, the sign on the roof.
+      for (let x = shopX + 4; x < W - 16; x += 4) { rect(ctx, x, ground + 18, 3, 2, PAL.dirtDark); px(ctx, x + 1, ground + 17, PAL.redLight); }
+      sign(ctx, shopX + (W - shopX) / 2, ground - 9, label);
+      return;
+    }
+    // Upper floor(s): wall, windows, balcony rail.
+    const floors = tier === 4 ? 2 : 1, up = ground - floors * 14;
+    rect(ctx, shopX, up, W - shopX - 1, floors * 14, shade(color, 0.55));
+    for (let f = 0; f < floors; f++) {
+      for (let x = shopX + 3; x < W - 6; x += 9) { rect(ctx, x, up + 3 + f * 14, 5, 7, PAL.outline); rect(ctx, x + 1, up + 4 + f * 14, 3, 5, f % 2 ? PAL.waterLight : PAL.goldLight); }
+    }
+    rect(ctx, shopX - 1, ground - 2, W - shopX + 1, 1, PAL.greyDark);
+    for (let x = shopX; x < W - 1; x += 3) rect(ctx, x, ground - 4, 1, 2, PAL.greyDark);
+    // Roof line, the lit sign (its letters in the shop colour on dark), and on the landmark a gold fish.
+    rect(ctx, shopX - 2, up - 2, W - shopX + 3, 2, PAL.dirtDeep);
+    const sw = textWidth(label) + 6, sx = Math.round(shopX + (W - shopX - sw) / 2);
+    rect(ctx, sx, up - 10, sw, 8, PAL.outline);
+    text(ctx, label, sx + 3, up - 8, tier === 4 ? PAL.gold : PAL.goldLight);
+    if (tier === 4) {
+      const fx = shopX - 6, fy = up - 6;
+      rect(ctx, fx, fy, 10, 5, PAL.gold); rect(ctx, fx + 10, fy + 1, 3, 3, PAL.gold); rect(ctx, fx - 3, fy - 1, 3, 2, PAL.gold); rect(ctx, fx - 3, fy + 4, 3, 2, PAL.gold);
+      px(ctx, fx + 2, fy + 1, PAL.outline); rect(ctx, fx + 3, fy + 3, 5, 1, PAL.goldLight);
+      rect(ctx, fx + 4, fy + 5, 2, ground - fy - 5, PAL.greyDark);
+      // String lights along the terrace.
+      for (let x = 1; x < shopX; x += 3) px(ctx, x, ground - 3 + (x % 2), x % 6 === 1 ? PAL.redLight : PAL.goldLight);
+    }
+  }));
+}
+
+/** A gold coin, for the till bursts. */
+export function coinCanvas(): HTMLCanvasElement {
+  return outline(makeCanvas(8, 8, (ctx) => {
+    rect(ctx, 2, 1, 4, 6, PAL.gold); rect(ctx, 1, 2, 6, 4, PAL.gold);
+    rect(ctx, 2, 2, 2, 2, PAL.goldLight); rect(ctx, 5, 4, 1, 2, '#c8890f');
+  }));
+}
+
+/** How a townsperson looks. */
+export interface WalkerLook { shirt: string; trousers: string; hair: string }
+export type WalkerPose = 'stand' | 'walk1' | 'walk2' | 'sit';
+
+/** A townsperson facing right, 7×13 plus outline: hair, face, shirt, trousers, legs that swing; or seated. */
+export function walkerCanvas(o: WalkerLook, pose: WalkerPose): HTMLCanvasElement {
+  return outline(makeCanvas(9, 15, (ctx) => {
+    const r = (x: number, y: number, w: number, h: number, c: string) => rect(ctx, 1 + x, 1 + y, w, h, c);
+    if (pose === 'sit') { r(1, 9, 6, 2, o.trousers); r(5, 11, 2, 2, o.trousers); }
+    else {
+      const [a, b] = pose === 'walk1' ? [-1, 1] : pose === 'walk2' ? [1, -1] : [0, 0];
+      r(1 + a, 10, 2, 3, o.trousers); r(4 + b, 10, 2, 3, o.trousers);
+    }
+    r(1, 5, 5, 5, o.shirt); r(1, 9, 5, 1, shade(o.shirt, -0.25));
+    r(5, 6, 1, 3, PAL.skin);
+    r(2, 1, 4, 4, PAL.skin); r(5, 2, 1, 1, PAL.outline);
+    r(1, 0, 5, 2, o.hair); r(1, 2, 1, 2, o.hair);
+  }));
+}
+
+export type Vehicle = 'fish' | 'van' | 'market' | 'lorry';
+
+/** Town traffic, facing right: fish truck (crates on the bed when loaded), delivery van, market box truck, export lorry. */
+export function vehicleCanvas(kind: Vehicle, loaded = true): HTMLCanvasElement {
+  const W = kind === 'lorry' ? 44 : kind === 'van' ? 24 : 30, H = kind === 'lorry' ? 19 : 17;
+  return outline(makeCanvas(W, H, (ctx) => {
+    const wheel = (x: number) => { rect(ctx, x - 2, H - 5, 5, 4, PAL.outline); rect(ctx, x - 1, H - 4, 3, 2, PAL.greyMid); };
+    const cab = (x: number, w: number, color: string) => {
+      rect(ctx, x, H - 13, w, 9, color); rect(ctx, x, H - 13, w, 1, shade(color, 0.3));
+      rect(ctx, x + w - 4, H - 12, 3, 4, PAL.waterLight); rect(ctx, x + w - 1, H - 7, 1, 2, PAL.goldLight);
+    };
+    if (kind === 'fish') {
+      rect(ctx, 1, H - 9, 20, 5, PAL.dirtDark); rect(ctx, 1, H - 9, 20, 1, PAL.dirt);
+      if (loaded) for (const x of [2, 8, 14]) { rect(ctx, x, H - 14, 6, 5, PAL.sandLight); rect(ctx, x, H - 12, 6, 1, PAL.sandMid); rect(ctx, x + 2, H - 15, 2, 1, PAL.waterLight); }
+      cab(21, 8, '#2f6fd6');
+      wheel(6); wheel(24);
+    } else if (kind === 'van') {
+      rect(ctx, 1, H - 14, 22, 10, PAL.white); rect(ctx, 1, H - 6, 22, 2, PAL.grey);
+      rect(ctx, 17, H - 13, 4, 4, PAL.waterLight);
+      rect(ctx, 4, H - 11, 8, 3, PAL.waterDeep); rect(ctx, 12, H - 10, 2, 1, PAL.waterDeep);
+      wheel(5); wheel(18);
+    } else if (kind === 'market') {
+      rect(ctx, 1, H - 16, 20, 12, PAL.green); rect(ctx, 1, H - 16, 20, 1, PAL.greenLight);
+      for (let x = 4; x < 20; x += 4) rect(ctx, x, H - 14, 1, 9, shade(PAL.green, -0.2));
+      cab(21, 8, PAL.redLight);
+      wheel(6); wheel(24);
+    } else {
+      rect(ctx, 1, H - 17, 32, 12, '#dd442c');
+      for (let x = 3; x < 32; x += 3) rect(ctx, x, H - 16, 1, 10, '#a8321f');
+      rect(ctx, 1, H - 5, 32, 1, PAL.greyDark);
+      cab(33, 10, PAL.gold);
+      wheel(6); wheel(14); wheel(38);
+    }
+  }));
+}
+
+/** SOLD OUT board hung over a restaurant window. */
+export function soldOutCanvas(): HTMLCanvasElement {
+  const w = textWidth('SOLD OUT') + 6;
+  return outline(makeCanvas(w + 2, 9, (ctx) => {
+    rect(ctx, 1, 1, w, 7, PAL.red);
+    text(ctx, 'SOLD OUT', 4, 2, PAL.white);
+  }));
+}
+
+/** A speech bubble with a red X (a customer who found nothing to eat). */
+export function bubbleCanvas(): HTMLCanvasElement {
+  return outline(makeCanvas(9, 10, (ctx) => {
+    rect(ctx, 1, 1, 7, 6, PAL.white); rect(ctx, 2, 7, 2, 1, PAL.white);
+    for (let k = 0; k < 4; k++) { px(ctx, 2 + k, 2 + k, PAL.red); px(ctx, 5 - k, 2 + k, PAL.red); }
   }));
 }
 
@@ -535,6 +702,7 @@ const ICON_COLORS: Record<string, string> = {
   r: PAL.red, p: '#fc8bb0', v: '#7a4a8a', u: PAL.waterDeep, U: PAL.waterLight, s: PAL.skin, g: PAL.green, G: PAL.greenLight,
 };
 const ICON_ROWS = {
+  up: ['...oo...', '..oGGo..', '.oGGGGo.', 'oGGgGGGo', 'ooogGooo', '..ogGo..', '..ogGo..', '..oooo..'],
   coin: ['..oooo..', '.oYYYyo.', 'oYYyyyyo', 'oYyYyyyo', 'oYyYyyyo', 'oyyyyyyo', '.oyyyyo.', '..oooo..'],
   trophy: ['oo.oooo.oo', 'oyoYyyyoyo', 'oyoYyyyoyo', '.ooYyyyoo.', '..oyyyyo..', '...oyyo...', '....oo....', '...oyyo...', '..oooooo..', '..oyyyyo..', '..oooooo..'],
   book: ['.oooo.oooo.', 'owwwwowwwwo', 'owkkwowkkwo', 'owwwwowwwwo', 'owkkwowkkwo', 'owwwwowwwwo', 'orrrrorrrro', '.oooo.oooo.'],

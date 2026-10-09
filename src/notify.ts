@@ -36,18 +36,19 @@ export class Notices {
   }
 
   /**
-   * Floats belong to the riverbank (they rise from the fisher, the pier, the
-   * harbor), so they're off in the town. Switching off clears any still rising.
+   * Floats belong to one view (the riverbank's rise from the fisher and the
+   * pier; the town's from its buildings): only the showing view's appear, and
+   * switching clears any still rising.
    */
-  set floats(on: boolean) {
-    if (!on && this.floatsOn) this.root.querySelectorAll('.float').forEach((el) => el.remove());
-    this.floatsOn = on;
+  set view(v: 'river' | 'town') {
+    if (v !== this.shown) this.root.querySelectorAll('.float').forEach((el) => el.remove());
+    this.shown = v;
   }
-  private floatsOn = true;
+  private shown: 'river' | 'town' = 'river';
 
   /** Text rising from a screen point (CSS px). */
-  float(text: string, x: number, y: number, tone: Tone = 'good'): void {
-    if (!this.floatsOn) return;
+  float(text: string, x: number, y: number, tone: Tone = 'good', where: 'river' | 'town' = 'river'): void {
+    if (where !== this.shown) return;
     const el = document.createElement('div');
     el.className = `float ${tone}`;
     el.textContent = text;

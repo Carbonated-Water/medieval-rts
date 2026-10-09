@@ -4,6 +4,24 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Town: a living street, then idle-tycoon restaurants (slice)
+  WHAT: Street life (src/town.ts) driven by game.townNews: fish trucks unload
+        at the plant (crates pile while it's behind), window conveyor, vans,
+        market truck and export lorry, customers who eat and pay, queues
+        when a restaurant can't keep up, SOLD OUT. Two restaurant rows on
+        phones, laid out bottom-up. Then restaurants became idle-tycoon
+        buildings: levels 1-100 (cheap levels, +2% price each; x2 speed and a
+        new look at 10/25/50/100: food cart, shop, terrace, two floors,
+        landmark), takings go to a till (120 dishes) you tap to collect with
+        a coin burst to your money, a manager (1.5x the restaurant) empties
+        it for you, hold a restaurant to hustle (x3). LV and till chips over
+        each building; LV opens a card with +1 / +10 / MAX and the manager;
+        level-ups puff, milestones fire fireworks and a banner.
+  WHY:  The user found the town "very very boring, no pizazz": watching
+        wasn't enough. They asked for idle-tycoon juice: something to do,
+        visible growth, spectacle. Fish & Chips first, to play before the
+        rest (rush, critic, plant, export) is built.
+
 2026-10-09  No riverbank pop-ups in town
   WHAT: Notices.floats switch; main turns floats off while the town shows
         (and clears any still rising), back on at the river.
