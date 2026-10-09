@@ -327,46 +327,83 @@ export function harborCanvas(state: HarborState): HTMLCanvasElement {
 
 export type BoatKind = 'net' | 'lobster' | 'sword';
 
-/** A company boat: hull, cabin, its fishing gear (net boom / trap stack / outriggers), and one little head per crew member. */
-export function boatCanvas(crew: number, silhouette = false, kind: BoatKind = 'net'): HTMLCanvasElement {
-  const W = 40, H = 24;
+/** What a boat's upgrades look like on deck. */
+export interface BoatLook { hull: number; engine: number; sonar: number; ice: number; captain: number }
+const PLAIN: BoatLook = { hull: 0, engine: 0, sonar: 0, ice: 0, captain: 0 };
+
+/**
+ * A company boat: hull (longer per hull level), cabin, its fishing gear (net
+ * boom / trap stack / outriggers), and the upgrades you can see: a sonar dish,
+ * an ice box, an exhaust stack, a captain at the wheel, one head per deckhand.
+ */
+export function boatCanvas(crew: number, silhouette = false, kind: BoatKind = 'net', look: BoatLook = PLAIN): HTMLCanvasElement {
+  const ext = look.hull * 4; // each hull level adds 4 px of boat
+  const W = 40 + ext, H = 26;
   const c = (col: string) => (silhouette ? '#2b3a4a' : col);
   const canvas = makeCanvas(W, H, (ctx) => {
-    // Hull: red below the waterline stripe, white above.
-    for (let y = 0; y < 7; y++) rect(ctx, 2 + Math.floor(y / 2), 15 + y, W - 4 - Math.floor(y / 2) * 2 - (y > 3 ? 2 : 0), 1, c(y < 3 ? PAL.white : PAL.red));
-    rect(ctx, 2, 17, W - 4, 1, c(PAL.waterDeeper));
-    // Cabin and window.
-    rect(ctx, 22, 8, 11, 7, c(PAL.white));
-    rect(ctx, 21, 7, 13, 2, c(PAL.waterDeep));
-    rect(ctx, 25, 10, 5, 3, c(PAL.waterLight));
+    // Hull: white topsides, red below the waterline stripe.
+    for (let y = 0; y < 7; y++) rect(ctx, 2 + Math.floor(y / 2), 17 + y, W - 4 - Math.floor(y / 2) * 2 - (y > 3 ? 2 : 0), 1, c(y < 3 ? PAL.white : PAL.red));
+    rect(ctx, 2, 19, W - 4, 1, c(PAL.waterDeeper));
+    // Cabin (moves aft as the hull grows) with its window, and the captain inside.
+    const cx = 22 + ext;
+    rect(ctx, cx, 10, 11, 7, c(PAL.white));
+    rect(ctx, cx - 1, 9, 13, 2, c(PAL.waterDeep));
+    rect(ctx, cx + 3, 12, 5, 3, c(PAL.waterLight));
+    if (look.captain) { rect(ctx, cx + 4, 13, 2, 2, c(PAL.skin)); rect(ctx, cx + 3, 12, 4, 1, c(PAL.outline)); px(ctx, cx + 4, 11, c(PAL.white)); }
+    // Sonar dish on the roof; exhaust stack for a strong engine.
+    if (look.sonar) { rect(ctx, cx + 8, 6, 1, 3, c(PAL.greyDark)); rect(ctx, cx + 6, 4, 5, 2, c(PAL.grey)); if (look.sonar >= 3) px(ctx, cx + 8, 3, c(PAL.red)); }
+    if (look.engine >= 2) { rect(ctx, cx + 1, 5, 2, 4, c(PAL.greyDark)); rect(ctx, cx + 1, 5, 2, 1, c(PAL.red)); }
+    // Ice box on deck (bigger with more ice).
+    if (look.ice) { const w = 4 + Math.min(look.ice, 3) * 2; rect(ctx, cx - w - 2, 13, w, 4, c(PAL.white)); rect(ctx, cx - w - 2, 15, w, 1, c(PAL.waterLight)); }
+    const gx = 0; // gear sits at the bow end
     if (kind === 'net') {
-      // Mast and net boom with a hanging net.
-      rect(ctx, 12, 1, 1, 14, c(PAL.dirtDeep));
-      for (let k = 0; k < 9; k++) px(ctx, 12 - k, 1 + k, c(PAL.dirtDark));
-      for (let y = 9; y < 15; y++) for (let x = 3; x < 7; x++) if ((x + y) % 2 === 0) px(ctx, x, y, c(PAL.sand));
+      rect(ctx, gx + 12, 3, 1, 14, c(PAL.dirtDeep));
+      for (let k = 0; k < 9; k++) px(ctx, gx + 12 - k, 3 + k, c(PAL.dirtDark));
+      for (let y = 11; y < 17; y++) for (let x = gx + 3; x < gx + 7; x++) if ((x + y) % 2 === 0) px(ctx, x, y, c(PAL.sand));
     } else if (kind === 'lobster') {
-      // A stack of wooden lobster traps and a buoy.
-      for (const [x, y] of [[3, 10], [9, 10], [6, 5]] as const) {
+      for (const [x, y] of [[3, 12], [9, 12], [6, 7]] as const) {
         rect(ctx, x, y, 6, 5, c(PAL.dirt));
         for (let k = 1; k < 6; k += 2) rect(ctx, x + k, y, 1, 5, c(PAL.dirtDeep));
       }
-      rect(ctx, 16, 9, 3, 4, c(PAL.goldLight));
-      rect(ctx, 16, 11, 3, 1, c(PAL.red));
+      rect(ctx, 16, 11, 3, 4, c(PAL.goldLight));
+      rect(ctx, 16, 13, 3, 1, c(PAL.red));
     } else {
-      // Two tall outrigger poles and a big line reel.
-      for (let k = 0; k < 14; k++) { px(ctx, 14 - Math.floor(k / 3), 14 - k, c(PAL.greyDark)); px(ctx, 18 + Math.floor(k / 3), 14 - k, c(PAL.greyDark)); }
-      rect(ctx, 4, 10, 6, 5, c(PAL.greyMid));
-      rect(ctx, 5, 11, 4, 3, c(PAL.white));
-      rect(ctx, 6, 12, 2, 1, c(PAL.outline));
+      for (let k = 0; k < 14; k++) { px(ctx, 14 - Math.floor(k / 3), 16 - k, c(PAL.greyDark)); px(ctx, 18 + Math.floor(k / 3), 16 - k, c(PAL.greyDark)); }
+      rect(ctx, 4, 12, 6, 5, c(PAL.greyMid));
+      rect(ctx, 5, 13, 4, 3, c(PAL.white));
+      rect(ctx, 6, 14, 2, 1, c(PAL.outline));
     }
-    // Crew: a straw hat and a face each, on deck.
+    // Deckhands: a straw hat and a face each, spread along the deck.
     for (let k = 0; k < crew; k++) {
-      const x = 15 + k * 3 - (k >= 2 ? 10 : 0);
-      rect(ctx, x, 12, 2, 2, c(PAL.skin));
-      rect(ctx, x - 1 + (k % 2), 11, 3, 1, c(PAL.goldLight));
+      const x = 15 + ((k * 5) % Math.max(6, ext + 6)) + (k >= 3 ? 2 : 0);
+      rect(ctx, x, 14, 2, 2, c(PAL.skin));
+      rect(ctx, x - 1 + (k % 2), 13, 3, 1, c(PAL.goldLight));
     }
   });
   return outline(canvas, silhouette ? '#1d2834' : PAL.outline);
+}
+
+/** The company warehouse next to the harbor office (bought for earnings while away). */
+export function warehouseCanvas(): HTMLCanvasElement {
+  return outline(makeCanvas(30, 24, (ctx) => {
+    rect(ctx, 1, 8, 28, 15, PAL.greyMid);
+    for (let x = 3; x < 29; x += 3) rect(ctx, x, 8, 1, 15, PAL.greyDark);
+    for (let y = 0; y < 7; y++) rect(ctx, 1 + y, 1 + y, 28 - y * 2, 1, PAL.red);
+    rect(ctx, 10, 13, 10, 10, PAL.dirtDeep);
+    rect(ctx, 10, 13, 10, 1, PAL.dirt);
+  }));
+}
+
+/** A cargo crane on the harbor pier (comes with the Harbor Master). */
+export function craneCanvas(): HTMLCanvasElement {
+  return outline(makeCanvas(26, 34, (ctx) => {
+    rect(ctx, 4, 6, 3, 27, PAL.gold);
+    for (let y = 8; y < 33; y += 4) px(ctx, 5, y, PAL.dirtDeep);
+    rect(ctx, 2, 4, 23, 3, PAL.gold);
+    rect(ctx, 0, 30, 11, 3, PAL.greyDark);
+    rect(ctx, 21, 7, 1, 12, PAL.outline);
+    rect(ctx, 18, 19, 7, 5, PAL.waterDeep);
+  }));
 }
 
 /** One stretch of dock planks (tiles vertically). */
@@ -457,6 +494,14 @@ const ICON_ROWS = {
   boat: ['.....o.....', '.....ok....', '.....okk...', '.....okkk..', '.....o.....', 'ooooooooooo', 'orwwwwwwwro', '.orrrrrrro.', '..ooooooo..'],
   crew: ['..ooo..', '.oYYYo.', 'oooooooo'.slice(0, 7), '.osso..'.slice(0, 7), '.ossso.', '..ooo..', '.orrro.', 'orrrrro', 'ooooooo'],
   net: ['o.o.o.o.o', '.o.o.o.o.', 'o.o.o.o.o', '.o.o.o.o.', 'o.o.o.o.o', '.o.o.o.o.', 'o.o.o.o.o'],
+  engine: ['...ooo...', '.oowkwoo.', '.okkkkko.', 'owkkokkwo', 'okkoookko', 'owkkokkwo', '.okkkkko.', '.oowkwoo.', '...ooo...'],
+  sonar: ['oo.....oo', 'oUo...oUo', '.oUoooUo.', '..oUUUo..', '...owo...', '....o....', '...ooo...', '..okkko..'],
+  ice: ['oooooooo', 'owUwwUwo', 'oUwwwwUo', 'owwUUwwo', 'owwUUwwo', 'oUwwwwUo', 'owUwwUwo', 'oooooooo'],
+  captain: ['..ooooo..', '.owwwwwo.', 'oooooooooo'.slice(0, 9), '.ossssso.', '.osossso.', '.ossssso.', '..ooooo..', '.ouuuuuo.', 'ouuyuuuuo'],
+  trap: ['ooooooooo', 'oBoBoBoBo', 'oBoBoBoBo', 'ooooooooo', 'oBoBoBoBo', 'oBoBoBoBo', 'ooooooooo'],
+  storm: ['..oooo...', '.okkkkoo.', 'okkkkkkko', 'okkkkkkko', '.ooooooo.', '...oyo...', '..oyo....', '..oo.....'],
+  anchor: ['...oo...', '..okko..', '...oo...', 'oooooooo', '...ok...', '...ok...', 'o..ok..o', 'ok.ok.ko', '.okkkko.', '..oooo..'],
+  plus: ['..ooo..', '..ogo..', 'ooogooo', 'ogggggo', 'ooogooo', '..ogo..', '..ooo..'],
   fish: ['...ooo....', 'o.oUUUo...', 'oouUUUUo..', 'ouuuuuowo.', 'oouuuuuoo.', 'o.ouuuo...', '...ooo....'],
 };
 export type IconName = keyof typeof ICON_ROWS;

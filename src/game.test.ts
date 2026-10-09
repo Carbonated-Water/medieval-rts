@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ACHIEVEMENTS, AUTO, BAITS, BOAT_PRICE, BOATS, BOOTS, COMPANY_PRICE, HANDS_MAX, HAND_COST, BILLFISH, SHELLFISH, COMPANY_UNLOCK_EARNED, CREW_COST, LETTERS, NETS, SEA_FISH, TRIP_SECONDS, CLOTHES, DEV_MULTIPLIER, FISH, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_MAX, VARIANTS,
+  ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_REPEAT, BOOTS, CAPTAIN_WAGE, COMPANY_PRICE, CREW_BASE, GROUNDS, HANDS_MAX, HAND_COST, SHELLFISH,
+  COMPANY_UNLOCK_EARNED, LETTERS, TRACK_GROWTH, TRACK_MAX, TRACK_ORDER, CLOTHES, DEV_MULTIPLIER, FISH, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_MAX, VARIANTS,
   MAX_GROUND_WORMS, START_WORMS, STRENGTH_PER_LEVEL, WORM_SPAWN_SECONDS, skillCost,
 } from './data';
 import { Game, fishById, type Line } from './game';
@@ -478,71 +479,142 @@ describe('fishing company', () => {
     expect(g.company).toBe(true);
   });
 
-  it('a boat, crew and nets: bigger hauls, shorter trips', () => {
-    const g = new Game({ money: 1e7, earned: 30000 }, rng(12));
-    expect(g.buyBoat()).toBe(false); // no company yet
-    g.buyCompany();
-    expect(g.buyBoat()).toBe(true);
-    expect(g.money).toBe(1e7 - COMPANY_PRICE - BOAT_PRICE);
-    expect(g.buyBoat()).toBe(false); // one boat of each kind
-    const b = g.boats[0]!;
-    expect(g.haulSize(b)).toBe(NETS[0]!.fish);
-    expect(g.tripSeconds(b)).toBe(TRIP_SECONDS);
-    expect(g.nextCrewCost(0)).toBe(CREW_COST[0]);
-    while (g.hireCrew(0));
-    while (g.upgradeNet(0));
-    expect(b.crew).toBe(4);
-    expect(b.net).toBe(NETS.length - 1);
-    expect(g.haulSize(b)).toBe(NETS[NETS.length - 1]!.fish * 2);
-    expect(g.tripSeconds(b)).toBeCloseTo(TRIP_SECONDS * 0.6);
-  });
-
-  it('a trip comes back with sea fish that sell from the harbor', () => {
-    const g = new Game({ money: 1e6, earned: 30000 }, rng(13));
-    g.buyCompany();
-    g.buyBoat();
-    expect(g.sendBoat(0)).toBe(true);
-    expect(g.sendBoat(0)).toBe(false); // already out
-    tick(g, TRIP_SECONDS - 1);
-    expect(g.boats[0]!.haul).toBeNull();
-    tick(g, 2);
-    const haul = g.boats[0]!.haul!;
-    expect(haul.reduce((s, h) => s + h.n, 0)).toBe(NETS[0]!.fish);
-    expect(haul.every((h) => SEA_FISH.some((f) => f.id === h.fish))).toBe(true);
-    expect(g.sendBoat(0)).toBe(false); // unload first
-    const money = g.money, earned = g.earned, value = g.haulValue(g.boats[0]!);
-    expect(g.collectHaul(0)).toBe(value);
-    expect(g.money).toBe(money + value);
-    expect(g.earned).toBe(earned + value);
-    expect(g.sendBoat(0)).toBe(true);
-  });
-
   it('round-trips through save data, and old saves have no company', () => {
     const g = new Game({ money: 1e6, earned: 30000 }, rng(14));
-    g.buyCompany(); g.buyBoat(); g.hireCrew(0); g.sendBoat(0); tick(g, 5);
-    const copy = new Game(JSON.parse(JSON.stringify(g.save())));
-    expect(copy.save()).toEqual(g.save());
+    g.buyCompany(); g.buyBoat(); g.hireCrew(0); g.upgradeTrack(0, 'engine'); g.sendBoat(0); tick(g, 5);
+    const { savedAt: _a, ...saved } = g.save();
+    const { savedAt: _b, ...again } = new Game(JSON.parse(JSON.stringify(g.save()))).save();
+    expect(again).toEqual(saved);
     const old = new Game({ money: 5 });
     expect(old.company).toBe(false);
     expect(old.boats).toEqual([]);
   });
+
+  it('boats from before upgrade tracks keep their gear and crew', () => {
+    const g = new Game({ company: true, boats: [{ type: 'net', net: 2, crew: 3, trip: null, haul: null }] } as never);
+    expect(g.boats[0]).toMatchObject({ crew: 3, ground: 'coast', tracks: { gear: 2, hull: 0 } });
+  });
 });
 
-describe('fishing company: more boats', () => {
-  it('one boat of each kind, each with its own gear, trip and catch', () => {
-    const g = new Game({ money: 1e7, earned: 30000 }, rng(21));
-    g.buyCompany();
-    for (const type of ['net', 'lobster', 'sword'] as const) expect(g.buyBoat(type)).toBe(true);
-    expect(g.buyBoat('lobster')).toBe(false);
-    const lobster = g.boats.findIndex((b) => b.type === 'lobster');
-    const sword = g.boats.findIndex((b) => b.type === 'sword');
-    expect(g.tripSeconds(g.boats[lobster]!)).toBe(BOATS.lobster.trip);
-    expect(g.nextNet(lobster)!.name).toBe(BOATS.lobster.gear[1]!.name);
-    g.sendBoat(lobster);
-    g.sendBoat(sword);
-    tick(g, BOATS.sword.trip + 1);
-    expect(g.boats[lobster]!.haul!.every((h) => SHELLFISH.some((f) => f.id === h.fish))).toBe(true);
-    expect(g.boats[sword]!.haul!.every((h) => BILLFISH.some((f) => f.id === h.fish))).toBe(true);
+describe('the fleet', () => {
+  const owner = (money = 1e9) => { const g = new Game({ money, earned: 30000 }, rng(41)); g.buyCompany(); return g; };
+
+  it('berths limit the fleet; each extra boat of a kind costs more', () => {
+    const g = owner();
+    expect(g.berthCount).toBe(BERTHS[0]!.boats);
+    expect(g.boatPrice('net')).toBe(BOATS.net.price);
+    expect(g.buyBoat('net')).toBe(true);
+    expect(g.boatPrice('net')).toBe(BOATS.net.price * (1 + BOAT_REPEAT));
+    expect(g.buyBoat('net')).toBe(true);
+    expect(g.boatName(1)).toBe('Net Boat 2');
+    expect(g.buyBoat('lobster')).toBe(true);
+    expect(g.buyBoat('sword')).toBe(false); // berths full
+    expect(g.buyBerth()).toBe(true);
+    expect(g.buyBoat('sword')).toBe(true);
+  });
+
+  it('upgrade tracks: rising costs, five levels, each doing its job', () => {
+    const g = owner();
+    g.buyBoat('net');
+    const b = g.boats[0]!;
+    const c0 = g.nextTrackCost(0, 'hull')!, haul0 = g.haulSize(b), trip0 = g.tripSeconds(b);
+    expect(g.upgradeTrack(0, 'hull')).toBe(true);
+    expect(g.nextTrackCost(0, 'hull')!).toBeCloseTo(c0 * TRACK_GROWTH, -2);
+    expect(g.crewMax(b)).toBe(CREW_BASE + 1);
+    expect(g.haulSize(b)).toBeGreaterThan(haul0);
+    g.upgradeTrack(0, 'engine');
+    expect(g.tripSeconds(b)).toBeLessThan(trip0);
+    for (const id of TRACK_ORDER) while (g.upgradeTrack(0, id));
+    expect(Object.values(b.tracks).every((l) => l === TRACK_MAX)).toBe(true);
+    expect(g.nextTrackCost(0, 'gear')).toBeNull();
+  });
+
+  it('farther grounds need engine, hull and sonar', () => {
+    const g = owner();
+    g.buyBoat('net');
+    expect(g.setGround(0, 'reef')).toBe(false);
+    g.upgradeTrack(0, 'engine');
+    expect(g.setGround(0, 'reef')).toBe(true);
+    expect(g.setGround(0, 'deep')).toBe(false);
+    const deep = GROUNDS.find((x) => x.id === 'deep')!;
+    for (const [id, lvl] of Object.entries(deep.need)) while (g.boats[0]!.tracks[id as never] < lvl!) g.upgradeTrack(0, id as never);
+    expect(g.setGround(0, 'deep')).toBe(true);
+  });
+
+  it('trips bring back the right catch; farther grounds are worth far more', () => {
+    const value = (ground: 'coast' | 'deep') => {
+      const g = owner();
+      g.buyBoat('lobster');
+      for (const id of TRACK_ORDER) for (let k = 0; k < 4; k++) g.upgradeTrack(0, id);
+      g.boats[0]!.tracks.captain = 0; // no wages, hand-sent
+      g.setGround(0, ground);
+      let total = 0;
+      for (let k = 0; k < 30; k++) {
+        g.sendBoat(0);
+        tick(g, g.boats[0]!.trip!.dur + 0.1);
+        expect(g.boats[0]!.haul!.every((h) => SHELLFISH.some((x) => x.id === h.fish))).toBe(true);
+        total += g.collectHaul(0);
+      }
+      return total;
+    };
+    expect(value('deep')).toBeGreaterThan(value('coast') * 5);
+  });
+
+  it('storms hit far grounds; a strong hull rides them out', () => {
+    const storms = (hull: number) => {
+      const g = owner();
+      g.buyBoat('net');
+      for (const id of ['engine', 'hull', 'sonar'] as const) for (let k = 0; k < 5; k++) g.upgradeTrack(0, id);
+      g.boats[0]!.tracks.hull = hull;
+      g.setGround(0, 'deep');
+      let n = 0;
+      for (let k = 0; k < 400; k++) { g.sendBoat(0); tick(g, g.boats[0]!.trip!.dur + 0.1); if (g.boats[0]!.event === 'storm') n++; g.collectHaul(0); }
+      return n;
+    };
+    expect(storms(3)).toBeGreaterThan(storms(5) * 1.5);
+  });
+
+  it('a captain sails again by himself and takes wages; the harbor master sells for a fee', () => {
+    const g = owner();
+    g.buyBoat('net');
+    g.upgradeTrack(0, 'captain');
+    tick(g, 1);
+    expect(g.boats[0]!.trip).not.toBeNull(); // sent without being asked
+    tick(g, g.boats[0]!.trip!.dur);
+    const haul = g.boats[0]!.haul!;
+    const raw = haul.reduce((s, h) => s + h.value, 0);
+    expect(g.haulValue(g.boats[0]!)).toBe(Math.round(raw * (1 - CAPTAIN_WAGE)));
+    expect(g.buyHarbor('master')).toBe(true);
+    const money = g.money;
+    tick(g, 0.5);
+    expect(g.money).toBeGreaterThan(money);
+    expect(g.boats[0]!.haul).toBeNull();
+  });
+
+  it('the fish buyer empties the crate; the supplier keeps fishermen in bait', () => {
+    const g = owner();
+    g.buyBoat('net');
+    g.hireHand();
+    g.setHandBait(0, 'shiner');
+    g.buyHarbor('buyer');
+    g.buyHarbor('supplier');
+    tick(g, 130);
+    expect(g.baitCount('shiner')).toBeGreaterThan(0);
+    expect(g.crate.length).toBeLessThan(25);
+    expect(g.earned).toBeGreaterThan(30000);
+  });
+
+  it('the company keeps earning while the game is closed, up to the warehouse limit', () => {
+    const g = owner(1e7);
+    g.buyBoat('net');
+    g.upgradeTrack(0, 'captain');
+    g.buyHarbor('master');
+    const hour = g.catchUp(3600);
+    expect(hour).toBeGreaterThan(0);
+    const g2 = owner(1e7);
+    g2.buyBoat('net'); g2.upgradeTrack(0, 'captain'); g2.buyHarbor('master');
+    expect(g2.catchUp(10 * 3600)).toBeLessThan(hour * 1.5); // capped at the warehouse's 1 hour
+    expect(new Game({}).catchUp(3600)).toBe(0); // no company, nothing happens
   });
 });
 

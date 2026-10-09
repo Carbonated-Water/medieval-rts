@@ -4,6 +4,31 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  The fleet (company phase 3): upgrade trees, grounds, automation, harbor growth
+  WHAT: Boats now have six upgrade tracks (Hull, Engine, Gear, Sonar, Ice
+        Hold, Captain, 5 levels each), crew slots from the hull, a fishing
+        ground per trip (Coast, Reef, Open Sea, Arctic, The Deep: unlocked
+        by engine / hull / sonar), trip events (storm, lucky school, trophy
+        sighting), any number of each kind up to the berths (3 to 8).
+        Harbor: berths, Harbor Master (auto-sell, crane), Fish Buyer
+        (auto-sells crate), Bait Supplier (restocks fishermen), Warehouse
+        (offline earnings 1-8 h, "While you were away"). Automation costs
+        upkeep (captain wages 8%, fees 5%, supplier +25%). Boats draw their
+        upgrades. UI: fleet grid (+ for empty berths, SEND ALL / SELL ALL),
+        Shipyard, Harbor and a boat panel with grounds bar, track grid and
+        detail strip. Fleet news (events, auto-sales) drives banners / log.
+        Banners no longer block taps; bobber taps win over the harbor.
+        Old boats keep their gear and crew. 63 tests.
+  WHY:  User: the boat phase was underwhelming (three upgrades, then
+        nothing) and a $2,500 haul is "like 1 fish for me"; wanted upgrades
+        for each boat, automated shipping, and a vast, creative boat game as
+        the next step. Chose all four pillars, idle with upkeep, and risk.
+  Balance: upgrade costs per boat use an upgrade base (20k / 30k / 45k), not
+        the boat's price, so every boat's steps pay back in ~1-2 hours;
+        maxed boats on The Deep make $61k / $88k / $158k per minute.
+
+---
+
 2026-10-09  The Fishing Company, phase 2: hired fishermen, wide pier, more boats
   WHAT: data: SHELLFISH, BILLFISH, BOATS (net / lobster / sword with their
         own gear, trip and catch), HANDS tables. game: typed boats (one of

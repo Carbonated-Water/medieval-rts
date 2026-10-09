@@ -232,37 +232,89 @@ export const BILLFISH: FishDef[] = [
   { id: 'marlin', name: 'Blue Marlin', tier: 4, price: 6400, kg: 400, rarity: 0.7, colors: ['#1a3a7a', '#e0e8f0', '#2a5ab0'], shape: 4.4 },
 ];
 
-/** Boat trips: base length (net boat), and what each crew member adds. */
-export const TRIP_SECONDS = 90;
-export const CREW_MAX = 4;
-/** Each crew member: this many more fish per haul, and trips this much shorter. */
-export const CREW_HAUL = 0.25;
-export const CREW_SPEED = 0.1;
-export const CREW_COST = [4000, 8000, 14000, 22000];
-export const BOAT_PRICE = 20000;
-/** Nets: fish per haul before crew. Bought in order. */
-export interface GearLevel { name: string; price: number; /** catches per trip before crew */ fish: number }
-export const NETS: GearLevel[] = [
-  { name: 'Hand Net', price: 0, fish: 8 },
-  { name: 'Drift Net', price: 15000, fish: 14 },
-  { name: 'Trawl Net', price: 40000, fish: 22 },
-];
+// ---------- the fleet: boats, their upgrade tracks, fishing grounds, the harbor ----------
 
-/** The three kinds of boat: one of each. Each has its own gear line, trip length and catch. */
+/** Upgrade tracks every boat has (levels 0..TRACK_MAX). */
+export type TrackId = 'hull' | 'engine' | 'gear' | 'sonar' | 'ice' | 'captain';
+export const TRACK_ORDER: TrackId[] = ['hull', 'engine', 'gear', 'sonar', 'ice', 'captain'];
+export const TRACK_MAX = 5;
+/** Level 1 costs `cost` x the boat's upgrade base; each level after costs TRACK_GROWTH times more. */
+export const TRACKS: Record<TrackId, { name: string; blurb: string; cost: number }> = {
+  hull: { name: 'Hull', blurb: 'Bigger hold, +1 crew, rides out storms', cost: 0.6 },
+  engine: { name: 'Engine', blurb: 'Faster trips, farther grounds', cost: 0.5 },
+  gear: { name: 'Gear', blurb: 'More catch per trip', cost: 0.5 },
+  sonar: { name: 'Sonar', blurb: 'Finds rarer catch', cost: 0.8 },
+  ice: { name: 'Ice Hold', blurb: 'Fresher catch sells for more', cost: 0.7 },
+  captain: { name: 'Captain', blurb: 'Sails again by himself', cost: 1.2 },
+};
+export const TRACK_GROWTH = 2.5;
+/** Per level: hold size, storm protection, trip speed, rarity step, sale value, captain's extra catch and storm sense. */
+export const HULL_HOLD = 0.15;
+export const HULL_STORM = 0.18;
+export const ENGINE_SPEED = 0.08;
+export const SONAR_STEP = 0.2;
+export const ICE_VALUE = 0.08;
+export const CAPTAIN_CATCH = 0.05;
+export const CAPTAIN_STORM = 0.06;
+/** A captain takes this share of every haul as wages. */
+export const CAPTAIN_WAGE = 0.08;
+
+/** Crew: CREW_BASE slots plus one per hull level. Each hand: more catch, shorter trips. */
+export const CREW_BASE = 2;
+export const CREW_HAUL = 0.15;
+export const CREW_SPEED = 0.04;
+/** Hiring the n-th deckhand (0-based) on a boat. */
+export const crewCost = (boatPrice: number, n: number) => Math.round((boatPrice * 0.15 * Math.pow(1.6, n)) / 100) * 100;
+
+/** Where a boat can go. Farther: longer, stormier, rarer and bigger catch. Needs engine / hull / sonar levels. */
+export type GroundId = 'coast' | 'reef' | 'open' | 'arctic' | 'deep';
+export interface GroundDef { id: GroundId; name: string; trip: number; storm: number; step: number; size: number; need: Partial<Record<TrackId, number>> }
+export const GROUNDS: GroundDef[] = [
+  { id: 'coast', name: 'Coast', trip: 60, storm: 0, step: 0, size: 1, need: {} },
+  { id: 'reef', name: 'Reef', trip: 110, storm: 0.06, step: 0.5, size: 1.3, need: { engine: 1 } },
+  { id: 'open', name: 'Open Sea', trip: 180, storm: 0.1, step: 1, size: 1.7, need: { engine: 2, hull: 1 } },
+  { id: 'arctic', name: 'Arctic', trip: 270, storm: 0.16, step: 1.5, size: 2.1, need: { engine: 3, hull: 2, sonar: 1 } },
+  { id: 'deep', name: 'The Deep', trip: 400, storm: 0.22, step: 2, size: 2.5, need: { engine: 4, hull: 3, sonar: 2 } },
+];
+/** Trip events: a storm loses part of the haul; a lucky school doubles it; a sighting (Open Sea and beyond) adds a trophy catch. */
+export const STORM_LOSS = 0.5;
+export const SCHOOL_CHANCE = 0.08;
+export const SIGHTING_CHANCE = 0.02;
+
+/** The three kinds of boat. Each has its own gear ladder (catches per trip, levels 0..5), trip length and catch. */
 export type BoatType = 'net' | 'lobster' | 'sword';
-export interface BoatDef { name: string; price: number; trip: number; gear: GearLevel[]; catch: FishDef[]; blurb: string }
+export interface BoatDef { name: string; price: number; /** upgrade tracks are priced from this, not the boat's price */ upgrade: number; tripFactor: number; gear: number[]; gearNames: string[]; catch: FishDef[]; blurb: string }
 export const BOATS: Record<BoatType, BoatDef> = {
-  net: { name: 'Net Boat', price: 20000, trip: TRIP_SECONDS, gear: NETS, catch: SEA_FISH, blurb: 'Herring to Bluefin Tuna' },
+  net: {
+    name: 'Net Boat', price: 20000, upgrade: 20000, tripFactor: 1, catch: SEA_FISH, blurb: 'Herring to Bluefin Tuna',
+    gear: [8, 11, 15, 19, 24, 30], gearNames: ['Hand Net', 'Drift Net', 'Trawl Net', 'Purse Seine', 'Factory Net', 'Megatrawl'],
+  },
   lobster: {
-    name: 'Lobster Boat', price: 60000, trip: 150, catch: SHELLFISH, blurb: 'Crabs and lobsters',
-    gear: [{ name: '10 Traps', price: 0, fish: 5 }, { name: '20 Traps', price: 35000, fish: 9 }, { name: '40 Traps', price: 90000, fish: 15 }],
+    name: 'Lobster Boat', price: 60000, upgrade: 30000, tripFactor: 1.25, catch: SHELLFISH, blurb: 'Crabs and lobsters',
+    gear: [5, 8, 11, 15, 20, 26], gearNames: ['10 Traps', '20 Traps', '40 Traps', '80 Traps', '160 Traps', 'Trap Fleet'],
   },
   sword: {
-    name: 'Longliner', price: 150000, trip: 210, catch: BILLFISH, blurb: 'Swordfish and marlin',
-    gear: [{ name: 'Short Line', price: 0, fish: 3 }, { name: 'Long Line', price: 70000, fish: 5 }, { name: 'Deep Line', price: 180000, fish: 8 }],
+    name: 'Longliner', price: 150000, upgrade: 45000, tripFactor: 1.5, catch: BILLFISH, blurb: 'Swordfish and marlin',
+    gear: [3, 5, 7, 9, 12, 16], gearNames: ['Short Line', 'Long Line', 'Deep Line', 'Double Line', 'Mile Line', 'Endless Line'],
   },
 };
 export const BOAT_ORDER: BoatType[] = ['net', 'lobster', 'sword'];
+/** Every extra boat of the same kind costs this much more (+50%, +100%, ...). */
+export const BOAT_REPEAT = 0.5;
+
+/** The harbor: berths (how many boats), automation, and the warehouse (offline earnings cap). */
+export const BERTHS: { boats: number; price: number }[] = [
+  { boats: 3, price: 0 }, { boats: 4, price: 150000 }, { boats: 5, price: 400000 }, { boats: 6, price: 1000000 }, { boats: 8, price: 2500000 },
+];
+export type HarborUpgradeId = 'master' | 'buyer' | 'supplier';
+export const HARBOR_UPGRADES: Record<HarborUpgradeId, { name: string; price: number; blurb: string; fee: number }> = {
+  master: { name: 'Harbor Master', price: 200000, blurb: 'Sells hauls as boats come in', fee: 0.05 },
+  buyer: { name: 'Fish Buyer', price: 80000, blurb: 'Buys the pier crate every minute', fee: 0.05 },
+  supplier: { name: 'Bait Supplier', price: 120000, blurb: "Restocks your fishermen's bait", fee: 0.25 },
+};
+export const WAREHOUSE: { hours: number; price: number }[] = [
+  { hours: 1, price: 0 }, { hours: 2, price: 100000 }, { hours: 4, price: 300000 }, { hours: 8, price: 900000 },
+];
 
 // ---------- hired fishermen on the wide pier (open once you own a boat) ----------
 

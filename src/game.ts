@@ -1,5 +1,8 @@
 import {
-  ACHIEVEMENTS, AUTO, BAITS, BOATS, COMPANY_PRICE, COMPANY_UNLOCK_EARNED, CREW_COST, CREW_HAUL, CREW_MAX, CREW_SPEED,
+  ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_REPEAT, CAPTAIN_CATCH, CAPTAIN_STORM, CAPTAIN_WAGE, COMPANY_PRICE, COMPANY_UNLOCK_EARNED,
+  CREW_BASE, CREW_HAUL, CREW_SPEED, ENGINE_SPEED, GROUNDS, HARBOR_UPGRADES, HULL_HOLD, HULL_STORM, ICE_VALUE, SCHOOL_CHANCE,
+  SIGHTING_CHANCE, SONAR_STEP, STORM_LOSS, TRACKS, TRACK_GROWTH, TRACK_MAX, WAREHOUSE, crewCost,
+  type GroundDef, type GroundId, type HarborUpgradeId, type TrackId,
   HANDS_MAX, HAND_COST, HAND_REACT, HAND_REACT_PER_LEVEL, HAND_REST, HAND_SKILL_MAX, LETTERS, handSkillCost, type BoatType, BITE_WAIT, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, GEAR, HAGGLE_PER_LEVEL, HOLDERS, MAX_GROUND_WORMS,
   MIN_BITE_WAIT, REEL_WINDOW, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, START_WORMS, STRENGTH_PER_LEVEL, TIERS,
   TOO_STRONG_WEIGHT, VARIANTS, VARIANT_ORDER, WORMS_PER_PICK, WORM_SPAWN_SECONDS, WORM_SPOTS, baitById,
@@ -15,15 +18,24 @@ export interface Catch {
   variant?: Variant;
 }
 
-/** One company boat: its net, crew, the trip it's on, and the haul waiting at the pier. */
+export interface HaulItem { fish: string; n: number; value: number }
+export type TripEvent = 'storm' | 'school' | 'sighting';
+
+/** One company boat: its upgrade tracks, crew, where it fishes, the trip it's on, and the haul waiting at the pier. */
 export interface Boat {
   type: BoatType;
-  /** Gear level (net / traps / longline). */
-  net: number;
+  tracks: Record<TrackId, number>;
   crew: number;
-  trip: { t: number; dur: number } | null;
-  haul: { fish: string; n: number; value: number }[] | null;
+  ground: GroundId;
+  trip: { t: number; dur: number; ground: GroundId } | null;
+  haul: HaulItem[] | null;
+  /** What happened on the last trip, for the haul screen. */
+  event: TripEvent | null;
+  /** Old saves: the gear level before boats had tracks. */
+  net?: number;
 }
+
+const NO_TRACKS = (): Record<TrackId, number> => ({ hull: 0, engine: 0, gear: 0, sonar: 0, ice: 0, captain: 0 });
 
 /** A hired fisherman on the wide pier: their own rod and level, the bait you assigned, one line. */
 export interface Hand {
@@ -67,6 +79,12 @@ export interface SaveData {
   company: boolean;
   letters: number;
   boats: Boat[];
+  /** Harbor: berth level, automation bought, warehouse level. */
+  berths: number;
+  harbor: Partial<Record<HarborUpgradeId, boolean>>;
+  warehouse: number;
+  /** When this was saved (ms), for earnings while away. */
+  savedAt: number;
   hands: Hand[];
   /** Hired fishermen's catches, waiting to be sold. */
   crate: Catch[];
@@ -121,6 +139,13 @@ export class Game {
   company = false;
   letters = 0;
   boats: Boat[] = [];
+  berths = 0;
+  harbor: Partial<Record<HarborUpgradeId, boolean>> = {};
+  warehouse = 0;
+  /** What just happened in the fleet (boats back, sold, events), for the UI to announce; not saved. */
+  fleetNews: { boat: number; paid: number; event: TripEvent | null }[] = [];
+  private buyerClock = 0;
+  private supplierClock = 0;
   hands: Hand[] = [];
   crate: Catch[] = [];
   private nextId = 1;
@@ -135,7 +160,15 @@ export class Game {
       if (!save.baits && oldBait) this.baits[BAITS[Math.min(oldBait, BAITS.length - 1)]!.id] = 25;
     }
     if (!BAITS.some((b) => b.id === this.baitSel)) this.baitSel = 'worm';
-    for (const b of this.boats) b.type ??= 'net';
+    // Boats from before upgrade tracks: keep their gear level and crew.
+    this.boats = this.boats.map((b) => ({
+      ...b, type: b.type ?? 'net', tracks: { ...NO_TRACKS(), ...(b.tracks ?? { gear: Math.min(b.net ?? 0, TRACK_MAX) }) },
+      ground: b.ground ?? 'coast', event: b.event ?? null,
+      trip: b.trip ? { ...b.trip, ground: b.trip.ground ?? b.ground ?? 'coast' } : null,
+    }));
+    for (const b of this.boats) delete b.net;
+    this.berths = clamp(this.berths, 0, BERTHS.length - 1);
+    this.warehouse = clamp(this.warehouse, 0, WAREHOUSE.length - 1);
     for (const h of this.hands) { h.line = { type: 'idle' }; h.react = null; }
     // Saves already past the reveal skip the earlier letters and get just the last one.
     if (!this.company && this.earned >= COMPANY_UNLOCK_EARNED) this.letters = Math.max(this.letters, LETTERS.length - 1);
@@ -371,6 +404,7 @@ export class Game {
   tick(dt: number): void {
     this.spawnWorms(dt);
     this.tickBoats(dt);
+    this.tickHarbor(dt);
     this.tickHands(dt);
     this.lines.forEach((line, i) => {
       if (line.type === 'idle') return;
@@ -512,22 +546,73 @@ export class Game {
     return true;
   }
 
-  /** One boat of each kind. */
+  // ---------- the fleet ----------
+
+  /** How many boats the harbor's berths hold. */
+  get berthCount(): number {
+    return BERTHS[this.berths]!.boats;
+  }
+
+  nextBerth(): { boats: number; price: number } | null {
+    return BERTHS[this.berths + 1] ?? null;
+  }
+
+  buyBerth(): boolean {
+    const next = this.nextBerth();
+    if (!this.company || !next || this.money < next.price) return false;
+    this.money -= next.price;
+    this.berths++;
+    return true;
+  }
+
+  /** Price of the next boat of a kind: each extra one of the same kind costs more. */
+  boatPrice(type: BoatType): number {
+    const owned = this.boats.filter((b) => b.type === type).length;
+    return Math.round(BOATS[type].price * (1 + BOAT_REPEAT * owned));
+  }
+
   canBuyBoat(type: BoatType = 'net'): boolean {
-    return this.company && !this.boats.some((b) => b.type === type);
+    return this.company && this.boats.length < this.berthCount && !!BOATS[type];
   }
 
   buyBoat(type: BoatType = 'net'): boolean {
-    const price = BOATS[type].price;
+    const price = this.boatPrice(type);
     if (!this.canBuyBoat(type) || this.money < price) return false;
     this.money -= price;
-    this.boats.push({ type, net: 0, crew: 0, trip: null, haul: null });
+    this.boats.push({ type, tracks: NO_TRACKS(), crew: 0, ground: 'coast', trip: null, haul: null, event: null });
     return true;
+  }
+
+  /** A boat's name in the fleet: "Net Boat", "Net Boat 2", ... */
+  boatName(i: number): string {
+    const b = this.boats[i]!;
+    const n = this.boats.slice(0, i + 1).filter((x) => x.type === b.type).length;
+    return n > 1 ? `${BOATS[b.type].name} ${n}` : BOATS[b.type].name;
+  }
+
+  /** Cost of the next level of an upgrade track on a boat, or null at max. */
+  nextTrackCost(i: number, id: TrackId): number | null {
+    const b = this.boats[i];
+    if (!b || b.tracks[id] >= TRACK_MAX) return null;
+    return Math.round((BOATS[b.type].upgrade * TRACKS[id].cost * Math.pow(TRACK_GROWTH, b.tracks[id])) / 100) * 100;
+  }
+
+  upgradeTrack(i: number, id: TrackId): boolean {
+    const cost = this.nextTrackCost(i, id);
+    if (cost === null || this.money < cost) return false;
+    this.money -= cost;
+    this.boats[i]!.tracks[id]++;
+    return true;
+  }
+
+  /** Crew slots: a bigger hull holds more hands. */
+  crewMax(b: Boat): number {
+    return CREW_BASE + b.tracks.hull;
   }
 
   nextCrewCost(i: number): number | null {
     const b = this.boats[i];
-    return b && b.crew < CREW_MAX ? CREW_COST[b.crew]! : null;
+    return b && b.crew < this.crewMax(b) ? crewCost(BOATS[b.type].upgrade, b.crew) : null;
   }
 
   hireCrew(i: number): boolean {
@@ -538,75 +623,173 @@ export class Game {
     return true;
   }
 
-  /** The next gear level for a boat (net, traps, longline). */
-  nextNet(i: number): { level: number; name: string; price: number; fish: number } | null {
-    const b = this.boats[i];
-    if (!b) return null;
-    const level = b.net + 1, gear = BOATS[b.type].gear[level];
-    return gear ? { level, ...gear } : null;
+  /** Can this boat reach a fishing ground (engine / hull / sonar levels)? */
+  groundOpen(b: Boat, g: GroundDef): boolean {
+    return (Object.entries(g.need) as [TrackId, number][]).every(([id, lvl]) => b.tracks[id] >= lvl);
   }
 
-  upgradeNet(i: number): boolean {
-    const next = this.nextNet(i);
-    if (!next || this.money < next.price) return false;
-    this.money -= next.price;
-    this.boats[i]!.net = next.level;
+  setGround(i: number, id: GroundId): boolean {
+    const b = this.boats[i], g = GROUNDS.find((x) => x.id === id);
+    if (!b || !g || !this.groundOpen(b, g)) return false;
+    b.ground = id;
     return true;
   }
 
-  tripSeconds(b: Boat): number {
-    return BOATS[b.type].trip * (1 - CREW_SPEED * b.crew);
+  private groundOf(id: GroundId): GroundDef {
+    return GROUNDS.find((g) => g.id === id) ?? GROUNDS[0]!;
+  }
+
+  tripSeconds(b: Boat, ground: GroundId = b.ground): number {
+    return this.groundOf(ground).trip * BOATS[b.type].tripFactor * (1 - ENGINE_SPEED * b.tracks.engine) * (1 - CREW_SPEED * b.crew);
   }
 
   haulSize(b: Boat): number {
-    return Math.round(BOATS[b.type].gear[b.net]!.fish * (1 + CREW_HAUL * b.crew));
+    const gear = BOATS[b.type].gear[b.tracks.gear]!;
+    return Math.round(gear * (1 + CREW_HAUL * b.crew) * (1 + HULL_HOLD * b.tracks.hull) * (1 + CAPTAIN_CATCH * b.tracks.captain));
   }
 
-  /** Send a boat out (only when it's at the pier with nothing to unload). */
+  stormChance(b: Boat, ground: GroundId = b.ground): number {
+    return Math.max(0, this.groundOf(ground).storm * (1 - HULL_STORM * b.tracks.hull) * (1 - CAPTAIN_STORM * b.tracks.captain));
+  }
+
+  /** Send a boat out to its fishing ground (only when it's at the pier with nothing to unload). */
   sendBoat(i: number): boolean {
     const b = this.boats[i];
     if (!b || b.trip || b.haul) return false;
-    b.trip = { t: 0, dur: this.tripSeconds(b) };
+    b.trip = { t: 0, dur: this.tripSeconds(b), ground: b.ground };
+    b.event = null;
     return true;
   }
 
+  /** What a haul sells for: Haggling and dev mode, less a captain's wages and any harbor fee. */
+  haulValue(b: Boat, fee = 0): number {
+    const raw = (b.haul ?? []).reduce((s, h) => s + h.value, 0);
+    const wage = b.tracks.captain > 0 ? CAPTAIN_WAGE : 0;
+    return Math.round(raw * (1 + HAGGLE_PER_LEVEL * this.haggling) * (this.dev ? DEV_MULTIPLIER : 1) * (1 - wage) * (1 - fee));
+  }
+
   /** Sell a boat's haul straight from the harbor. Returns the money. */
-  collectHaul(i: number): number {
+  collectHaul(i: number, fee = 0): number {
     const b = this.boats[i];
     if (!b?.haul) return 0;
-    const raw = b.haul.reduce((s, h) => s + h.value, 0);
-    const paid = Math.round(raw * (1 + HAGGLE_PER_LEVEL * this.haggling) * (this.dev ? DEV_MULTIPLIER : 1));
+    const paid = this.haulValue(b, fee);
     b.haul = null;
     this.money += paid;
     this.earned += paid;
     return paid;
   }
 
-  /** What a haul sells for right now. */
-  haulValue(b: Boat): number {
-    const raw = (b.haul ?? []).reduce((s, h) => s + h.value, 0);
-    return Math.round(raw * (1 + HAGGLE_PER_LEVEL * this.haggling) * (this.dev ? DEV_MULTIPLIER : 1));
-  }
-
-  /** A net full of sea fish, grouped by kind. */
-  private rollHaul(b: Boat): { fish: string; n: number; value: number }[] {
-    const out = new Map<string, { fish: string; n: number; value: number }>();
-    for (let k = this.haulSize(b); k > 0; k--) {
-      const f = this.pick(BOATS[b.type].catch, (x) => TIERS[x.tier].weight * x.rarity);
-      const e = out.get(f.id) ?? { fish: f.id, n: 0, value: 0 };
+  /**
+   * A trip's catch, grouped by kind: farther grounds and better sonar mean
+   * rarer catch, farther grounds and the ice hold mean bigger value. Then the
+   * sea has its say: a storm, a lucky school, or a sighting.
+   */
+  private rollHaul(b: Boat, groundId: GroundId): HaulItem[] {
+    const ground = this.groundOf(groundId), def = BOATS[b.type];
+    const step = 1 + ground.step + SONAR_STEP * b.tracks.sonar;
+    const worth = ground.size * (1 + ICE_VALUE * b.tracks.ice);
+    const out = new Map<string, HaulItem>();
+    const add = (fish: FishDef, mult = 1) => {
+      const e = out.get(fish.id) ?? { fish: fish.id, n: 0, value: 0 };
       e.n++;
-      e.value += Math.round(f.price * (0.6 + this.rng() * 0.8));
-      out.set(f.id, e);
+      e.value += Math.round(fish.price * worth * mult * (0.6 + this.rng() * 0.8));
+      out.set(fish.id, e);
+    };
+    for (let k = this.haulSize(b); k > 0; k--) add(this.pick(def.catch, (x) => TIERS[x.tier].weight * x.rarity * Math.pow(step, x.tier - 1)));
+    b.event = null;
+    const roll = this.rng();
+    const storm = this.stormChance(b, groundId);
+    if (roll < storm) {
+      b.event = 'storm';
+      for (const e of out.values()) { e.n = Math.max(0, Math.round(e.n * (1 - STORM_LOSS))); e.value = Math.round(e.value * (1 - STORM_LOSS)); }
+    } else if (roll < storm + SCHOOL_CHANCE) {
+      b.event = 'school';
+      for (const e of out.values()) { e.n *= 2; e.value *= 2; }
+    } else if (GROUNDS.indexOf(ground) >= 2 && roll < storm + SCHOOL_CHANCE + SIGHTING_CHANCE) {
+      b.event = 'sighting';
+      add(def.catch[def.catch.length - 1]!, 3);
     }
-    return BOATS[b.type].catch.filter((f) => out.has(f.id)).map((f) => out.get(f.id)!);
+    return def.catch.filter((x) => (out.get(x.id)?.n ?? 0) > 0).map((x) => out.get(x.id)!);
   }
 
   private tickBoats(dt: number): void {
-    for (const b of this.boats) {
-      if (!b.trip) continue;
-      b.trip.t += dt;
-      if (b.trip.t >= b.trip.dur) { b.trip = null; b.haul = this.rollHaul(b); }
+    this.boats.forEach((b, i) => {
+      if (b.trip) {
+        b.trip.t += dt;
+        if (b.trip.t >= b.trip.dur) {
+          const g = b.trip.ground;
+          b.trip = null;
+          b.haul = this.rollHaul(b, g);
+          // Automation: the harbor master sells hauls as they come in.
+          const paid = this.harbor.master ? this.collectHaul(i, HARBOR_UPGRADES.master.fee) : 0;
+          this.fleetNews.push({ boat: i, paid, event: b.event });
+        }
+      }
+      if (b.haul && this.harbor.master) this.collectHaul(i, HARBOR_UPGRADES.master.fee);
+      // A captain sails again by himself.
+      if (!b.trip && !b.haul && b.tracks.captain > 0) this.sendBoat(i);
+    });
+  }
+
+  // ---------- the harbor: automation and the warehouse ----------
+
+  buyHarbor(id: HarborUpgradeId): boolean {
+    const u = HARBOR_UPGRADES[id];
+    if (!this.company || this.harbor[id] || this.money < u.price) return false;
+    this.money -= u.price;
+    this.harbor[id] = true;
+    return true;
+  }
+
+  nextWarehouse(): { hours: number; price: number } | null {
+    return WAREHOUSE[this.warehouse + 1] ?? null;
+  }
+
+  buyWarehouse(): boolean {
+    const next = this.nextWarehouse();
+    if (!this.company || !next || this.money < next.price) return false;
+    this.money -= next.price;
+    this.warehouse++;
+    return true;
+  }
+
+  /** Hours of earnings the company keeps while the game is closed. */
+  get offlineHours(): number {
+    return WAREHOUSE[this.warehouse]!.hours;
+  }
+
+  /** Fish Buyer empties the pier crate every minute; Bait Supplier tops up each fisherman's bait (at a markup). */
+  private tickHarbor(dt: number): void {
+    if (this.harbor.buyer && (this.buyerClock += dt) >= 60) {
+      this.buyerClock = 0;
+      const total = Math.round(this.crateValue() * (1 - HARBOR_UPGRADES.buyer.fee));
+      this.crate = [];
+      this.money += total;
+      this.earned += total;
     }
+    if (this.harbor.supplier && (this.supplierClock += dt) >= 5) {
+      this.supplierClock = 0;
+      for (const h of this.hands) {
+        const price = BAITS.find((x) => x.id === h.bait)!.price * (1 + HARBOR_UPGRADES.supplier.fee);
+        if (price <= 0 || this.baitCount(h.bait) >= 5 || this.money < price * 20) continue;
+        this.money -= Math.round(price * 20);
+        this.baits[h.bait] = this.baitCount(h.bait) + 20;
+      }
+    }
+  }
+
+  /**
+   * Time passed with the game closed: the company keeps working (boats,
+   * captains, the harbor master, fishermen, buyer, supplier) for up to the
+   * warehouse's hours. Returns the money made.
+   */
+  catchUp(seconds: number): number {
+    if (!this.company) return 0;
+    const before = this.money;
+    const total = Math.min(seconds, this.offlineHours * 3600);
+    for (let t = 0; t < total; t += 0.5) this.tick(0.5);
+    this.fleetNews = [];
+    return Math.round(this.money - before);
   }
 
   // ---------- hired fishermen on the wide pier ----------
@@ -756,6 +939,7 @@ export class Game {
       skill: this.skill, reflexes: this.reflexes, haggling: this.haggling, strength: this.strength, dev: this.dev,
       bag: this.bag, journal: this.journal, nextId: this.nextId, earned: this.earned, claimed: this.claimed,
       company: this.company, letters: this.letters, boats: this.boats,
+      berths: this.berths, harbor: { ...this.harbor }, warehouse: this.warehouse, savedAt: Date.now(),
       hands: this.hands.map((h) => ({ ...h, line: { type: 'idle' as const }, react: null })), crate: this.crate,
     };
   }

@@ -1,4 +1,4 @@
-import { ACHIEVEMENTS, BOATS, DEV_MULTIPLIER, HAND_NAMES, LETTERS, RODS, SKILLS, VARIANTS, baitById, type BaitId, type BoatType, type GearKind, type SkillId } from './data';
+import { ACHIEVEMENTS, BOATS, DEV_MULTIPLIER, HAND_NAMES, HARBOR_UPGRADES, LETTERS, TRACKS, type GroundId, type HarborUpgradeId, type TrackId, RODS, SKILLS, VARIANTS, baitById, type BaitId, type BoatType, type GearKind, type SkillId } from './data';
 import { Game, fishById, type Line, type SaveData } from './game';
 import { Scene, WORM_SPOT_X } from './scene';
 import './ui.css';
@@ -16,7 +16,11 @@ function load(): Partial<SaveData> | undefined {
   }
 }
 
-const game = new Game(load());
+const saved = load();
+const game = new Game(saved);
+// The company kept working while the game was closed (up to the warehouse's hours).
+const away = saved?.savedAt ? (Date.now() - saved.savedAt) / 1000 : 0;
+const awayEarned = away > 30 ? game.catchUp(away) : 0;
 // ?dev=1 switches dev mode on (fish sell for DEV_MULTIPLIER×); the journal has a toggle too.
 if (new URLSearchParams(location.search).get('dev') === '1') game.dev = true;
 const canvas = document.getElementById('scene') as HTMLCanvasElement;
@@ -31,7 +35,7 @@ const save = () => {
   if (!dirty || wiping) return;
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(game.save())); dirty = false; } catch { /* storage full or blocked: keep playing */ }
 };
-setInterval(save, 2000);
+setInterval(() => { if (game.company) dirty = true; save(); }, 2000); // an open company always has news to save
 addEventListener('pagehide', save);
 
 // Arriving at a shop opens it: the market only if there's something to sell.
@@ -45,6 +49,7 @@ scene.onArrive = (p) => {
 canvas.addEventListener('click', (e) => {
   if (ui.open) return;
   // The harbor across the river opens its panel from anywhere.
+  if (scene.hitBobber(e.clientX, e.clientY) >= 0) { game.reel(scene.hitBobber(e.clientX, e.clientY)); return; }
   if (scene.hitHarbor(e.clientX, e.clientY)) { ui.open = 'harbor'; return; }
   // Hired fishermen and the crate on the wide pier.
   const hand = scene.hitHand(e.clientX, e.clientY);
@@ -86,14 +91,14 @@ function onAction(a: Action): void {
     if (!game.cast() && !game.activeBait) { const at = scene.fisherScreen(); note.float('NO BAIT', at.x, at.y, 'bad'); }
   }
   else if (a === 'reel') game.reel();
-  else if (a === 'market' || a === 'tackle' || a === 'baitshop' || a === 'pouch' || a === 'harbor' || a === 'pier' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'inbox' || a === 'settings') ui.open = ui.open === a ? null : a;
+  else if (a === 'market' || a === 'tackle' || a === 'baitshop' || a === 'pouch' || a === 'harbor' || a === 'pier' || a === 'shipyard' || a === 'harborup' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'inbox' || a === 'settings') ui.open = ui.open === a ? null : a;
   else if (a.startsWith('bait:')) game.selectBait(a.slice(5) as BaitId);
   else if (a === 'buyCompany') {
     if (game.buyCompany()) { ui.open = null; note.clearBanners(); note.banner(pixelIcon('boat'), 'THE FISHING CO.', 'is yours', 'rare'); }
   } else if (a.startsWith('buyBoat:')) {
     const type = a.slice(8) as BoatType;
-    if (game.buyBoat(type)) note.banner(pixelIcon('boat'), 'BOUGHT', BOATS[type].name);
-  } else if (a.startsWith('boat:')) { ui.boatSel = Number(a.slice(5)); ui.open = 'boat'; }
+    if (game.buyBoat(type)) { note.banner(pixelIcon('boat'), 'BOUGHT', game.boatName(game.boats.length - 1)); ui.open = 'harbor'; }
+  } else if (a.startsWith('boat:')) { ui.boatSel = Number(a.slice(5)); ui.trackSel = 'hull'; ui.open = 'boat'; }
   else if (a === 'hire') { if (game.hireHand()) note.banner(pixelIcon('crew'), 'HIRED', HAND_NAMES[game.hands.length - 1]!); }
   else if (a === 'sellCrate') { const n = game.sellCrate(); if (n) note.banner(pixelIcon('fish'), 'CRATE SOLD', `$${n.toLocaleString()}`); }
   else if (a.startsWith('hand:')) { ui.handSel = Number(a.slice(5)); ui.open = 'hand'; }
@@ -112,9 +117,22 @@ function onAction(a: Action): void {
     const paid = game.collectHaul(Number(a.slice(8)));
     if (paid) note.banner(pixelIcon('boat'), 'HAUL SOLD', `$${paid.toLocaleString()}`);
   } else if (a.startsWith('crew:')) { if (game.hireCrew(Number(a.slice(5)))) note.banner(pixelIcon('crew'), 'HIRED', 'A new deckhand'); }
-  else if (a.startsWith('net:')) {
-    const i = Number(a.slice(4)), next = game.nextNet(i);
-    if (next && game.upgradeNet(i)) note.banner(pixelIcon('net'), 'BOUGHT', next.name);
+  else if (a.startsWith('track:')) ui.trackSel = a.slice(6) as TrackId;
+  else if (a.startsWith('upgrade:')) {
+    const [, i, id] = a.split(':') as [string, string, TrackId];
+    if (game.upgradeTrack(Number(i), id)) note.banner(pixelIcon('anchor'), game.boatName(Number(i)).toUpperCase(), `${TRACKS[id].name} ${game.boats[Number(i)]!.tracks[id]}`);
+  } else if (a.startsWith('ground:')) {
+    const [, i, id] = a.split(':') as [string, string, GroundId];
+    game.setGround(Number(i), id);
+  } else if (a === 'sendAll') game.boats.forEach((_, i) => game.sendBoat(i));
+  else if (a === 'collectAll') {
+    const paid = game.boats.reduce((s, _, i) => s + game.collectHaul(i), 0);
+    if (paid) note.banner(pixelIcon('boat'), 'HAULS SOLD', `$${paid.toLocaleString()}`);
+  } else if (a === 'buyBerth') { if (game.buyBerth()) note.banner(pixelIcon('anchor'), 'NEW BERTH', `Room for ${game.berthCount} boats`); }
+  else if (a === 'buyWarehouse') { if (game.buyWarehouse()) note.banner(pixelIcon('trap'), 'WAREHOUSE', `${game.offlineHours} hours`); }
+  else if (a.startsWith('buyHarbor:')) {
+    const k = a.slice(10) as HarborUpgradeId;
+    if (game.buyHarbor(k)) note.banner(pixelIcon('captain'), 'HIRED', HARBOR_UPGRADES[k].name);
   }
   else if (a.startsWith('buyBait:')) {
     const [, id, n] = a.split(':') as [string, BaitId, string];
@@ -127,7 +145,7 @@ function onAction(a: Action): void {
     const paid = game.claim(ui.pick);
     if (paid) note.banner(pixelIcon('coin'), 'COLLECTED', `$${paid.toLocaleString()}`);
   }
-  else if (a === 'close') ui.open = ui.open === 'boat' ? 'harbor' : ui.open === 'hand' ? 'pier' : null;
+  else if (a === 'close') ui.open = ui.open === 'boat' || ui.open === 'shipyard' || ui.open === 'harborup' ? 'harbor' : ui.open === 'hand' ? 'pier' : null;
   else if (a === 'sellAll') { const n = game.sellAll(); if (n) note.banner(pixelIcon('coin'), 'SOLD', `$${n.toLocaleString()}`); }
   else if (a.startsWith('sellFish:')) {
     const f = fishById(a.slice(9));
@@ -197,7 +215,6 @@ function announceLine(line: Extract<Line, { type: 'result' }>, slot: number): vo
 }
 
 /** The harbor's story beats: letters, the reveal, and boats coming home. */
-const hauls = game.boats.map((b) => !!b.haul);
 function announceHarbor(): void {
   for (const text of game.takeLetters()) {
     const reveal = game.letters === LETTERS.length;
@@ -205,10 +222,14 @@ function announceHarbor(): void {
     note.log(`letter:${text}`, pixelIcon('letter'), 'A letter from H.', 'plain');
     dirty = true;
   }
-  game.boats.forEach((b, i) => {
-    if (b.haul && !hauls[i]) note.banner(pixelIcon('boat'), `${BOATS[b.type].name.toUpperCase()} IS BACK`, `$${game.haulValue(b).toLocaleString()}`, 'rare');
-    hauls[i] = !!b.haul;
-  });
+  for (const n of game.fleetNews.splice(0)) {
+    const name = game.boatName(n.boat), b = game.boats[n.boat]!;
+    if (n.event === 'storm') note.banner(pixelIcon('storm'), `${name.toUpperCase()}: STORM`, 'Lost half the catch', 'bad');
+    else if (n.event === 'school') note.banner(pixelIcon('boat'), `${name.toUpperCase()}: LUCKY SCHOOL`, 'Double haul!', 'rare');
+    else if (n.event === 'sighting') note.banner(pixelIcon('star'), `${name.toUpperCase()}: TROPHY`, 'A giant on the line!', 'rare');
+    if (n.paid) note.log(`sold:${n.boat}`, pixelIcon('boat'), `${name} sold $${n.paid.toLocaleString()}`, 'plain');
+    else if (!n.event) note.banner(pixelIcon('boat'), `${name.toUpperCase()} IS BACK`, `$${game.haulValue(b).toLocaleString()}`, 'rare');
+  }
   game.hands.forEach((h, i) => {
     const starved = game.handStarved(h);
     if (starved && !handStarved[i]) note.banner(pixelIcon('bait'), `${HAND_NAMES[i]!.toUpperCase()} NEEDS BAIT`, 'Restock your pouch', 'plain');
@@ -278,6 +299,7 @@ function frame(now: number): void {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+if (awayEarned > 0) note.banner(pixelIcon('anchor'), 'WHILE YOU WERE AWAY', `The company made $${awayEarned.toLocaleString()}`, 'rare');
 
 // Debug handles for poking at state from the console.
 Object.assign(window, { game, scene, fishById });

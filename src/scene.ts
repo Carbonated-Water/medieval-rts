@@ -4,7 +4,7 @@ import tilesUrl from './assets/kenney/tiles.png';
 import { BOOTS, CLOTHES, HAND_OUTFITS, RODS, TIERS, VARIANTS, type FishDef, type Variant } from './data';
 import type { Game, Line } from './game';
 import {
-  HAND, PAL, alertCanvas, baitShopCanvas, boatCanvas, bobberCanvas, harborCanvas, fishCanvas, fisherCanvas, holderCanvas, plankCanvas, schoolCanvas, stallCanvas, type Pose,
+  HAND, PAL, alertCanvas, baitShopCanvas, boatCanvas, bobberCanvas, craneCanvas, harborCanvas, warehouseCanvas, fishCanvas, fisherCanvas, holderCanvas, plankCanvas, schoolCanvas, stallCanvas, type Pose,
 } from './pixelart';
 
 export type Place = 'market' | 'school' | 'bait' | 'tackle' | 'dock';
@@ -108,6 +108,9 @@ export class Scene {
   private harbor = new Sprite();
   private ship = new Sprite();
   private boatSprites: Sprite[] = [];
+  private warehouse = new Sprite();
+  private crane = new Sprite();
+  private builtBerths = -1;
   private boatAlerts: Sprite[] = [];
   private builtCompany = false;
   private builtPier = false;
@@ -226,9 +229,18 @@ export class Scene {
     this.waterTop = tiling(this.tile(33), 0, V.riverTop - 6, V.w, TILE);
     add(new Graphics()).rect(0, V.riverBottom - 14, V.w, 14).fill({ color: PAL.waterDeep, alpha: 0.35 });
     // The old harbor on the far bank, with a short pier.
+    this.builtBerths = this.game.company ? this.game.berthCount : 0;
+    const pierLen = 30 + Math.max(0, this.builtBerths - 1) * 22;
     const pier = add(new Graphics());
-    pier.rect(V.harborX - 34, V.riverTop - 2, 30, 3).fill(PAL.sand).rect(V.harborX - 34, V.riverTop + 1, 30, 1).fill(PAL.dirtDark);
-    for (let x = V.harborX - 32; x < V.harborX - 4; x += 8) pier.rect(x, V.riverTop + 1, 2, 5).fill(PAL.dirtDeep);
+    pier.rect(V.harborX - 4 - pierLen, V.riverTop - 2, pierLen, 3).fill(PAL.sand).rect(V.harborX - 4 - pierLen, V.riverTop + 1, pierLen, 1).fill(PAL.dirtDark);
+    for (let x = V.harborX - 2 - pierLen; x < V.harborX - 4; x += 8) pier.rect(x, V.riverTop + 1, 2, 5).fill(PAL.dirtDeep);
+    // The warehouse and crane appear as you buy them.
+    this.warehouse = add(new Sprite(this.cached('warehouse', warehouseCanvas)));
+    this.warehouse.anchor.set(0.5, 1);
+    this.warehouse.position.set(V.harborX - 34, V.riverTop + 1);
+    this.crane = add(new Sprite(this.cached('crane', craneCanvas)));
+    this.crane.anchor.set(0.5, 1);
+    this.crane.position.set(V.harborX - 60, V.riverTop + 1);
     this.harbor = add(new Sprite());
     this.harbor.anchor.set(0.5, 1);
     this.harbor.position.set(V.harborX, V.riverTop + 1);
@@ -294,8 +306,8 @@ export class Scene {
     this.player.anchor.set(0.5, 1);
     this.world.addChild(this.player);
     // Company boats (sprites are retextured each frame as crew changes).
-    this.boatSprites = [0, 1, 2].map(() => { const s = add(new Sprite(), this.world); s.anchor.set(0.5, 1); s.visible = false; return s; });
-    this.boatAlerts = [0, 1, 2].map(() => { const s = add(new Sprite(this.cached('alert', alertCanvas)), this.world); s.anchor.set(0.5, 1); s.visible = false; return s; });
+    this.boatSprites = Array.from({ length: 8 }, () => { const s = add(new Sprite(), this.world); s.anchor.set(0.5, 1); s.visible = false; return s; });
+    this.boatAlerts = Array.from({ length: 8 }, () => { const s = add(new Sprite(this.cached('alert', alertCanvas)), this.world); s.anchor.set(0.5, 1); s.visible = false; return s; });
     for (const f of this.flying) f.sprite.destroy();
     this.flying = [];
     this.flyLayer = add(new Container(), this.world);
@@ -489,6 +501,7 @@ export class Scene {
     if (!this.ready) return;
     if (this.game.company !== this.builtCompany && this.fading === null) this.fading = 0;
     if (this.game.pierOpen !== this.builtPier && this.fading === null) this.resize();
+    if (this.game.company && this.game.berthCount !== this.builtBerths && this.fading === null) this.resize();
     if (this.fading !== null) this.fade(dt);
     this.trackLines();
     for (const f of this.flying) f.t += dt;
@@ -602,16 +615,20 @@ export class Scene {
     const cycle = this.time % 45;
     this.ship.visible = !game.company && cycle < 20;
     if (this.ship.visible) this.ship.position.set(Math.round(-30 + (cycle / 20) * (V.w + 60)), V.riverTop + 4);
-    // Boats: moored at the pier, or sailing off to the left and back.
-    const pierX = V.harborX - 22, y = V.riverTop + 12;
+    this.warehouse.visible = game.company && game.warehouse > 0;
+    this.crane.visible = game.company && !!game.harbor.master;
+    // Boats: moored along the pier in two rows, or sailing off to the left and back.
+    const pierX = V.harborX - 22;
     this.boatSprites.forEach((s, i) => {
       const b = game.boats[i];
       const alert = this.boatAlerts[i]!;
       s.visible = !!b;
       alert.visible = false;
       if (!b) return;
-      s.texture = this.cached(`boat:${b.type}:${b.crew}`, () => boatCanvas(b.crew, false, b.type));
-      let x = pierX - i * 44;
+      const look = { hull: b.tracks.hull, engine: b.tracks.engine, sonar: b.tracks.sonar, ice: b.tracks.ice, captain: b.tracks.captain };
+      s.texture = this.cached(`boat:${b.type}:${b.crew}:${Object.values(look).join('')}`, () => boatCanvas(b.crew, false, b.type, look));
+      const y = V.riverTop + 12 + (i % 2) * 15;
+      let x = pierX - Math.floor(i / 2) * 50 - (i % 2) * 25;
       if (b.trip) {
         const p = b.trip.t / b.trip.dur, far = -40;
         if (p < 0.15) x = x + (far - x) * (p / 0.15);

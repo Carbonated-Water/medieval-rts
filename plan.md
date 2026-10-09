@@ -105,17 +105,28 @@ arrows walk, Space casts / reels, E opens the building you stand at.
   screen (sky and foreground squeezed), one pixel scale smaller on big
   screens. Office becomes FISH CO.; tapping it opens Fishing Co. from
   anywhere (it's across the river).
-- **Net Boat** $20,000 (one in phase 1): send on a trip (90 s, -10% per
-  crew), returns with a net of sea fish (8 / 14 / 22 per net, +25% per
-  crew) sold straight from the harbor (Haggling and dev mode apply).
-  Crew 4 max ($4k/8k/14k/22k), nets Hand / Drift $15k / Trawl $40k. Sea
-  fish: Herring, Mackerel, Cod, Sea Bass, Halibut, Bluefin Tuna (~$60/fish
-  on average). Full kit ~= $2.9k/min with prompt resends.
-- **Boats** (one of each; Fishing Co. panel lists them, tap one for crew
-  and gear): Net Boat $20k (90 s trips, nets), Lobster Boat $60k (150 s,
-  10/20/40 traps; Blue Crab, Lobster, Spiny Lobster, King Crab), Longliner
-  $150k (210 s, short/long/deep line; Mahi-Mahi, Sailfish, Swordfish, Blue
-  Marlin). Fully kitted ~= $3.1k / $3.9k / $4.1k per minute.
+- **The fleet** (phase 3, 2026-10-09). Boats: Net Boat $20k, Lobster Boat
+  $60k, Longliner $150k; any mix, up to the harbor's berths (3, buy up to
+  8); each extra boat of a kind +50%. Every boat has six upgrade tracks,
+  levels 0-5 (cost: base x share x 2.5^level): **Hull** (+15% hold, +1 crew
+  slot, -18% storms), **Engine** (-8% trip, unlocks grounds), **Gear** (6
+  named levels per kind, e.g. Hand Net to Megatrawl), **Sonar** (+0.2 rarity
+  step), **Ice Hold** (+8% value), **Captain** (sails again by himself, +5%
+  catch, -6% storms, takes 8% wages). Crew: 2 + hull slots, +15% catch and
+  -4% trip each. Upgrades show on the boat (longer hull, dish, ice box,
+  stack, captain).
+- **Fishing grounds** per boat: Coast (1:00) / Reef (1:50, Engine 1) / Open
+  Sea (3:00, Engine 2 Hull 1) / Arctic (4:30, Engine 3 Hull 2 Sonar 1) /
+  The Deep (6:40, Engine 4 Hull 3 Sonar 2): farther = rarer, bigger, more
+  storms. **Events** on return: storm (lose half), lucky school (x2, 8%),
+  trophy sighting (Open Sea+, 2%).
+- **Harbor**: berths; Harbor Master $200k (sells hauls as they come in, 5%
+  fee; brings a crane); Fish Buyer $80k (sells the pier crate every minute,
+  5%); Bait Supplier $120k (tops fishermen up 20 at a time, +25%);
+  Warehouse (earnings while closed: 1h, 2h $100k, 4h $300k, 8h $900k).
+- **Ladder** (simulated, prompt resends): starter Net Boat on the Coast
+  ~$550/min; each tier of upgrades pays back in ~65-130 min; maxed on The
+  Deep: Net $61k, Lobster $88k, Longliner $158k per minute.
 - **Wide pier + hired fishermen** (opens with the first boat): the dock
   becomes a T-pier. Hire up to 4 (Ada, Bo, Cy, Dee: $8k/16k/28k/45k). Each
   has their own Rod (bought like yours) and Fishing level (to 25, $60 x
