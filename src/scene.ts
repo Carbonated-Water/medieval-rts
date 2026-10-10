@@ -4,7 +4,7 @@ import tilesUrl from './assets/kenney/tiles.png';
 import { BOOTS, CLOTHES, HAND_OUTFITS, RODS, TIERS, VARIANTS, type FishDef, type Variant } from './data';
 import type { Game, Line } from './game';
 import {
-  HAND, PAL, alertCanvas, baitShopCanvas, boatCanvas, bobberCanvas, craneCanvas, harborCanvas, lighthouseCanvas, warehouseCanvas, fishCanvas, fisherCanvas, holderCanvas, plankCanvas, schoolCanvas, stallCanvas, type Pose,
+  HAND, PAL, alertCanvas, baitShopCanvas, boatCanvas, bobberCanvas, craneCanvas, harborCanvas, jettyCanvas, lighthouseCanvas, warehouseCanvas, fishCanvas, fisherCanvas, holderCanvas, plankCanvas, schoolCanvas, stallCanvas, type Pose,
 } from './pixelart';
 
 export type Place = 'market' | 'school' | 'bait' | 'tackle' | 'dock';
@@ -107,6 +107,7 @@ export class Scene {
   private wormFx = new Graphics();
   private harbor = new Sprite();
   private lighthouse = new Sprite();
+  private jetty = new Sprite();
   private ship = new Sprite();
   private boatSprites: Sprite[] = [];
   private warehouse = new Sprite();
@@ -251,6 +252,10 @@ export class Scene {
     this.lighthouse.anchor.set(0.5, 1);
     const lh = this.lighthouseSpot();
     this.lighthouse.position.set(lh.x, lh.y);
+    // The Exotic Market's jetty runs off the islet beside it.
+    this.jetty = add(new Sprite(this.cached('jetty', jettyCanvas)));
+    this.jetty.anchor.set(0, 1);
+    this.jetty.position.set(lh.x + 8, lh.y);
     this.ship = add(new Sprite(this.cached('ship', () => boatCanvas(0, true))));
     this.ship.anchor.set(0.5, 1);
     this.ship.alpha = 0.75;
@@ -358,6 +363,12 @@ export class Scene {
   hitLighthouse(cx: number, cy: number): boolean {
     const x = cx / this.scale, y = cy / this.scale, p = this.lighthouseSpot();
     return Math.abs(x - p.x) < 16 && y > p.y - 58 && y < p.y + 6;
+  }
+
+  /** The Exotic Market's jetty beside the lighthouse (once the company is yours). */
+  hitJetty(cx: number, cy: number): boolean {
+    const x = cx / this.scale, y = cy / this.scale, p = this.lighthouseSpot();
+    return this.game.company && x > p.x + 10 && x < p.x + 54 && y > p.y - 30 && y < p.y + 4;
   }
 
   /** Is a screen point on the harbor (office, pier or a moored boat)? */
@@ -658,6 +669,7 @@ export class Scene {
     const state = game.company ? 'open' : game.companyRevealed ? 'forsale' : 'boarded';
     this.harbor.texture = this.cached(`harbor:${state}`, () => harborCanvas(state));
     this.lighthouse.texture = this.cached(`lighthouse:${game.company}`, () => lighthouseCanvas(game.company));
+    this.jetty.visible = game.company;
     if (game.company) {
       // A beam sweeping slowly out over the water.
       const p = this.lighthouseSpot(), lx = p.x, ly = p.y - 48, a = Math.sin(this.time * 0.6) * 0.9;

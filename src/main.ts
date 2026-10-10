@@ -70,6 +70,7 @@ canvas.addEventListener('click', (e) => {
   if (ui.open) return;
   // The harbor across the river opens its panel from anywhere.
   if (scene.hitBobber(e.clientX, e.clientY) >= 0) { game.reel(scene.hitBobber(e.clientX, e.clientY)); return; }
+  if (scene.hitJetty(e.clientX, e.clientY)) { ui.open = 'exotic'; return; }
   if (scene.hitLighthouse(e.clientX, e.clientY)) { ui.open = 'lighthouse'; return; }
   if (scene.hitHarbor(e.clientX, e.clientY)) { ui.open = 'harbor'; return; }
   // Hired fishermen and the crate on the wide pier.
@@ -112,7 +113,7 @@ function onAction(a: Action): void {
     if (!game.cast() && !game.activeBait) { const at = scene.fisherScreen(); note.float('NO BAIT', at.x, at.y, 'bad'); }
   }
   else if (a === 'reel') game.reel();
-  else if (a === 'market' || a === 'tackle' || a === 'baitshop' || a === 'pouch' || a === 'harbor' || a === 'pier' || a === 'shipyard' || a === 'harborup' || a === 'pierstaff' || a === 'ledger' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'inbox' || a === 'settings' || a === 'tree' || a === 'retire' || a === 'lighthouse') ui.open = ui.open === a ? null : a;
+  else if (a === 'market' || a === 'tackle' || a === 'baitshop' || a === 'pouch' || a === 'harbor' || a === 'pier' || a === 'shipyard' || a === 'harborup' || a === 'pierstaff' || a === 'ledger' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'inbox' || a === 'settings' || a === 'tree' || a === 'retire' || a === 'lighthouse' || a === 'exotic') ui.open = ui.open === a ? null : a;
   else if (a.startsWith('bait:')) game.selectBait(a.slice(5) as BaitId);
   else if (a === 'buyCompany') {
     if (game.buyCompany()) { ui.open = null; note.clearBanners(); note.banner(pixelIcon('boat'), 'THE FISHING CO.', 'is yours', 'rare'); }
@@ -181,6 +182,19 @@ function onAction(a: Action): void {
     const legend = LEGENDS.find((l) => l.id === a.slice(6));
     if (legend) { ui.open = null; fightView.start(new Fight(legend)); }
   } else if (a === 'fightDone') { fightView.close(); ui.open = 'lighthouse'; }
+  else if (a.startsWith('exTab:')) ui.exTab = a.slice(6) as 'hold' | 'listed' | 'wanted';
+  else if (a.startsWith('exList:')) { if (game.listExotic(Number(a.slice(7)))) note.float('LISTED', innerWidth / 2, innerHeight / 2, 'plain'); }
+  else if (a.startsWith('exOpen:')) { ui.exSel = Number(a.slice(7)); ui.open = 'listing'; }
+  else if (a.startsWith('exUnlist:')) { if (game.unlistExotic(Number(a.slice(9)))) ui.open = 'exotic'; }
+  else if (a.startsWith('exSell:')) {
+    const [, id, i] = a.split(':');
+    const n = game.sellToOffer(Number(id), Number(i));
+    if (n) { note.banner(pixelIcon('coin'), 'SOLD', `$${n.toLocaleString()}`, 'rare'); ui.open = 'exotic'; }
+  } else if (a.startsWith('exGive:')) {
+    const w = game.wanted.find((x) => x.id === Number(a.slice(7)));
+    const match = w && [...game.exoticHold, ...game.listings.map((l) => l.exotic)].filter((e) => game.meetsWanted(w, e)).sort((x, y) => x.kg - y.kg)[0];
+    if (w && match) { const n = game.fulfillWanted(w.id, match.id); if (n) note.banner(pixelIcon('coin'), `${w.buyer.toUpperCase()} PAID`, `$${n.toLocaleString()}`, 'rare'); }
+  }
   else if (a === 'back') ui.open = ui.parentOf(ui.open);
   else if (a.startsWith('coTab:')) ui.open = a.slice(6) as 'harbor' | 'ledger' | 'harborup';
   else if (a === 'boatPrev' || a === 'boatNext') {

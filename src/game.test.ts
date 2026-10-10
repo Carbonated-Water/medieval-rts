@@ -921,3 +921,62 @@ describe('prestige: Pearls and the Fish Tree', () => {
   });
 });
 
+
+describe('the Exotic Market', () => {
+  const market = () => new Game({ money: 0, earned: 1e7, company: true }, rng(21));
+
+  it('landed legends go into a hold of 6, worth more when heavier', () => {
+    const g = market();
+    const small = g.addExotic('ghostmarlin', 300)!, big = g.addExotic('ghostmarlin', 600)!;
+    expect(big.value).toBe(small.value * 2);
+    for (let k = 0; k < 4; k++) g.addExotic('kelpwyrm');
+    expect(g.exoticHold.length).toBe(6);
+    expect(g.addExotic('kelpwyrm')).toBeNull();
+  });
+
+  it('a listed fish gets offers that come and go; selling pays the offer', () => {
+    const g = market();
+    const e = g.addExotic('abyssking')!;
+    expect(g.listExotic(e.id)).toBe(true);
+    expect(g.exoticHold.length).toBe(0);
+    tick(g, 120);
+    const l = g.listings[0]!;
+    expect(l.offers.length).toBeGreaterThan(0);
+    expect(l.offers.length).toBeLessThanOrEqual(4);
+    expect(l.offers[0]!.amount).toBeGreaterThan(e.value * 0.5);
+    const best = l.offers[0]!.amount;
+    expect(g.sellToOffer(e.id, 0)).toBe(best);
+    expect(g.money).toBe(best);
+    expect(g.listings.length).toBe(0);
+  });
+
+  it('only 3 fish can be listed; unlisting puts a fish back in the hold', () => {
+    const g = market();
+    const ids = [1, 2, 3, 4].map(() => g.addExotic('kelpwyrm')!.id);
+    expect(ids.slice(0, 3).every((id) => g.listExotic(id))).toBe(true);
+    expect(g.listExotic(ids[3]!)).toBe(false);
+    expect(g.unlistExotic(ids[0]!)).toBe(true);
+    expect(g.exoticHold.map((e) => e.id).sort()).toEqual([ids[0], ids[3]].sort());
+  });
+
+  it('WANTED notices appear, pay about double for a big enough fish, and refuse a small one', () => {
+    const g = market();
+    tick(g, 301);
+    const w = g.wanted[0]!;
+    expect(w).toBeTruthy();
+    const small = g.addExotic(w.fish, w.minKg - 10)!, ok = g.addExotic(w.fish, w.minKg + 10)!;
+    expect(g.fulfillWanted(w.id, small.id)).toBe(0);
+    expect(w.reward).toBeGreaterThan(g.exoticValue(w.fish, w.minKg) * 1.6);
+    expect(g.fulfillWanted(w.id, ok.id)).toBe(w.reward);
+    expect(g.wanted.includes(w)).toBe(false);
+  });
+
+  it('round-trips through save data', () => {
+    const g = market();
+    g.listExotic(g.addExotic('ghostmarlin')!.id);
+    g.addExotic('kelpwyrm');
+    tick(g, 310);
+    const again = new Game(JSON.parse(JSON.stringify(g.save())));
+    expect([again.exoticHold, again.listings, again.wanted, again.nextExoticId]).toEqual([g.exoticHold, g.listings, g.wanted, g.nextExoticId]);
+  });
+});

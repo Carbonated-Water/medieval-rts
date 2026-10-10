@@ -2,18 +2,19 @@ import {
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_ORDER, COMPANY_PRICE, COMPANY_UNLOCK_EARNED, DEV_MULTIPLIER, GROUNDS, HARBOR_UPGRADES,
   MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, PIER_STAFF, HANDS_MAX,
   TRACKS, TRACK_MAX, TRACK_ORDER, WAREHOUSE, type HarborUpgradeId, type TrackId, HAND_NAMES, HAND_SKILL_MAX, LETTERS, RODS, FISH, GEAR, REFLEX_PER_LEVEL, SKILLS, STRENGTH_PER_LEVEL, HAGGLE_PER_LEVEL,
-  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, TREE_FISH, type TreeFish, LEGENDS,
+  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, TREE_FISH, type TreeFish, LEGENDS, EXOTIC,
 } from './data';
-import { type Boat, type Game, fishById } from './game';
+import { type Boat, type Exotic, type Game, fishById } from './game';
 import { Notices, lineHtml, timeAgo } from './notify';
 import { pixelFishIcon as fishIcon, pixelIcon, type IconName } from './pixelart';
 import type { Place } from './scene';
 
 /** One panel per job: the market sells fish, the tackle shop sells gear, the school trains skills. */
-export type Panel = 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'ledger' | 'boat' | 'tree' | 'retire' | 'lighthouse' | 'shipyard' | 'harborup' | 'pier' | 'pierstaff' | 'hand' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
+export type Panel = 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'ledger' | 'boat' | 'tree' | 'retire' | 'lighthouse' | 'exotic' | 'listing' | 'shipyard' | 'harborup' | 'pier' | 'pierstaff' | 'hand' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
 
 export type Action =
-  | 'cast' | 'reel' | 'close' | 'back' | 'reset' | 'toggleDev' | Panel | `fight:${string}` | 'fightDone' | 'boatPrev' | 'boatNext' | `coTab:${'harbor' | 'ledger' | 'harborup'}`
+  | 'cast' | 'reel' | 'close' | 'back' | 'reset' | 'toggleDev' | Panel | `fight:${string}` | 'fightDone'
+  | `exTab:${'hold' | 'listed' | 'wanted'}` | `exList:${number}` | `exUnlist:${number}` | `exOpen:${number}` | `exSell:${number}:${number}` | `exGive:${number}` | 'boatPrev' | 'boatNext' | `coTab:${'harbor' | 'ledger' | 'harborup'}`
   | `achTab:${'base' | 'tree'}` | `treeTier:${number}` | `treeSel:${string}` | `unlock:${string}` | 'doRetire' | `journalTier:${number}`
   | 'sellAll' | `sellFish:${string}` | `buy:${GearKind}` | `train:${SkillId}` | 'claimAll' | `trophy:${string}`
   | `bait:${BaitId}` | `buyBait:${BaitId}:${number}`
@@ -40,6 +41,8 @@ export const ACH_ICON: Record<AchStat, IconName> = {
 const num = (n: number) => n.toLocaleString('en-US');
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 const coin = (n: number, scale = 2) => `<span class="cash"><img src="${pixelIcon('coin', scale)}" alt="">${num(n)}</span>`;
+/** Short money for tight buttons: $8.8M. */
+const cash = (n: number) => `<span class="cash"><img src="${pixelIcon('coin', 2)}" alt="">${kmb(n)}</span>`;
 const icon = (name: IconName, scale = 3) => `<img src="${pixelIcon(name, scale)}" alt="">`;
 /** Level as pips (short tracks) or a bar (long ones). */
 const level = (lv: number, max: number) => max <= 10
@@ -68,13 +71,16 @@ export class UI {
   open: Panel | null = null;
   /** Trophy shown in the detail strip. */
   pick: string | null = null;
+  /** Exotic Market: which tab, and which listing is open. */
+  exTab: 'hold' | 'listed' | 'wanted' = 'hold';
+  exSel = 0;
   /** The Fishing Co. tab last shown (a boat or the shipyard goes back to it). */
   coTab: 'harbor' | 'ledger' | 'harborup' = 'harbor';
 
   /** Where ◄ goes from a panel (null: it has no parent, only X). */
   parentOf(panel: Panel | null): Panel | null {
     if (panel === 'boat' || panel === 'shipyard') return this.coTab;
-    return ({ hand: 'pier', pierstaff: 'pier', tree: 'settings', retire: 'settings' } as Partial<Record<Panel, Panel>>)[panel ?? 'market'] ?? null;
+    return ({ hand: 'pier', pierstaff: 'pier', tree: 'settings', retire: 'settings', listing: 'exotic' } as Partial<Record<Panel, Panel>>)[panel ?? 'market'] ?? null;
   }
   /** Trophy page: the originals, or the Fish Tree's. */
   achTab: 'base' | 'tree' = 'base';
@@ -194,6 +200,8 @@ export class UI {
             : panel === 'journal' ? [`Journal ${Object.keys(game.journal).length}/${FISH.length + TREE_FISH.filter((f) => f.side === 'river').length}`, this.journalHtml(game)]
             : panel === 'tree' ? ['Fish Tree', this.treeHtml(game)]
             : panel === 'lighthouse' ? ['Lighthouse', this.lighthouseHtml(game)]
+            : panel === 'exotic' ? ['Exotic Market', this.exoticHtml(game)]
+            : panel === 'listing' ? [this.listingTitle(game), this.listingHtml(game)]
             : panel === 'retire' ? ['Retire', this.retireHtml(game)]
               : panel === 'trophies' ? [`Trophies ${game.claimed.length}/${ACHIEVEMENTS.length}`, this.trophiesHtml(game)]
                 : panel === 'inbox' ? ['Log', this.inboxHtml()]
@@ -593,9 +601,61 @@ export class UI {
   /** The Lighthouse: where expeditions will sail from. For now, practice fights against the legends. */
   private lighthouseHtml(game: Game): string {
     if (!game.company) return `<div class="row"><div class="slot">${icon('lock')}</div><div class="meta"><b>Boarded up</b><div class="sub"><small>Own the Fishing Co. first</small></div></div></div>`;
-    const rows = LEGENDS.map((l, k) => `<div class="row"><div class="slot"><img src="${fishIcon(l, false, 48, 28)}" alt=""></div><div class="meta"><b>${l.name}</b>
+    const rows = LEGENDS.map((l, k) => `<div class="row"><div class="slot"><img class="fit" src="${fishIcon(l, false, 48, 28)}" alt=""></div><div class="meta"><b>${l.name}</b>
       <div class="sub">${level(k + 1, 3)}<small>${l.blurb}</small></div></div><button class="btn" data-act="fight:${l.id}">FIGHT</button></div>`).join('');
     return rows + '<p class="note">Practice fights. Hold to reel, let go when it runs. Voyages to find them come next.</p>';
+  }
+
+  // ---------- the Exotic Market ----------
+
+  /** Hold (list a fish), Listed (best offers; tap for all), Wanted (collectors' notices). */
+  private exoticHtml(game: Game): string {
+    const tab = this.exTab;
+    const tabs = `<div class="tiers three">${([['hold', `HOLD ${game.exoticHold.length}/${EXOTIC.hold}`], ['listed', `LISTED ${game.listings.length}/${EXOTIC.slots}`], ['wanted', `WANTED ${game.wanted.length}`]] as const)
+      .map(([k, label]) => `<button class="tab${tab === k ? ' on' : ''}" style="--c:#7a4a8a" data-act="exTab:${k}">${label}</button>`).join('')}</div>`;
+    const fishRow = (e: Exotic, right: string, sub = `worth about $${kmb(e.value)}`) => {
+      const f = LEGENDS.find((l) => l.id === e.fish)!;
+      return `<div class="row"><div class="slot"><img class="fit" src="${fishIcon(f, false, 48, 28)}" alt=""></div><div class="meta"><b>${f.name} <span class="small">${e.kg.toLocaleString()} kg</span></b>
+        <div class="sub"><small>${sub}</small></div></div>${right}</div>`;
+    };
+    const t = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+    let body = '';
+    if (tab === 'hold') {
+      const full = game.listings.length >= EXOTIC.slots;
+      body = game.exoticHold.map((e) => fishRow(e, `<button class="btn" data-act="exList:${e.id}" ${full ? 'disabled' : ''}>LIST</button>`)).join('')
+        || '<p class="empty">No exotic fish yet. Voyages bring them back.</p>';
+    } else if (tab === 'listed') {
+      body = game.listings.map((l) => {
+        const best = l.offers[0];
+        const right = best ? `<button class="btn" data-act="exOpen:${l.exotic.id}">${cash(best.amount)}</button>` : `<button class="btn plain" data-act="exOpen:${l.exotic.id}">WAITING</button>`;
+        return fishRow(l.exotic, right, best ? `best: ${best.buyer} · ${t(best.left)} · ${l.offers.length} offer${l.offers.length > 1 ? 's' : ''}` : 'no offers yet');
+      }).join('') || '<p class="empty">Nothing listed. List fish from the hold.</p>';
+    } else {
+      body = game.wanted.map((w) => {
+        const f = LEGENDS.find((l) => l.id === w.fish)!;
+        const match = [...game.exoticHold, ...game.listings.map((l) => l.exotic)].filter((e) => game.meetsWanted(w, e)).sort((a, b) => a.kg - b.kg)[0];
+        return `<div class="row"><div class="slot"><img class="fit" src="${fishIcon(f, !match, 48, 28)}" alt=""></div><div class="meta"><b>${f.name} <span class="small">${w.minKg.toLocaleString()}+ kg</span></b>
+          <div class="sub"><small>${w.buyer} · ${t(w.left)} left</small></div></div>
+          <button class="btn" data-act="exGive:${w.id}" ${match ? '' : 'disabled'}>${cash(w.reward)}</button></div>`;
+      }).join('') || '<p class="empty">No notices right now. Collectors post one every few minutes.</p>';
+    }
+    return tabs + body;
+  }
+
+  private listingTitle(game: Game): string {
+    const l = game.listings.find((x) => x.exotic.id === this.exSel);
+    return l ? LEGENDS.find((f) => f.id === l.exotic.fish)!.name : 'Listing';
+  }
+
+  /** One listed fish: every offer (sell to any), or take it off the market. */
+  private listingHtml(game: Game): string {
+    const l = game.listings.find((x) => x.exotic.id === this.exSel);
+    if (!l) return '<p class="empty">Sold or taken off the market.</p>';
+    const t = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+    const offers = l.offers.map((o, i) => `<div class="row"><div class="slot">${icon('crew')}</div><div class="meta"><b>${o.buyer}</b><div class="sub"><small>offer ends in ${t(o.left)}</small></div></div>
+      <button class="btn" data-act="exSell:${l.exotic.id}:${i}">${cash(o.amount)}</button></div>`).join('') || '<p class="empty">Waiting for the first offer...</p>';
+    return `<p class="note">${l.exotic.kg.toLocaleString()} kg · worth about $${kmb(l.exotic.value)} · next offer in ~${Math.ceil(l.next)} s. Offers creep up the longer it's listed.</p>${offers}
+      <button class="btn wide plain" data-act="exUnlist:${l.exotic.id}" ${game.exoticHold.length >= EXOTIC.hold ? 'disabled' : ''}>TAKE IT OFF THE MARKET</button>`;
   }
 
   /** Retire: what this run turns into, what stays, what goes. */

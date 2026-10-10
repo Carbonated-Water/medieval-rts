@@ -66,11 +66,16 @@ const GLYPHS: Record<string, string[]> = {
   K: ['#.#', '#.#', '##.', '#.#', '#.#'], L: ['#..', '#..', '#..', '#..', '###'], M: ['#...#', '##.##', '#.#.#', '#...#', '#...#'],
   O: ['.#.', '#.#', '#.#', '#.#', '.#.'], R: ['##.', '#.#', '##.', '#.#', '#.#'], S: ['.##', '#..', '.#.', '..#', '##.'],
   T: ['###', '.#.', '.#.', '.#.', '.#.'], ' ': ['.', '.', '.', '.', '.'], '?': ['##.', '..#', '.#.', '...', '.#.'], '.': ['.', '.', '.', '.', '#'],
+  D: ['##.', '#.#', '#.#', '#.#', '##.'], G: ['.##', '#..', '#.#', '#.#', '.##'], N: ['#..#', '##.#', '#.##', '#..#', '#..#'],
+  P: ['##.', '#.#', '##.', '#..', '#..'], U: ['#.#', '#.#', '#.#', '#.#', '###'], V: ['#.#', '#.#', '#.#', '#.#', '.#.'],
+  W: ['#...#', '#...#', '#.#.#', '##.##', '#...#'], X: ['#.#', '#.#', '.#.', '#.#', '#.#'], Y: ['#.#', '#.#', '.#.', '.#.', '.#.'],
 };
-const textWidth = (s: string) => [...s].reduce((w, ch) => w + GLYPHS[ch]![0]!.length + 1, -1);
+/** A letter's pixels: one the font doesn't have draws as a space instead of breaking the whole scene. */
+const glyph = (ch: string) => GLYPHS[ch] ?? GLYPHS[' ']!;
+const textWidth = (s: string) => [...s].reduce((w, ch) => w + glyph(ch)[0]!.length + 1, -1);
 function text(ctx: Ctx, s: string, x: number, y: number, color: string): void {
   for (const ch of s) {
-    const g = GLYPHS[ch]!;
+    const g = glyph(ch);
     g.forEach((row, gy) => [...row].forEach((v, gx) => v === '#' && px(ctx, x + gx, y + gy, color)));
     x += g[0]!.length + 1;
   }
@@ -431,6 +436,22 @@ export function lighthouseCanvas(open: boolean): HTMLCanvasElement {
     rect(ctx, W / 2 - 4, 5, 8, 7, open ? PAL.goldLight : PAL.greyDark);
     if (open) rect(ctx, W / 2 - 2, 6, 4, 5, '#fff3b0');
     rect(ctx, W / 2 - 5, 3, 10, 2, PAL.red); rect(ctx, W / 2 - 2, 1, 4, 2, PAL.red);
+  }));
+}
+
+/** The Exotic Market: a little jetty off the lighthouse islet with a striped trading tent and its sign. */
+export function jettyCanvas(): HTMLCanvasElement {
+  const W = 44, H = 30;
+  return outline(makeCanvas(W, H, (ctx) => {
+    // Planks out over the water, posts down into it.
+    rect(ctx, 0, H - 8, W, 3, PAL.sand); for (let x = 2; x < W; x += 4) rect(ctx, x, H - 8, 1, 3, PAL.sandMid);
+    for (const x of [3, 20, 38]) rect(ctx, x, H - 5, 2, 5, PAL.dirtDeep);
+    // Tent: purple and gold stripes, a counter with a fish on it.
+    for (let y = 0; y < 6; y++) rect(ctx, 14 - y, 9 + y, 18 + y * 2, 1, PAL.gold);
+    for (let x = 8; x < 38; x += 4) rect(ctx, x, 12, 2, 3, '#7a4a8a');
+    rect(ctx, 10, 15, 2, 7, PAL.dirtDark); rect(ctx, 34, 15, 2, 7, PAL.dirtDark);
+    rect(ctx, 9, 18, 28, 4, PAL.dirt); rect(ctx, 17, 16, 9, 2, PAL.waterLight); rect(ctx, 26, 16, 2, 2, PAL.waterDeep);
+    sign(ctx, 23, 0, 'EXOTIC');
   }));
 }
 

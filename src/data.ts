@@ -421,10 +421,33 @@ export const FIGHT = {
 /** A legendary you fight on an expedition: how much fight it has, how hard it pulls, how often and how hard it surges. */
 export interface LegendDef extends FishDef { stamina: number; pull: number; surgePower: number; surgeEvery: number; blurb: string }
 export const LEGENDS: LegendDef[] = [
-  { id: 'kelpwyrm', name: 'Kelp Wyrm', tier: 5, price: 0, kg: 90, rarity: 1, colors: ['#3a7a3a', '#a8e080', '#f0c040'], shape: 6.5, stamina: 50, pull: 0.12, surgePower: 2.6, surgeEvery: 5, blurb: 'Lazy, but it thrashes' },
-  { id: 'ghostmarlin', name: 'Ghost Marlin', tier: 5, price: 0, kg: 500, rarity: 1, colors: ['#c8d8f0', '#ffffff', '#8098c8'], shape: 4.4, look: 'billed', stamina: 80, pull: 0.2, surgePower: 3, surgeEvery: 4, blurb: 'Fast and proud' },
-  { id: 'abyssking', name: 'Abyss King', tier: 5, price: 0, kg: 3000, rarity: 1, colors: ['#2a1a4a', '#8060c0', '#f04080'], shape: 3.6, stamina: 100, pull: 0.28, surgePower: 2.3, surgeEvery: 3, blurb: 'It does not tire' },
+  { id: 'kelpwyrm', name: 'Kelp Wyrm', tier: 5, price: 2000000, kg: 90, rarity: 1, colors: ['#3a7a3a', '#a8e080', '#f0c040'], shape: 6.5, stamina: 50, pull: 0.12, surgePower: 2.6, surgeEvery: 5, blurb: 'Lazy, but it thrashes' },
+  { id: 'ghostmarlin', name: 'Ghost Marlin', tier: 5, price: 6000000, kg: 500, rarity: 1, colors: ['#c8d8f0', '#ffffff', '#8098c8'], shape: 4.4, look: 'billed', stamina: 80, pull: 0.2, surgePower: 3, surgeEvery: 4, blurb: 'Fast and proud' },
+  { id: 'abyssking', name: 'Abyss King', tier: 5, price: 15000000, kg: 3000, rarity: 1, colors: ['#2a1a4a', '#8060c0', '#f04080'], shape: 3.6, stamina: 100, pull: 0.28, surgePower: 2.3, surgeEvery: 3, blurb: 'It does not tire' },
 ];
+
+/**
+ * The Exotic Market (the jetty by the lighthouse): expedition fish wait in the
+ * hold, go up for offers (a few listing slots; collectors bid every so often,
+ * each bid lasts a while, bids creep up the longer a fish is listed) or go to
+ * a collector's WANTED notice (pays about double, for a fish of a given size).
+ * A fish's value = its legend's price x its weight / the legend's usual weight.
+ */
+export const EXOTIC = {
+  hold: 6,
+  slots: 3,
+  offerEvery: [15, 40] as [number, number],
+  offerLife: [60, 150] as [number, number],
+  /** An offer is the fish's value x a random factor in this range, plus offerTrend for every minute it has been listed. */
+  offerRange: [0.7, 1.4] as [number, number],
+  offerTrend: 0.04,
+  maxOffers: 4,
+  wanted: 3,
+  wantedEvery: 300,
+  wantedLife: [600, 1200] as [number, number],
+  wantedPay: [1.7, 2.4] as [number, number],
+};
+export const COLLECTORS = ['Baron Gill', 'Madame Koi', 'Old Moss', 'Captain Reyes', 'The Countess', 'Dr. Finley', 'Lady Marlowe', 'Mr. Tanaka'];
 
 /** The harbor: berths (how many boats), automation, and the warehouse (offline earnings cap). */
 export const BERTHS: { boats: number; price: number }[] = [

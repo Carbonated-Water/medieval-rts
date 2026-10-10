@@ -54,11 +54,13 @@ export class FightView {
     const q = <T extends Element>(s: string) => this.el.querySelector(s) as unknown as T;
     this.parts = { fish: q('.fish'), line: q('.rope line'), mark: q('.mark'), stam: q('.stam i'), prompt: q('.prompt'), result: q('.result'), water: q('.water'), hold: q('.hold') };
     this.el.className = 'show'; // a fresh screen: no result, surge or reeling state left from the last fight
+    document.body.classList.add('fighting'); // the game's pop-ups and banners stay out of the fight (they still reach the inbox)
   }
 
   close(): void {
     this.fight = null;
     this.el.className = '';
+    document.body.classList.remove('fighting');
     this.el.innerHTML = '';
   }
 

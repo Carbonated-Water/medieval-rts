@@ -7,7 +7,7 @@ import {
   MIN_BITE_WAIT, REEL_WINDOW, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, START_WORMS, STRENGTH_PER_LEVEL, TIERS,
   TOO_STRONG_WEIGHT, VARIANTS, VARIANT_ORDER, WORMS_PER_PICK, WORM_SPAWN_SECONDS, WORM_SPOTS, baitById,
   type AchStat, type AchievementDef, type BaitId, type FishDef, type GearKind, type SkillId, type Tier, type Variant,
-  BILLFISH, SEA_FISH, SHELLFISH, TREE_FISH, pearlsFor, treeFishById, type TreeFish,
+  BILLFISH, SEA_FISH, SHELLFISH, TREE_FISH, pearlsFor, treeFishById, type TreeFish, COLLECTORS, EXOTIC, LEGENDS,
 } from './data';
 
 export interface Catch {
@@ -62,6 +62,11 @@ export interface SaveData {
   retirements?: number;
   /** Sea species your boats have ever landed (the sea's journal); survives retiring. */
   seaSeen?: string[];
+  /** The Exotic Market. */
+  exoticHold?: Exotic[];
+  listings?: Listing[];
+  wanted?: Wanted[];
+  nextExoticId?: number;
   money: number;
   rod: number;
   holders: number;
@@ -120,8 +125,17 @@ export type Line =
   | { type: 'bite'; t: number; window: number; fish: FishDef; tooStrong: boolean; bait?: BaitId }
   | { type: 'result'; t: number; outcome: 'caught' | 'escaped' | 'snapped' | 'scared'; fish?: FishDef; caught?: Catch; strong?: boolean };
 
-/** Every fish in the game: river, sea, and the Fish Tree. */
-const ALL_FISH: FishDef[] = [...FISH, ...SEA_FISH, ...SHELLFISH, ...BILLFISH, ...TREE_FISH];
+/** Every fish in the game: river, sea, the Fish Tree, and the expedition legends. */
+const ALL_FISH: FishDef[] = [...FISH, ...SEA_FISH, ...SHELLFISH, ...BILLFISH, ...TREE_FISH, ...LEGENDS];
+
+/** An expedition fish in the exotic hold: which legend, how heavy, what it's worth. */
+export interface Exotic { id: number; fish: string; kg: number; value: number }
+/** A collector's offer on a listed fish (seconds left before it's withdrawn). */
+export interface Offer { buyer: string; amount: number; left: number }
+/** A fish up for offers: the offers in, seconds to the next one, how long it has been listed. */
+export interface Listing { exotic: Exotic; offers: Offer[]; next: number; age: number }
+/** A WANTED notice: a collector wants this legend, at least this heavy, for this reward, before time runs out. */
+export interface Wanted { id: number; buyer: string; fish: string; minKg: number; reward: number; left: number }
 export const fishById = (id: string): FishDef => ALL_FISH.find((f) => f.id === id)!;
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(v)));
@@ -165,6 +179,11 @@ export class Game {
   fishTree: string[] = [];
   retirements = 0;
   seaSeen: string[] = [];
+  exoticHold: Exotic[] = [];
+  listings: Listing[] = [];
+  wanted: Wanted[] = [];
+  nextExoticId = 1;
+  private wantedClock = 0;
   /** Value made so far this session, by source (fish caught at their price, boat hauls). For the $/sec readout; not saved. */
   made = { you: 0, hands: 0, boats: 0 };
   /** One entry per line in the water (length = lineCount). */
@@ -287,6 +306,102 @@ export class Game {
     this.pearls -= treeFishById(id)!.cost;
     this.fishTree.push(id);
     return true;
+  }
+
+  // ---------- the Exotic Market ----------
+
+  private span = ([lo, hi]: [number, number]) => lo + this.rng() * (hi - lo);
+
+  /** What an expedition fish of this weight is worth. */
+  exoticValue(fish: string, kg: number): number {
+    const l = LEGENDS.find((x) => x.id === fish)!;
+    return Math.round((l.price * kg) / l.kg / 1000) * 1000;
+  }
+
+  /** A landed legend goes into the exotic hold (null if the hold is full). Voyages call this. */
+  addExotic(fish: string, kg?: number): Exotic | null {
+    if (this.exoticHold.length >= EXOTIC.hold) return null;
+    const l = LEGENDS.find((x) => x.id === fish);
+    if (!l) return null;
+    const w = kg ?? Math.round(l.kg * (0.7 + this.rng() * 0.7));
+    const e: Exotic = { id: this.nextExoticId++, fish, kg: w, value: this.exoticValue(fish, w) };
+    this.exoticHold.push(e);
+    return e;
+  }
+
+  /** Put a fish from the hold up for offers (if a listing slot is free). */
+  listExotic(id: number): boolean {
+    const i = this.exoticHold.findIndex((e) => e.id === id);
+    if (i < 0 || this.listings.length >= EXOTIC.slots) return false;
+    const [exotic] = this.exoticHold.splice(i, 1);
+    this.listings.push({ exotic: exotic!, offers: [], next: this.span([4, 10]), age: 0 });
+    return true;
+  }
+
+  /** Take a fish off the market, back into the hold. */
+  unlistExotic(id: number): boolean {
+    const i = this.listings.findIndex((l) => l.exotic.id === id);
+    if (i < 0 || this.exoticHold.length >= EXOTIC.hold) return false;
+    this.exoticHold.push(this.listings.splice(i, 1)[0]!.exotic);
+    return true;
+  }
+
+  /** Sell a listed fish to one of its offers. */
+  sellToOffer(id: number, offer: number): number {
+    const i = this.listings.findIndex((l) => l.exotic.id === id), o = this.listings[i]?.offers[offer];
+    if (!o) return 0;
+    this.listings.splice(i, 1);
+    this.money += o.amount;
+    this.earned += o.amount;
+    return o.amount;
+  }
+
+  /** Does this fish meet that notice? */
+  meetsWanted(w: Wanted, e: Exotic): boolean {
+    return e.fish === w.fish && e.kg >= w.minKg;
+  }
+
+  /** Hand a fish (from the hold or a listing) to a WANTED notice. */
+  fulfillWanted(wantedId: number, exoticId: number): number {
+    const w = this.wanted.find((x) => x.id === wantedId);
+    const inHold = this.exoticHold.find((e) => e.id === exoticId), listed = this.listings.find((l) => l.exotic.id === exoticId);
+    const e = inHold ?? listed?.exotic;
+    if (!w || !e || !this.meetsWanted(w, e)) return 0;
+    if (inHold) this.exoticHold = this.exoticHold.filter((x) => x !== inHold); else this.listings = this.listings.filter((x) => x !== listed);
+    this.wanted = this.wanted.filter((x) => x !== w);
+    this.money += w.reward;
+    this.earned += w.reward;
+    return w.reward;
+  }
+
+  /** Offers come and go on listed fish; WANTED notices are posted and expire. */
+  private tickExotic(dt: number): void {
+    for (const l of this.listings) {
+      l.age += dt;
+      for (const o of l.offers) o.left -= dt;
+      l.offers = l.offers.filter((o) => o.left > 0);
+      if ((l.next -= dt) <= 0) {
+        l.next = this.span(EXOTIC.offerEvery);
+        const used = new Set(l.offers.map((o) => o.buyer));
+        const buyer = COLLECTORS.filter((b) => !used.has(b))[Math.floor(this.rng() * (COLLECTORS.length - used.size))] ?? COLLECTORS[0]!;
+        const amount = Math.round((l.exotic.value * (this.span(EXOTIC.offerRange) + EXOTIC.offerTrend * (l.age / 60))) / 1000) * 1000;
+        l.offers.push({ buyer, amount, left: this.span(EXOTIC.offerLife) });
+        l.offers.sort((a, b) => b.amount - a.amount);
+        l.offers = l.offers.slice(0, EXOTIC.maxOffers);
+      }
+    }
+    if (!this.company) return;
+    for (const w of this.wanted) w.left -= dt;
+    this.wanted = this.wanted.filter((w) => w.left > 0);
+    if (this.wanted.length < EXOTIC.wanted && (this.wantedClock += dt) >= EXOTIC.wantedEvery) {
+      this.wantedClock = 0;
+      const l = LEGENDS[Math.floor(this.rng() * LEGENDS.length)]!;
+      const minKg = Math.round((l.kg * (0.8 + this.rng() * 0.4)) / 10) * 10;
+      this.wanted.push({
+        id: this.nextExoticId++, buyer: COLLECTORS[Math.floor(this.rng() * COLLECTORS.length)]!, fish: l.id, minKg,
+        reward: Math.round((this.exoticValue(l.id, minKg) * this.span(EXOTIC.wantedPay)) / 1000) * 1000, left: this.span(EXOTIC.wantedLife),
+      });
+    }
   }
 
   /** Pearls you'd get for retiring now. */
@@ -508,6 +623,7 @@ export class Game {
     this.spawnWorms(dt);
     this.tickBoats(dt);
     this.tickHarbor(dt);
+    this.tickExotic(dt);
     this.tickHands(dt);
     this.lines.forEach((line, i) => {
       if (line.type === 'idle') return;
@@ -1182,6 +1298,7 @@ export class Game {
       berths: this.berths, harbor: { ...this.harbor }, warehouse: this.warehouse, savedAt: Date.now(),
       pierSections: this.pierSections, managerBudget: this.managerBudget,
       pearls: this.pearls, fishTree: this.fishTree, retirements: this.retirements, seaSeen: this.seaSeen,
+      exoticHold: this.exoticHold, listings: this.listings, wanted: this.wanted, nextExoticId: this.nextExoticId,
       hands: this.hands.map((h) => ({ ...h, line: { type: 'idle' as const }, react: null })), crate: this.crate,
     };
   }

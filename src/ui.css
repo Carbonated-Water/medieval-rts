@@ -47,6 +47,7 @@ button { font: inherit; color: inherit; cursor: pointer; padding: 0; border: 0; 
 /* The big-fish fight: full screen, over everything. */
 #fight { position: fixed; inset: 0; z-index: 20; display: none; flex-direction: column; background: #123a5a; touch-action: none; user-select: none; -webkit-user-select: none; }
 #fight.show { display: flex; }
+body.fighting .banner, body.fighting #notes { visibility: hidden; }
 #fight .water { position: relative; flex: 1; overflow: hidden; background: linear-gradient(#5ab0e0 0 18%, #1e6a9a 18% 19%, #175a86 19%, #0c2e4a); }
 #fight .surface { position: absolute; left: 0; right: 0; top: 18%; height: 4px; background: repeating-linear-gradient(90deg, #8fd8f8 0 8px, transparent 8px 16px); }
 #fight .rope { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -86,6 +87,9 @@ button { font: inherit; color: inherit; cursor: pointer; padding: 0; border: 0; 
 #sheet .tiers.two { grid-template-columns: 1fr 1fr; }
 #sheet .tiers.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 #sheet .tiers.three .tab { height: 30px; font: 16px/1 'Kenney Mini'; }
+#sheet .row[data-act] { cursor: pointer; }
+/* Fish pictures (some legends are long) fitted inside a row's icon box. */
+#sheet .slot img.fit { width: 40px; height: 40px; object-fit: contain; image-rendering: pixelated; }
 #sheet .ledger-total { display: flex; align-items: center; gap: 8px; padding: 2px 4px; }
 #sheet .ledger-total b { font: 32px/0.8 'Kenney Pixel'; font-weight: normal; color: var(--cream); text-shadow: 2px 2px 0 var(--shade); }
 #sheet .ledger-total small { flex: 1; min-width: 0; color: var(--parch); }

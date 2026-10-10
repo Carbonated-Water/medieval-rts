@@ -4,6 +4,19 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Exotic Market; no pop-ups in fights; black-screen fix
+  WHAT: A trading jetty (EXOTIC) off the lighthouse islet opens the Exotic
+        Market: a hold of 6 expedition fish (value = legend price x weight),
+        3 listing slots where collectors make offers every 15-40 s (each lasts
+        1-2.5 min, creeping up the longer a fish is listed; sell to any or
+        unlist), and a WANTED board (a notice every 5 min, ~2x value for a
+        legend over a weight). Empty until voyages exist. Banners and pop-ups
+        hide while a fight is on (still in the inbox). Pixel font: the letters
+        lost in the town revert are back (D G N P U V W X Y) and unknown ones
+        draw as a space: the jetty sign EXOTIC crashed the scene (black screen).
+  WHY:  The user asked for an exotic fish market with offers and listings,
+        and to stop worker catch pop-ups showing over fights.
+
 2026-10-09  Fight: the reel spins up; letting a run go tires the fish
   WHAT: Holding spins the reel up over 0.6 s (down in 0.2 s) and the fish
         tires by reel speed, so taps barely hurt it; the HOLD area fills as

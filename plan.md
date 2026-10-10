@@ -187,6 +187,8 @@ arrows walk, Space casts / reels, E opens the building you stand at.
   Supplies and hull; a bad voyage loses its haul, never the ship. Flagship
   upgrades: hold, hull, reel, line, sonar. Rewards: expedition-only legends
   (journal page, trophies), Pearls, rare gear and bait, money. ~30 min rest.
+- Exotic Market (done, 2026-10-09): jetty by the lighthouse; hold 6, 3
+  listings with collector offers, WANTED board. Fills from voyages.
 - Slices: 1) lighthouse + fight (done: practice fights), 2) map and voyage,
   3) Flagship and rewards.
 - Fight rules (tested): the reel spins up while held, so steady reeling
