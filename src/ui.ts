@@ -14,7 +14,7 @@ export type Panel = 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'led
 
 export type Action =
   | 'cast' | 'reel' | 'close' | 'back' | 'reset' | 'toggleDev' | Panel | `fight:${string}` | 'fightDone'
-  | `exTab:${'hold' | 'listed' | 'wanted'}` | `exList:${number}` | `exUnlist:${number}` | `exOpen:${number}` | `exSell:${number}:${number}` | `exGive:${number}` | 'boatPrev' | 'boatNext' | `coTab:${'harbor' | 'ledger' | 'harborup'}`
+  | `exTab:${'hold' | 'listed' | 'wanted'}` | `exList:${number}` | `exUnlist:${number}` | `exOpen:${number}` | `exSell:${number}:${number}` | `exGive:${number}` | 'exDev' | 'boatPrev' | 'boatNext' | `coTab:${'harbor' | 'ledger' | 'harborup'}`
   | `achTab:${'base' | 'tree'}` | `treeTier:${number}` | `treeSel:${string}` | `unlock:${string}` | 'doRetire' | `journalTier:${number}`
   | 'sellAll' | `sellFish:${string}` | `buy:${GearKind}` | `train:${SkillId}` | 'claimAll' | `trophy:${string}`
   | `bait:${BaitId}` | `buyBait:${BaitId}:${number}`
@@ -624,6 +624,8 @@ export class UI {
       const full = game.listings.length >= EXOTIC.slots;
       body = game.exoticHold.map((e) => fishRow(e, `<button class="btn" data-act="exList:${e.id}" ${full ? 'disabled' : ''}>LIST</button>`)).join('')
         || '<p class="empty">No exotic fish yet. Voyages bring them back.</p>';
+      // Dev mode only: a test fish, to try the market before voyages exist.
+      if (game.dev) body += `<button class="btn wide red" data-act="exDev" ${game.exoticHold.length >= EXOTIC.hold ? 'disabled' : ''}>DEV: ADD TEST FISH</button>`;
     } else if (tab === 'listed') {
       body = game.listings.map((l) => {
         const best = l.offers[0];

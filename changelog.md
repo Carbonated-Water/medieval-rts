@@ -4,6 +4,11 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Dev: test fish for the Exotic Market
+  WHAT: In dev mode the market HOLD tab has DEV: ADD TEST FISH (a random
+        legend into the hold). Hidden otherwise.
+  WHY:  The user wanted to try listing before voyages exist.
+
 2026-10-09  Exotic Market; no pop-ups in fights; black-screen fix
   WHAT: A trading jetty (EXOTIC) off the lighthouse islet opens the Exotic
         Market: a hold of 6 expedition fish (value = legend price x weight),
