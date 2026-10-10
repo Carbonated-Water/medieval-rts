@@ -4,6 +4,15 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Fight: letting go in a run is always safe
+  WHAT: During a surge, holding snaps the line fast but letting go eases the
+        tension (the fish takes line and recovers 2% stamina a second). The
+        HOLD area turns red and reads LET GO! on a warning or a run, and the
+        tension bar flashes. Abyss King stamina 100 (~55 s; Kelp Wyrm ~14 s,
+        Ghost Marlin ~30 s).
+  WHY:  The user kept losing the Abyss King to what felt random: a surge kept
+        pushing tension into the red even after letting go.
+
 2026-10-09  Phase 3 slice 1: the lighthouse and the big-fish fight
   WHAT: A lighthouse on a rocky islet off the far bank (boarded until the
         Fishing Co., then lit with a sweeping beam) opens the Lighthouse panel.

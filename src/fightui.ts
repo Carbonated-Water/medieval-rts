@@ -15,7 +15,7 @@ export class FightView {
   private holding = false;
   private shownEnd = false;
   private parts!: {
-    fish: HTMLImageElement; line: SVGLineElement; mark: HTMLElement; stam: HTMLElement; prompt: HTMLElement; result: HTMLElement; water: HTMLElement;
+    fish: HTMLImageElement; line: SVGLineElement; mark: HTMLElement; stam: HTMLElement; prompt: HTMLElement; result: HTMLElement; water: HTMLElement; hold: HTMLElement;
   };
 
   constructor(private onEnd: (f: Fight) => void) {
@@ -52,7 +52,7 @@ export class FightView {
       <div class="hold">HOLD TO REEL</div>
       <div class="result"></div>`;
     const q = <T extends Element>(s: string) => this.el.querySelector(s) as unknown as T;
-    this.parts = { fish: q('.fish'), line: q('.rope line'), mark: q('.mark'), stam: q('.stam i'), prompt: q('.prompt'), result: q('.result'), water: q('.water') };
+    this.parts = { fish: q('.fish'), line: q('.rope line'), mark: q('.mark'), stam: q('.stam i'), prompt: q('.prompt'), result: q('.result'), water: q('.water'), hold: q('.hold') };
     this.el.className = 'show'; // a fresh screen: no result, surge or reeling state left from the last fight
   }
 
@@ -86,6 +86,9 @@ export class FightView {
     this.el.classList.toggle('reeling', this.holding && !f.end);
     const prompt = f.end ? '' : f.warn > 0 ? 'IT WANTS TO RUN!' : f.surging ? 'LET GO!' : f.zone === 'slack' ? 'REEL!' : f.zone === 'high' ? 'EASY...' : f.zone === 'green' && this.holding ? 'GOOD!' : 'REEL';
     if (p.prompt.textContent !== prompt) p.prompt.textContent = prompt;
+    // The big button says what to do: in a warning or a run, let go.
+    const cue = f.warn > 0 || f.surging ? 'LET GO!' : 'HOLD TO REEL';
+    if (p.hold.textContent !== cue) p.hold.textContent = cue;
     p.prompt.className = `prompt ${f.warn > 0 || f.surging ? 'bad' : f.zone === 'green' ? 'good' : ''}`;
     if (f.end && !this.shownEnd) {
       this.shownEnd = true;

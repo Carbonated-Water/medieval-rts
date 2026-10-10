@@ -189,8 +189,8 @@ arrows walk, Space casts / reels, E opens the building you stand at.
   (journal page, trophies), Pearls, rare gear and bait, money. ~30 min rest.
 - Slices: 1) lighthouse + fight (done: practice fights), 2) map and voyage,
   3) Flagship and rewards.
-- Fight rule: pull x surgePower must stay under ~0.65 so letting go in a
-  surge always saves the line.
+- Fight rule: letting go during a run is always safe (the fish takes line
+  and recovers a little); holding through a run snaps the line.
 
 ## Roadmap (agreed order, 2026-10-09)
 

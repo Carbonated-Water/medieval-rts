@@ -390,14 +390,19 @@ export const treeFishById = (id: string) => TREE_FISH.find((f) => f.id === id);
 // ---------- expeditions (phase 3): the lighthouse on the far bank, big-fish fights ----------
 
 /**
- * Fight tuning (see fight.ts). Tension per second: +reelTension + pull while
- * holding, pull - ease when not. Stamina drained per second while reeling in
- * the green: reel / fish.stamina.
+ * Fight tuning (see fight.ts). Tension per second: +reelTension + pull x
+ * pullOnReel while holding, pull - ease when not. In a surge (a run): holding
+ * adds reelTension + pull x surgePower (snaps fast); letting go is always
+ * safe: tension eases by runEase and the fish recovers runRecover stamina a
+ * second. Stamina drained per second while reeling in the green: reel / fish.stamina.
  */
 export const FIGHT = {
   reel: 9,
   reelTension: 0.3,
+  pullOnReel: 0.5,
   ease: 0.45,
+  runEase: 0.15,
+  runRecover: 0.02,
   /** The green band of tension; below `slack` the line is loose; at 1 it snaps. */
   green: [0.35, 0.8] as [number, number],
   slack: 0.08,
@@ -409,12 +414,11 @@ export const FIGHT = {
 };
 
 /** A legendary you fight on an expedition: how much fight it has, how hard it pulls, how often and how hard it surges. */
-/** Keep pull x surgePower under about 0.65: letting go during a surge must always save the line (tension rises at pull x power - ease). */
 export interface LegendDef extends FishDef { stamina: number; pull: number; surgePower: number; surgeEvery: number; blurb: string }
 export const LEGENDS: LegendDef[] = [
   { id: 'kelpwyrm', name: 'Kelp Wyrm', tier: 5, price: 0, kg: 90, rarity: 1, colors: ['#3a7a3a', '#a8e080', '#f0c040'], shape: 6.5, stamina: 50, pull: 0.12, surgePower: 2.6, surgeEvery: 5, blurb: 'Lazy, but it thrashes' },
   { id: 'ghostmarlin', name: 'Ghost Marlin', tier: 5, price: 0, kg: 500, rarity: 1, colors: ['#c8d8f0', '#ffffff', '#8098c8'], shape: 4.4, look: 'billed', stamina: 80, pull: 0.2, surgePower: 3, surgeEvery: 4, blurb: 'Fast and proud' },
-  { id: 'abyssking', name: 'Abyss King', tier: 5, price: 0, kg: 3000, rarity: 1, colors: ['#2a1a4a', '#8060c0', '#f04080'], shape: 3.6, stamina: 55, pull: 0.28, surgePower: 2.3, surgeEvery: 3, blurb: 'It does not tire' },
+  { id: 'abyssking', name: 'Abyss King', tier: 5, price: 0, kg: 3000, rarity: 1, colors: ['#2a1a4a', '#8060c0', '#f04080'], shape: 3.6, stamina: 100, pull: 0.28, surgePower: 2.3, surgeEvery: 3, blurb: 'It does not tire' },
 ];
 
 /** The harbor: berths (how many boats), automation, and the warehouse (offline earnings cap). */

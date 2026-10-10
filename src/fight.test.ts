@@ -14,8 +14,8 @@ const play = (legend = LEGENDS[0]!, hold: (f: Fight) => boolean, seed = 1) => {
 };
 /** A sensible player: reel while the tension is comfortable, let go on a warning or a surge. */
 const sensible = (f: Fight) => f.warn <= 0 && !f.surging && f.tension < FIGHT.green[1] - 0.12;
-/** A reckless one: reels in the comfortable range but ignores surges. */
-const reckless = (f: Fight) => f.tension < FIGHT.green[1] - 0.05;
+/** A stubborn one: reels in the comfortable range, and keeps reeling when the fish runs. */
+const stubborn = (f: Fight) => f.surging || f.tension < FIGHT.green[1] - 0.12;
 
 describe('big-fish fight', () => {
   it('holding the whole time snaps the line', () => {
@@ -37,8 +37,16 @@ describe('big-fish fight', () => {
     expect(times[2]!).toBeLessThan(120);
   });
 
-  it('ignoring the surge warnings loses to the hardest fish', () => {
-    const losses = [1, 2, 3, 4, 5].filter((seed) => play(LEGENDS[2], reckless, seed).end !== 'caught').length;
-    expect(losses).toBeGreaterThanOrEqual(4);
+  it('holding on through a run snaps the line', () => {
+    for (const l of LEGENDS) expect(play(l, stubborn).end, l.name).toBe('snapped');
+  });
+
+  it('letting go during a run is always safe: tension eases and the fish only recovers a little', () => {
+    const f = new Fight(LEGENDS[2]!, rng(4));
+    f.tension = 0.79; f.stamina = 0.5; f.surge = 2;
+    for (let k = 0; k < 120; k++) f.update(1 / 60, false);
+    expect(f.end).toBeNull();
+    expect(f.tension).toBeLessThan(0.79);
+    expect(f.stamina).toBeLessThan(0.6);
   });
 });

@@ -49,8 +49,13 @@ export class Fight {
     if (this.surge > 0) this.surge -= dt;
     else if (this.warn > 0) { this.warn -= dt; if (this.warn <= 0) this.surge = FIGHT.surgeLen * (0.7 + this.rng() * 0.6); }
     else if ((this.next -= dt) <= 0) { this.warn = FIGHT.warning; this.next = this.gap(); }
-    const pull = this.fish.pull * (this.surging ? this.fish.surgePower : 1);
-    this.tension = Math.max(0, this.tension + (holding ? FIGHT.reelTension + pull : pull - FIGHT.ease) * dt);
+    const pull = this.fish.pull;
+    if (this.surging) {
+      // A run: holding on fights it and the line snaps fast; letting go is always safe,
+      // the fish takes line (tension eases) and gets a little of its strength back.
+      this.tension = Math.max(0, this.tension + (holding ? FIGHT.reelTension + pull * this.fish.surgePower : -FIGHT.runEase) * dt);
+      if (!holding) this.stamina = Math.min(1, this.stamina + FIGHT.runRecover * dt);
+    } else this.tension = Math.max(0, this.tension + (holding ? FIGHT.reelTension + pull * FIGHT.pullOnReel : pull - FIGHT.ease) * dt);
     // Reeling tires the fish: best in the green, a little with a loose line, a bit more (but risky) up high.
     if (holding) {
       const z = this.zone, k = z === 'green' ? 1 : z === 'high' ? 1.3 : 0.4;
