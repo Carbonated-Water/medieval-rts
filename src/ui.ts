@@ -29,8 +29,8 @@ export type Action =
   | 'hire' | 'sellCrate' | `hand:${number}` | `handRod:${number}` | `handTrain:${number}` | `handBait:${number}:${BaitId}`;
 
 /** The Tackle shop: rod holders and the Autofisher (rods and clothes are gear, at the Gear Shop). */
-const GEAR_ORDER: GearKind[] = ['holders', 'auto'];
-export const GEAR_ICON: Record<GearKind, IconName> = { rod: 'rod', holders: 'holder', auto: 'auto', clothes: 'shirt', boots: 'boot' };
+const GEAR_ORDER: GearKind[] = ['holders', 'auto', 'net', 'chum', 'icebox'];
+export const GEAR_ICON: Record<GearKind, IconName> = { rod: 'rod', holders: 'holder', auto: 'auto', clothes: 'shirt', boots: 'boot', net: 'net', chum: 'bait', icebox: 'ice' };
 const ROMAN: Record<Tier, string> = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V' };
 /** Where each slot of a tree side sits in its half of the sky (percent): root at the bottom, two branches, two tips. */
 const POS = [{ x: 50, y: 84 }, { x: 24, y: 52 }, { x: 76, y: 52 }, { x: 24, y: 18 }, { x: 76, y: 18 }];

@@ -127,7 +127,8 @@ export const HOLDERS: HolderDef[] = [
  * `recast` seconds) and reels each bite after a random reaction time in
  * `react` — slower than a sharp human at first, so playing yourself pays.
  */
-export interface AutoDef { name: string; price: number; blurb: string; recast: number; react: [number, number] }
+/** `smart`: casts your best bait by itself. `sure`: never misses a bite. */
+export interface AutoDef { name: string; price: number; blurb: string; recast: number; react: [number, number]; smart?: boolean; sure?: boolean }
 
 export const AUTO: AutoDef[] = [
   { name: 'Manual', price: 0, blurb: 'Fish by hand', recast: Infinity, react: [0, 0] },
@@ -135,15 +136,51 @@ export const AUTO: AutoDef[] = [
   { name: 'Autofisher II', price: 5000, blurb: 'Quicker hands', recast: 1.4, react: [0.35, 0.95] },
   { name: 'Autofisher III', price: 22000, blurb: 'Rarely misses', recast: 0.7, react: [0.3, 0.75] },
   { name: 'Autofisher IV', price: 60000, blurb: 'Never sleeps', recast: 0.25, react: [0.25, 0.55] },
+  { name: 'Autofisher V', price: 150000, blurb: 'Fast', recast: 0.15, react: [0.2, 0.45] },
+  { name: 'Autofisher VI', price: 400000, blurb: 'Faster', recast: 0.1, react: [0.15, 0.35] },
+  { name: 'Autofisher VII', price: 1000000, blurb: 'Best bait', recast: 0.08, react: [0.12, 0.3], smart: true },
+  { name: 'Autofisher VIII', price: 3000000, blurb: 'Sure', recast: 0.05, react: [0.08, 0.2], smart: true, sure: true },
 ];
 
-export type GearKind = 'rod' | 'holders' | 'auto' | 'clothes' | 'boots';
+/** Landing Net: chance a catch brings in a second fish of the same kind. */
+export const NETS = [
+  { name: 'No Net', price: 0, blurb: 'One fish at a time', chance: 0 },
+  { name: 'Landing Net I', price: 2000, blurb: '5% doubles', chance: 0.05 },
+  { name: 'Landing Net II', price: 8000, blurb: '10% doubles', chance: 0.1 },
+  { name: 'Landing Net III', price: 30000, blurb: '15% doubles', chance: 0.15 },
+  { name: 'Landing Net IV', price: 120000, blurb: '20% doubles', chance: 0.2 },
+  { name: 'Landing Net V', price: 500000, blurb: '25% doubles', chance: 0.25 },
+];
+/** Chum Bucket: every `every` seconds a Frenzy of `lasts` seconds when bites come FRENZY_SPEED times faster. */
+export const CHUMS = [
+  { name: 'No Chum', price: 0, blurb: 'No frenzies', every: Infinity, lasts: 0 },
+  { name: 'Chum Bucket I', price: 3000, blurb: 'Frenzy 5 min', every: 300, lasts: 10 },
+  { name: 'Chum Bucket II', price: 12000, blurb: 'Frenzy 4 min', every: 240, lasts: 15 },
+  { name: 'Chum Bucket III', price: 45000, blurb: 'Frenzy 3 min', every: 200, lasts: 20 },
+  { name: 'Chum Bucket IV', price: 160000, blurb: 'Frenzy 2.5 min', every: 160, lasts: 25 },
+  { name: 'Chum Bucket V', price: 600000, blurb: 'Frenzy 2 min', every: 120, lasts: 30 },
+];
+export const FRENZY_SPEED = 3;
+/** Ice Box: fish you sell at the Market are worth this much more. */
+export const ICEBOXES = [
+  { name: 'No Ice Box', price: 0, blurb: 'Fish as they come', bonus: 0 },
+  { name: 'Ice Box I', price: 1500, blurb: '+5% sales', bonus: 0.05 },
+  { name: 'Ice Box II', price: 6000, blurb: '+10% sales', bonus: 0.1 },
+  { name: 'Ice Box III', price: 25000, blurb: '+15% sales', bonus: 0.15 },
+  { name: 'Ice Box IV', price: 100000, blurb: '+20% sales', bonus: 0.2 },
+  { name: 'Ice Box V', price: 400000, blurb: '+25% sales', bonus: 0.25 },
+];
+
+export type GearKind = 'rod' | 'holders' | 'auto' | 'clothes' | 'boots' | 'net' | 'chum' | 'icebox';
 export const GEAR: Record<GearKind, { title: string; levels: { name: string; price: number; blurb: string }[] }> = {
   rod: { title: 'Rod', levels: RODS },
   holders: { title: 'Rod Holders', levels: HOLDERS },
   auto: { title: 'Autofisher', levels: AUTO },
   clothes: { title: 'Clothes', levels: CLOTHES },
   boots: { title: 'Boots', levels: BOOTS },
+  net: { title: 'Landing Net', levels: NETS },
+  chum: { title: 'Chum Bucket', levels: CHUMS },
+  icebox: { title: 'Ice Box', levels: ICEBOXES },
 };
 
 // ---------- gear: what you wear and fish with ----------

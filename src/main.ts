@@ -391,6 +391,12 @@ function digWorms(): void {
 }
 
 let last = performance.now();
+/** Tackle news: a frenzy starts (Chum Bucket), the Landing Net brings in a second fish. */
+function tackleNews(): void {
+  if (game.frenzyNews) { game.frenzyNews = false; note.banner(pixelIcon('bait'), 'FRENZY!', 'Bites come fast', 'rare'); }
+  for (; game.doubleNews > 0; game.doubleNews--) { const at = scene.fisherScreen(); note.float('DOUBLE!', at.x, at.y - 30, 'rare'); }
+}
+
 function frame(now: number): void {
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
@@ -402,6 +408,7 @@ function frame(now: number): void {
   digWorms();
   announceHands();
   announce();
+  tackleNews();
   announceAchievements();
   scene.update(dt);
   sampleRates(now);

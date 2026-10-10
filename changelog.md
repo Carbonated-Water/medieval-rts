@@ -4,6 +4,15 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-10  Tackle shop: Autofisher V-VIII, Landing Net, Chum Bucket, Ice Box
+  WHAT: Autofisher V-VIII ($150k-$3M): faster recast and reactions; VII casts
+        your best bait itself, VIII never lets a bite escape. Landing Net I-V:
+        5-25% chance a catch brings a second fish (DOUBLE! float). Chum Bucket
+        I-V: a Frenzy every 5 to 2 min, 10-30 s, bites 3x faster (banner).
+        Ice Box I-V: +5-25% on fish sold at the Market (not the pier crate).
+  WHY:  With gear moved to the Gear Shop, Tackle had only two rows; the user
+        picked these four lines.
+
 2026-10-10  Gear card, mobile RPG style
   WHAT: Tapping a piece shows one big card: icon, name, tier and slot, its
         stats each with a green up or red down arrow against the piece you

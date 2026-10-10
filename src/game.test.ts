@@ -127,10 +127,53 @@ describe('fishing', () => {
 describe('gear', () => {
   it('rod holders and the Autofisher (the Tackle shop) are bought in order, one level at a time', () => {
     const rich = new Game({ money: 1e9 });
-    for (const kind of ['holders', 'auto'] as const) {
+    for (const kind of ['holders', 'auto', 'net', 'chum', 'icebox'] as const) {
       while (rich.buyGear(kind));
       expect(rich.nextGear(kind)).toBeNull();
     }
+  });
+
+  it('Landing Net: a catch sometimes brings in a second fish', () => {
+    const count = (net: number) => {
+      const g = new Game({ net, skill: 5 }, rng(3));
+      for (let k = 0; k < 200; k++) { waitForBite(g); g.reel(); tick(g, 0.1); }
+      return g.bag.length;
+    };
+    expect(count(5)).toBeGreaterThan(count(0) + 20);
+  });
+
+  it('Ice Box: fish sold at the Market are worth more; the pier crate is not iced', () => {
+    const c = { value: 100 } as never;
+    expect(new Game({ icebox: 5 }).priceOf(c)).toBe(125);
+    expect(new Game({ icebox: 5 }).priceOf(c, false)).toBe(100);
+    expect(new Game({}).priceOf(c)).toBe(100);
+  });
+
+  it('Chum Bucket: a frenzy comes on its clock and speeds up bites while it lasts', () => {
+    const g = new Game({ chum: 5 }, rng(2));
+    tick(g, 119);
+    expect(g.frenzyLeft).toBe(0);
+    tick(g, 2);
+    expect(g.frenzyLeft).toBeGreaterThan(0);
+    expect(g.frenzyNews).toBe(true);
+    const fast = g.biteWait('worm'), slow = new Game({}, rng(2)).biteWait('worm');
+    expect(fast).toBeLessThan(slow);
+    tick(g, 31);
+    expect(g.frenzyLeft).toBe(0);
+  });
+
+  it('Autofisher VII casts your best bait by itself; VIII never misses a bite', () => {
+    const g = new Game({ auto: 7, baits: { worm: 100, cricket: 5 } }, rng(5));
+    g.autoFish();
+    expect(g.baitSel).toBe('cricket');
+    const sure = new Game({ auto: 8, baits: { worm: 1e6 } }, rng(9));
+    const ends = (g: Game) => { const seen = new WeakSet<object>(), out = { escaped: 0, caught: 0 };
+      for (let k = 0; k < 6000; k++) { g.tick(0.05); g.autoFish(); for (const l of g.lines) if (l.type === 'result' && !seen.has(l)) { seen.add(l); if (l.outcome === 'escaped') out.escaped++; if (l.outcome === 'caught') out.caught++; } }
+      return out; };
+    expect(ends(new Game({ auto: 1, baits: { worm: 1e6 } }, rng(9))).escaped).toBeGreaterThan(0);
+    const top = ends(sure);
+    expect(top.escaped).toBe(0);
+    expect(top.caught).toBeGreaterThan(20);
   });
 
   it('a new run starts in the starter set; buying a piece puts it on and the old one goes to the bag', () => {

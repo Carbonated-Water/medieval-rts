@@ -7,7 +7,7 @@ import {
   MIN_BITE_WAIT, REEL_WINDOW, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, START_WORMS, STRENGTH_PER_LEVEL, TIERS,
   TOO_STRONG_WEIGHT, VARIANTS, VARIANT_ORDER, WORMS_PER_PICK, WORM_SPAWN_SECONDS, WORM_SPOTS, baitById,
   type AchStat, type AchievementDef, type BaitId, type FishDef, type GearKind, type SkillId, type Tier, type Variant,
-  GEAR_BAG, GEAR_SELL, GEAR_SLOTS, GEAR_TIERS, LEGACY_GEAR, STARTER_GEAR, gearById, type GearDef, type GearSlot, type StatId,
+  CHUMS, FRENZY_SPEED, ICEBOXES, NETS, GEAR_BAG, GEAR_SELL, GEAR_SLOTS, GEAR_TIERS, LEGACY_GEAR, STARTER_GEAR, gearById, type GearDef, type GearSlot, type StatId,
   BILLFISH, SEA_FISH, SHELLFISH, TREE_FISH, pearlsFor, treeFishById, type TreeFish, COLLECTORS, EXOTIC, LEGENDS, VOYAGE, type LegendDef, type Region,
 } from './data';
 import * as V from './voyage';
@@ -65,6 +65,10 @@ export interface SaveData {
   /** Sea species your boats have ever landed (the sea's journal); survives retiring. */
   seaSeen?: string[];
   /** Gear: what you're wearing (by slot) and the bag of pieces you aren't. */
+  /** Tackle: Landing Net, Chum Bucket and Ice Box levels. */
+  net?: number;
+  chum?: number;
+  icebox?: number;
   equipped?: Partial<Record<GearSlot, GearItem | null>>;
   gearBag?: GearItem[];
   nextGearId?: number;
@@ -196,6 +200,14 @@ export class Game {
   fishTree: string[] = [];
   retirements = 0;
   seaSeen: string[] = [];
+  net = 0;
+  chum = 0;
+  icebox = 0;
+  /** Chum: seconds toward the next frenzy, seconds of frenzy left; news for the screen (frenzies started, double catches). */
+  frenzyClock = 0;
+  frenzyLeft = 0;
+  frenzyNews = false;
+  doubleNews = 0;
   equipped: Record<GearSlot, GearItem | null> = { rod: null, hat: null, shirt: null, pants: null, boots: null };
   gearBag: GearItem[] = [];
   nextGearId = 1;
@@ -265,6 +277,9 @@ export class Game {
     this.holders = clamp(this.holders, 0, HOLDERS.length - 1);
     this.syncLines();
     this.auto = clamp(this.auto, 0, AUTO.length - 1);
+    this.net = clamp(this.net, 0, NETS.length - 1);
+    this.chum = clamp(this.chum, 0, CHUMS.length - 1);
+    this.icebox = clamp(this.icebox, 0, ICEBOXES.length - 1);
     this.clothes = clamp(this.clothes, 0, CLOTHES.length - 1);
     this.boots = clamp(this.boots, 0, BOOTS.length - 1);
     for (const id of Object.keys(SKILLS) as SkillId[]) this.setLevel(id, clamp(this.level(id), SKILLS[id].start, SKILLS[id].max));
@@ -682,7 +697,7 @@ export class Game {
     const [lo, hi] = BITE_WAIT;
     // Your own lines: the rod's tier and Patience; a hired hand's: its rod level.
     const mine = rod === undefined, level = mine ? Math.min(4, GEAR_TIERS[this.gearOf('rod')!.tier].rank - 1) : rod;
-    const wait = ((lo + this.rng() * (hi - lo)) * baitById(bait).wait * (1 - 0.06 * level)) / (mine ? 1 + this.gearStat('patience') / 100 : 1);
+    const wait = ((lo + this.rng() * (hi - lo)) * baitById(bait).wait * (1 - 0.06 * level)) / (mine ? (1 + this.gearStat('patience') / 100) * (this.frenzyLeft > 0 ? FRENZY_SPEED : 1) : 1);
     return Math.max(MIN_BITE_WAIT, wait);
   }
 
@@ -755,8 +770,8 @@ export class Game {
   }
 
   /** What a catch sells for right now (Haggling, dev mode). */
-  priceOf(c: Catch): number {
-    return Math.round(c.value * (1 + HAGGLE_PER_LEVEL * this.haggling) * (this.dev ? DEV_MULTIPLIER : 1));
+  priceOf(c: Catch, iced = true): number {
+    return Math.round(c.value * (1 + HAGGLE_PER_LEVEL * this.haggling) * (iced ? 1 + ICEBOXES[this.icebox]!.bonus : 1) * (this.dev ? DEV_MULTIPLIER : 1));
   }
 
   // ---------- fishing ----------
@@ -813,7 +828,11 @@ export class Game {
     } else if (line.type === 'bite') {
       const strong = line.tooStrong && this.rng() < this.strengthChance();
       if (line.tooStrong && !strong) this.lines[i] = { type: 'result', t: 0, outcome: 'snapped', fish: line.fish };
-      else this.lines[i] = { type: 'result', t: 0, outcome: 'caught', fish: line.fish, caught: this.land(line.fish, false, line.bait), strong };
+      else {
+        this.lines[i] = { type: 'result', t: 0, outcome: 'caught', fish: line.fish, caught: this.land(line.fish, false, line.bait), strong };
+        // The Landing Net sometimes brings in a second one.
+        if (this.rng() < NETS[this.net]!.chance) { this.land(line.fish, false, line.bait); this.doubleNews++; }
+      }
     }
   }
 
@@ -834,6 +853,7 @@ export class Game {
     this.tickExotic(dt);
     if (this.flagshipRest > 0) this.flagshipRest = Math.max(0, this.flagshipRest - dt);
     this.tickHands(dt);
+    this.tickChum(dt);
     this.lines.forEach((line, i) => {
       if (line.type === 'idle') return;
       line.t += dt;
@@ -857,12 +877,27 @@ export class Game {
   autoFish(): void {
     if (this.auto === 0) return;
     const a = AUTO[this.auto]!;
+    // The top Autofishers cast your best bait by themselves.
+    if (a.smart) { const best = [...BAITS].reverse().find((b) => this.baitCount(b.id) > 0); if (best) this.baitSel = best.id; }
     this.lines.forEach((line, i) => {
       if (line.type !== 'bite') { this.autoReact[i] = undefined; return; }
-      const react = (this.autoReact[i] ??= a.react[0] + this.rng() * (a.react[1] - a.react[0]));
+      const roll = a.react[0] + this.rng() * (a.react[1] - a.react[0]);
+      const react = (this.autoReact[i] ??= a.sure ? Math.min(roll, line.window * 0.5) : roll);
       if (line.t >= react) { this.autoReact[i] = undefined; this.reelLine(i); }
     });
     this.castWhere((line) => line.type === 'idle' || (line.type === 'result' && line.t >= a.recast));
+  }
+
+  /** The Chum Bucket: every so often a frenzy, when bites come much faster (lines already waiting bite sooner too). */
+  private tickChum(dt: number): void {
+    const c = CHUMS[this.chum]!;
+    if (!this.chum) return;
+    if (this.frenzyLeft > 0) { this.frenzyLeft = Math.max(0, this.frenzyLeft - dt); return; }
+    if ((this.frenzyClock += dt) < c.every) return;
+    this.frenzyClock = 0;
+    this.frenzyLeft = c.lasts;
+    this.frenzyNews = true;
+    for (const line of this.lines) if (line.type === 'waiting') line.biteAt = line.t + (line.biteAt - line.t) / FRENZY_SPEED;
   }
 
   /** Roll for a rare variant (rarest first, at most one). */
@@ -1407,7 +1442,7 @@ export class Game {
   }
 
   crateValue(): number {
-    return this.crate.reduce((s, c) => s + this.priceOf(c), 0);
+    return this.crate.reduce((s, c) => s + this.priceOf(c, false), 0);
   }
 
   /** Sell everything the fishermen caught. */
@@ -1509,7 +1544,7 @@ export class Game {
       pierSections: this.pierSections, managerBudget: this.managerBudget,
       pearls: this.pearls, fishTree: this.fishTree, retirements: this.retirements, seaSeen: this.seaSeen,
       exoticHold: this.exoticHold, listings: this.listings, wanted: this.wanted, nextExoticId: this.nextExoticId,
-      equipped: this.equipped, gearBag: this.gearBag, nextGearId: this.nextGearId,
+      equipped: this.equipped, gearBag: this.gearBag, nextGearId: this.nextGearId, net: this.net, chum: this.chum, icebox: this.icebox,
       flagship: this.flagship, flagshipRest: this.flagshipRest, voyage: this.voyage, landed: this.landed,
       hands: this.hands.map((h) => ({ ...h, line: { type: 'idle' as const }, react: null })), crate: this.crate,
     };
