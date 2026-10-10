@@ -391,18 +391,23 @@ export const treeFishById = (id: string) => TREE_FISH.find((f) => f.id === id);
 
 /**
  * Fight tuning (see fight.ts). Tension per second: +reelTension + pull x
- * pullOnReel while holding, pull - ease when not. In a surge (a run): holding
- * adds reelTension + pull x surgePower (snaps fast); letting go is always
- * safe: tension eases by runEase and the fish recovers runRecover stamina a
- * second. Stamina drained per second while reeling in the green: reel / fish.stamina.
+ * pullOnReel while holding, pull - ease when not. The reel spins up over
+ * spinUp seconds of holding and stops over spinDown; stamina drained per
+ * second while reeling in the green: reel x spin / fish.stamina (taps barely
+ * tire it). In a surge (a run): holding adds runHold + pull x surgePower
+ * (snaps fast, even tapping); letting go eases tension by runEase and the
+ * fish tires itself by runTire of its stamina a second.
  */
 export const FIGHT = {
   reel: 9,
   reelTension: 0.3,
   pullOnReel: 0.5,
   ease: 0.45,
+  spinUp: 0.6,
+  spinDown: 0.2,
+  runHold: 1.1,
   runEase: 0.15,
-  runRecover: 0.02,
+  runTire: 0.04,
   /** The green band of tension; below `slack` the line is loose; at 1 it snaps. */
   green: [0.35, 0.8] as [number, number],
   slack: 0.08,

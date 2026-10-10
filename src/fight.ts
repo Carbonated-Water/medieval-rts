@@ -17,6 +17,8 @@ export class Fight {
   tension = 0.45;
   /** Seconds the line has been slack in a row. */
   slack = 0;
+  /** How fast the reel is turning, 0..1 (spins up while held). */
+  spin = 0;
   /** Seconds of surge left; seconds of warning before the next one. */
   surge = 0;
   warn = 0;
@@ -50,16 +52,21 @@ export class Fight {
     else if (this.warn > 0) { this.warn -= dt; if (this.warn <= 0) this.surge = FIGHT.surgeLen * (0.7 + this.rng() * 0.6); }
     else if ((this.next -= dt) <= 0) { this.warn = FIGHT.warning; this.next = this.gap(); }
     const pull = this.fish.pull;
+    // The reel spins up while held and stops quickly when let go: taps never get it going.
+    this.spin = Math.max(0, Math.min(1, this.spin + (holding ? dt / FIGHT.spinUp : -dt / FIGHT.spinDown)));
     if (this.surging) {
-      // A run: holding on fights it and the line snaps fast; letting go is always safe,
-      // the fish takes line (tension eases) and gets a little of its strength back.
-      this.tension = Math.max(0, this.tension + (holding ? FIGHT.reelTension + pull * this.fish.surgePower : -FIGHT.runEase) * dt);
-      if (!holding) this.stamina = Math.min(1, this.stamina + FIGHT.runRecover * dt);
+      // A run: reeling against it (even a tap) sends the tension shooting up; letting go
+      // is safe and pays: the tension eases and the fish wears itself out on the line.
+      if (holding) this.tension += (FIGHT.runHold + pull * this.fish.surgePower) * dt;
+      else {
+        this.tension = Math.max(0, this.tension - FIGHT.runEase * dt);
+        this.stamina -= FIGHT.runTire * dt;
+      }
     } else this.tension = Math.max(0, this.tension + (holding ? FIGHT.reelTension + pull * FIGHT.pullOnReel : pull - FIGHT.ease) * dt);
-    // Reeling tires the fish: best in the green, a little with a loose line, a bit more (but risky) up high.
+    // Reeling tires the fish, by how fast the reel spins: best in the green, a little with a loose line, a bit more (but risky) up high.
     if (holding) {
       const z = this.zone, k = z === 'green' ? 1 : z === 'high' ? 1.3 : 0.4;
-      this.stamina -= (this.reel * k * dt) / this.fish.stamina;
+      this.stamina -= (this.reel * this.spin * k * dt) / this.fish.stamina;
     }
     this.slack = this.zone === 'slack' ? this.slack + dt : 0;
     if (this.tension >= 1) this.end = 'snapped';

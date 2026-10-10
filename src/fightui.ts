@@ -89,6 +89,8 @@ export class FightView {
     // The big button says what to do: in a warning or a run, let go.
     const cue = f.warn > 0 || f.surging ? 'LET GO!' : 'HOLD TO REEL';
     if (p.hold.textContent !== cue) p.hold.textContent = cue;
+    // The button fills as the reel spins up: a steady hold fills it, taps barely move it.
+    p.hold.style.setProperty('--spin', f.spin.toFixed(2));
     p.prompt.className = `prompt ${f.warn > 0 || f.surging ? 'bad' : f.zone === 'green' ? 'good' : ''}`;
     if (f.end && !this.shownEnd) {
       this.shownEnd = true;

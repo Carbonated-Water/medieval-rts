@@ -4,6 +4,16 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Fight: the reel spins up; letting a run go tires the fish
+  WHAT: Holding spins the reel up over 0.6 s (down in 0.2 s) and the fish
+        tires by reel speed, so taps barely hurt it; the HOLD area fills as
+        it spins. In a run, any reeling (even a tap) spikes the tension fast;
+        letting go eases it and the fish loses 4% stamina a second. Steady
+        play lands Kelp Wyrm ~19 s, Ghost Marlin ~30 s, Abyss King ~38 s;
+        tap-spamming loses (slack line or snap). Tests cover both.
+  WHY:  The user could win by tapping Space over and over, and LET GO did
+        nothing useful.
+
 2026-10-09  Fight: letting go in a run is always safe
   WHAT: During a surge, holding snaps the line fast but letting go eases the
         tension (the fish takes line and recovers 2% stamina a second). The

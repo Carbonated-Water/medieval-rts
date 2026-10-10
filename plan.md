@@ -189,8 +189,9 @@ arrows walk, Space casts / reels, E opens the building you stand at.
   (journal page, trophies), Pearls, rare gear and bait, money. ~30 min rest.
 - Slices: 1) lighthouse + fight (done: practice fights), 2) map and voyage,
   3) Flagship and rewards.
-- Fight rule: letting go during a run is always safe (the fish takes line
-  and recovers a little); holding through a run snaps the line.
+- Fight rules (tested): the reel spins up while held, so steady reeling
+  beats tapping (spamming loses); letting go during a run is safe and tires
+  the fish; reeling during a run, even tapping, snaps the line.
 
 ## Roadmap (agreed order, 2026-10-09)
 
