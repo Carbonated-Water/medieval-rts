@@ -4,6 +4,22 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-10  Gear: slots, tiers, stats, the Gear Shop and the Character screen
+  WHAT: Five slots (rod, hat, shirt, pants, boots), tiers Bronze..Diamond
+        (+ Legendary, voyages only), seven % stats (Size, Luck, Patience,
+        Reflex, Strength, Fortune, Stride) wired into fishing. 75 shop pieces
+        (3 per slot per tier) and 10 Legendary definitions, each with a style
+        and colours drawn in code (gearCanvas); the fisher wears your hat,
+        shirt, pants, boots and rod colour. A rod's tier is the rarest fish it
+        lands. New Gear Shop on the meadow (BUY by slot and tier, buying puts
+        it on; SELL from the bag); Character screen (top bar) with slots,
+        totals, a 24-slot bag, and an item card that compares against what you
+        wear (EQUIP / TAKE OFF / SELL / SELL ALL keeps Legendaries). Tackle keeps
+        rod holders and the Autofisher. Old saves: rod, clothes and boots
+        levels become the matching pieces.
+  WHY:  The user asked for real gear: a separate gear shop, a character
+        screen, buy and sell, and drops while fishing (next).
+
 2026-10-09  Voyages
   WHAT: Buy the Flagship ($10M) at the Lighthouse, pick a region and legend,
         SAIL. A map of three rows of 2-3 spots (fishing grounds, events,

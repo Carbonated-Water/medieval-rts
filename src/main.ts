@@ -1,10 +1,10 @@
-import { ACHIEVEMENTS, BOATS, DEV_MULTIPLIER, HAND_NAMES, HARBOR_UPGRADES, LETTERS, TRACKS, type GroundId, type HarborUpgradeId, type TrackId, RODS, SKILLS, VARIANTS, baitById, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, LEGENDS } from './data';
+import { ACHIEVEMENTS, BOATS, DEV_MULTIPLIER, HAND_NAMES, HARBOR_UPGRADES, LETTERS, TRACKS, type GroundId, type HarborUpgradeId, type TrackId, RODS, SKILLS, VARIANTS, baitById, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, LEGENDS, gearById, type GearSlot, type GearTier } from './data';
 import { Game, fishById, type Line, type SaveData } from './game';
 import { Fight } from './fight';
 import { FightView } from './fightui';
 import { Scene, WORM_SPOT_X } from './scene';
 import './ui.css';
-import { pixelFishIcon as fishIcon, pixelIcon } from './pixelart';
+import { pixelFishIcon as fishIcon, pixelIcon, gearIcon } from './pixelart';
 import { ACH_ICON, BAIT_ICON, GEAR_ICON, SKILL_ICON, UI, type Action } from './ui';
 
 const SAVE_KEY = 'riverside-fishing-v1';
@@ -73,6 +73,7 @@ canvas.addEventListener('click', (e) => {
   // The harbor across the river opens its panel from anywhere.
   if (scene.hitBobber(e.clientX, e.clientY) >= 0) { game.reel(scene.hitBobber(e.clientX, e.clientY)); return; }
   if (scene.hitJetty(e.clientX, e.clientY)) { ui.open = 'exotic'; return; }
+  if (scene.hitGearShop(e.clientX, e.clientY)) { ui.open = 'gearshop'; return; }
   if (scene.hitLighthouse(e.clientX, e.clientY)) { ui.open = game.voyage ? 'voyage' : 'lighthouse'; return; }
   if (scene.hitHarbor(e.clientX, e.clientY)) { ui.open = 'harbor'; return; }
   // Hired fishermen and the crate on the wide pier.
@@ -115,7 +116,7 @@ function onAction(a: Action): void {
     if (!game.cast() && !game.activeBait) { const at = scene.fisherScreen(); note.float('NO BAIT', at.x, at.y, 'bad'); }
   }
   else if (a === 'reel') game.reel();
-  else if (a === 'market' || a === 'tackle' || a === 'baitshop' || a === 'pouch' || a === 'harbor' || a === 'pier' || a === 'shipyard' || a === 'harborup' || a === 'pierstaff' || a === 'ledger' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'inbox' || a === 'settings' || a === 'tree' || a === 'retire' || a === 'lighthouse' || a === 'exotic' || a === 'voyage') ui.open = ui.open === a ? null : a;
+  else if (a === 'market' || a === 'tackle' || a === 'baitshop' || a === 'pouch' || a === 'harbor' || a === 'pier' || a === 'shipyard' || a === 'harborup' || a === 'pierstaff' || a === 'ledger' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'inbox' || a === 'settings' || a === 'tree' || a === 'retire' || a === 'lighthouse' || a === 'exotic' || a === 'voyage' || a === 'gearshop' || a === 'character') ui.open = ui.open === a ? null : a;
   else if (a.startsWith('bait:')) game.selectBait(a.slice(5) as BaitId);
   else if (a === 'buyCompany') {
     if (game.buyCompany()) { ui.open = null; note.clearBanners(); note.banner(pixelIcon('boat'), 'THE FISHING CO.', 'is yours', 'rare'); }
@@ -180,6 +181,20 @@ function onAction(a: Action): void {
     if (paid) note.banner(pixelIcon('coin'), 'COLLECTED', `$${paid.toLocaleString()}`);
   }
   else if (a === 'close') ui.open = null;
+  else if (a.startsWith('gsMode:')) ui.gsMode = a.slice(7) as 'buy' | 'sell';
+  else if (a.startsWith('gsSlot:')) ui.gsSlot = a.slice(7) as GearSlot;
+  else if (a.startsWith('gsTier:')) ui.gsTier = a.slice(7) as GearTier;
+  else if (a.startsWith('gbuy:')) {
+    const r = game.buyGearPiece(a.slice(5));
+    if (r) note.banner(gearIcon(gearById(a.slice(5))!), 'EQUIPPED', gearById(a.slice(5))!.name + (r.sold ? ` · bag full, old one sold $${r.sold.toLocaleString()}` : ''), 'rare');
+  } else if (a.startsWith('gsel:')) {
+    const [, where, key] = a.split(':') as [string, 'bag' | 'eq', string];
+    ui.gsel = { where, key };
+    ui.open = 'gearitem';
+  } else if (a.startsWith('gequip:')) { if (game.equipGear(Number(a.slice(7)))) ui.open = ui.gearFrom; }
+  else if (a.startsWith('gunequip:')) { if (game.unequipGear(a.slice(9) as GearSlot)) ui.open = ui.gearFrom; }
+  else if (a.startsWith('gsell:')) { const n = game.sellGear(Number(a.slice(6))); if (n) { note.float(`+$${n.toLocaleString()}`, innerWidth / 2, innerHeight / 2, 'good'); ui.open = ui.gearFrom; } }
+  else if (a === 'gsellall') { const n = game.sellAllGear(); if (n) note.banner(pixelIcon('coin'), 'SOLD ALL', `$${n.toLocaleString()}`, 'plain'); }
   else if (a.startsWith('fight:')) {
     const legend = LEGENDS.find((l) => l.id === a.slice(6));
     if (legend) { ui.open = null; fightView.start(new Fight(legend)); }

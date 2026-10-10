@@ -2,19 +2,21 @@ import {
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_ORDER, COMPANY_PRICE, COMPANY_UNLOCK_EARNED, DEV_MULTIPLIER, GROUNDS, HARBOR_UPGRADES,
   MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, PIER_STAFF, HANDS_MAX,
   TRACKS, TRACK_MAX, TRACK_ORDER, WAREHOUSE, type HarborUpgradeId, type TrackId, HAND_NAMES, HAND_SKILL_MAX, LETTERS, RODS, FISH, GEAR, REFLEX_PER_LEVEL, SKILLS, STRENGTH_PER_LEVEL, HAGGLE_PER_LEVEL,
-  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, TREE_FISH, type TreeFish, LEGENDS, EXOTIC, REGIONS, VOYAGE,
+  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, TREE_FISH, type TreeFish, LEGENDS, EXOTIC, REGIONS, VOYAGE, GEAR_BAG, GEAR_ITEMS, GEAR_SLOTS, GEAR_TIERS, GEAR_TIER_ORDER, STATS, STAT_ORDER, type GearDef, type GearSlot, type GearTier, type StatId,
 } from './data';
-import { type Boat, type Exotic, type Game, fishById } from './game';
+import { type Boat, type Exotic, type Game, type GearItem, fishById } from './game';
 import * as V from './voyage';
 import { Notices, lineHtml, timeAgo } from './notify';
-import { pixelFishIcon as fishIcon, pixelIcon, type IconName } from './pixelart';
+import { fisherIcon, gearIcon, pixelFishIcon as fishIcon, pixelIcon, type HatStyle, type IconName } from './pixelart';
 import type { Place } from './scene';
 
 /** One panel per job: the market sells fish, the tackle shop sells gear, the school trains skills. */
-export type Panel = 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'ledger' | 'boat' | 'tree' | 'retire' | 'lighthouse' | 'exotic' | 'listing' | 'voyage' | 'shipyard' | 'harborup' | 'pier' | 'pierstaff' | 'hand' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
+export type Panel = 'gearshop' | 'character' | 'gearitem' | 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'ledger' | 'boat' | 'tree' | 'retire' | 'lighthouse' | 'exotic' | 'listing' | 'voyage' | 'shipyard' | 'harborup' | 'pier' | 'pierstaff' | 'hand' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
 
 export type Action =
-  | 'cast' | 'reel' | 'close' | 'back' | 'reset' | 'toggleDev' | Panel | `fight:${string}` | 'fightDone' | `lhRegion:${'coast' | 'ocean' | 'abyss'}`
+  | 'cast' | 'reel' | 'close' | 'back' | 'reset' | 'toggleDev' | Panel
+  | `gsMode:${'buy' | 'sell'}` | `gsSlot:${GearSlot}` | `gsTier:${GearTier}` | `gbuy:${string}` | `gsel:${'bag' | 'eq'}:${string}`
+  | `gequip:${number}` | `gunequip:${GearSlot}` | `gsell:${number}` | 'gsellall' | `fight:${string}` | 'fightDone' | `lhRegion:${'coast' | 'ocean' | 'abyss'}`
   | 'buyFlagship' | `sail:${string}` | `vsail:${number}` | `vchoose:${number}` | 'vlegend' | 'vfight' | 'vhome'
   | `exTab:${'hold' | 'listed' | 'wanted'}` | `exList:${number}` | `exUnlist:${number}` | `exOpen:${number}` | `exSell:${number}:${number}` | `exGive:${number}` | 'exDev' | 'boatPrev' | 'boatNext' | `coTab:${'harbor' | 'ledger' | 'harborup'}`
   | `achTab:${'base' | 'tree'}` | `treeTier:${number}` | `treeSel:${string}` | `unlock:${string}` | 'doRetire' | `journalTier:${number}`
@@ -26,11 +28,15 @@ export type Action =
   | 'buyPierSection' | `budget:${number}`
   | 'hire' | 'sellCrate' | `hand:${number}` | `handRod:${number}` | `handTrain:${number}` | `handBait:${number}:${BaitId}`;
 
-const GEAR_ORDER: GearKind[] = ['rod', 'holders', 'auto', 'clothes', 'boots'];
+/** The Tackle shop: rod holders and the Autofisher (rods and clothes are gear, at the Gear Shop). */
+const GEAR_ORDER: GearKind[] = ['holders', 'auto'];
 export const GEAR_ICON: Record<GearKind, IconName> = { rod: 'rod', holders: 'holder', auto: 'auto', clothes: 'shirt', boots: 'boot' };
 const ROMAN: Record<Tier, string> = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V' };
 /** Where each slot of a tree side sits in its half of the sky (percent): root at the bottom, two branches, two tips. */
 const POS = [{ x: 50, y: 84 }, { x: 24, y: 52 }, { x: 76, y: 52 }, { x: 24, y: 18 }, { x: 76, y: 18 }];
+
+/** Each gear slot's icon (tabs and empty slots). */
+const SLOT_ICON: Record<GearSlot, IconName> = { rod: 'rod', hat: 'star', shirt: 'shirt', pants: 'bag', boots: 'boot' };
 
 export const BAIT_ICON: Record<BaitId, IconName> = { worm: 'bait', cricket: 'cricket', shiner: 'shiner', leech: 'leech', glow: 'glow', gold: 'gold' };
 export const SKILL_ICON: Record<SkillId, IconName> = { fishing: 'hook', reflexes: 'bolt', haggling: 'bag', strength: 'fist' };
@@ -73,6 +79,12 @@ export class UI {
   open: Panel | null = null;
   /** Trophy shown in the detail strip. */
   pick: string | null = null;
+  /** Gear Shop: buying or selling, which slot and tier. Selected piece (in the bag, or worn in a slot) and the panel it was opened from. */
+  gsMode: 'buy' | 'sell' = 'buy';
+  gsSlot: GearSlot = 'rod';
+  gsTier: GearTier = 'bronze';
+  gsel: { where: 'bag' | 'eq'; key: string } = { where: 'eq', key: 'rod' };
+  gearFrom: 'character' | 'gearshop' = 'character';
   /** Lighthouse: which region's legends are shown. */
   lhRegion: 'coast' | 'ocean' | 'abyss' = 'coast';
   /** Exotic Market: which tab, and which listing is open. */
@@ -84,6 +96,7 @@ export class UI {
   /** Where ◄ goes from a panel (null: it has no parent, only X). */
   parentOf(panel: Panel | null): Panel | null {
     if (panel === 'boat' || panel === 'shipyard') return this.coTab;
+    if (panel === 'gearitem') return this.gearFrom;
     return ({ hand: 'pier', pierstaff: 'pier', tree: 'settings', retire: 'settings', listing: 'exotic', voyage: 'lighthouse' } as Partial<Record<Panel, Panel>>)[panel ?? 'market'] ?? null;
   }
   /** Trophy page: the originals, or the Fish Tree's. */
@@ -156,6 +169,7 @@ export class UI {
     this.set('top', this.top,
       `<div class="wallet"><div class="plaque purse">${icon('coin')}${num(game.money)}</div>${this.ratesHtml(game)}</div>` +
       (game.dev ? `<span class="dev">DEV x${DEV_MULTIPLIER}</span>` : '') + '<span class="grow"></span>' +
+      `<button class="slot" data-act="character" aria-label="character">${icon('shirt')}</button>` +
       `<button class="slot" data-act="journal" aria-label="journal">${icon('book')}</button>` +
       `<button class="slot" data-act="trophies" aria-label="achievements">${icon('trophy')}${badge(ready)}</button>` +
       `<button class="slot" data-act="inbox" aria-label="log">${icon('bell')}${badge(unread)}</button>` +
@@ -210,6 +224,9 @@ export class UI {
             : panel === 'retire' ? ['Retire', this.retireHtml(game)]
               : panel === 'trophies' ? [`Trophies ${game.claimed.length}/${ACHIEVEMENTS.length}`, this.trophiesHtml(game)]
                 : panel === 'inbox' ? ['Log', this.inboxHtml()]
+                : panel === 'gearshop' ? ['Gear Shop', this.gearShopHtml(game)]
+                : panel === 'character' ? ['Character', this.characterHtml(game)]
+                : panel === 'gearitem' ? [this.gearItemTitle(game), this.gearItemHtml(game)]
                   : ['Settings', this.settingsHtml(game)];
     // ◄ back to the parent (if any), X always closes. A boat flips to the previous/next boat instead of showing the money (it's in the corner anyway).
     const tabbed = game.company && (panel === 'harbor' || panel === 'ledger' || panel === 'harborup');
@@ -666,6 +683,92 @@ export class UI {
     else if (v.stage === 'fight') card += `<button class="btn wide" data-act="vfight">FIGHT THE ${l.name.toUpperCase()}</button>`;
     else card += `<p class="note">${v.result === 'failed' ? 'The haul is lost.' : `Haul: $${kmb(v.haul)}${v.result === 'caught' ? ` · ${l.name} ${(v.kg ?? 0).toLocaleString()} kg · +${V.pearlsFor(l)} Pearls` : ''}`}</p><button class="btn wide" data-act="vhome">HOME</button>`;
     return stat + map + card;
+  }
+
+  // ---------- gear ----------
+
+  /** A piece's tile: its icon in its tier's frame (a "+" for a piece found fishing). */
+  private gearTile(def: GearDef, item: GearItem | null, act: string, sel = false): string {
+    return `<button class="gtile t-${def.tier}${sel ? ' sel' : ''}" style="--t:${GEAR_TIERS[def.tier].color}" data-act="${act}" title="${def.name}">
+      <img src="${gearIcon(def)}" alt="${def.name}">${item?.drop ? `<i class="plus${item.fine ? ' fine' : ''}">+</i>` : ''}</button>`;
+  }
+
+  /** Stats as short chips; with `vs`, each is green or red against those numbers (what you wear in that slot). */
+  private statChips(stats: Partial<Record<StatId, number>>, vs?: Partial<Record<StatId, number>>): string {
+    return STAT_ORDER.filter((s) => stats[s]).map((s) => {
+      const v = stats[s]!, o = vs?.[s] ?? 0, cls = !vs ? '' : v > o ? ' up' : v < o ? ' down' : '';
+      return `<span class="chip${cls}">${STATS[s].name} +${v}%</span>`;
+    }).join('');
+  }
+
+  /** The Gear Shop: BUY (slot, then tier, three pieces each; bought pieces go straight on) or SELL (your bag). */
+  private gearShopHtml(game: Game): string {
+    const mode = `<div class="tiers two"><button class="tab${this.gsMode === 'buy' ? ' on' : ''}" style="--c:#2f6fd6" data-act="gsMode:buy">BUY</button><button class="tab${this.gsMode === 'sell' ? ' on' : ''}" style="--c:#dd442c" data-act="gsMode:sell">SELL ${game.gearBag.length}/${GEAR_BAG}</button></div>`;
+    if (this.gsMode === 'sell') return mode + this.bagHtml(game, 'gearshop');
+    const slots = `<div class="tiers five">${GEAR_SLOTS.map((s) => `<button class="tab${this.gsSlot === s ? ' on' : ''}" style="--c:#7a5a3a" data-act="gsSlot:${s}"><img src="${pixelIcon(SLOT_ICON[s], 2)}" alt="${s}"></button>`).join('')}</div>`;
+    const tiers = `<div class="tiers five">${GEAR_TIER_ORDER.slice(0, 5).map((t) => `<button class="tab${this.gsTier === t ? ' on' : ''}" style="--c:${GEAR_TIERS[t].color}" data-act="gsTier:${t}">${GEAR_TIERS[t].name.slice(0, 4).toUpperCase()}</button>`).join('')}</div>`;
+    const worn = game.equipped[this.gsSlot];
+    const rows = GEAR_ITEMS.filter((d) => d.slot === this.gsSlot && d.tier === this.gsTier).map((d) => {
+      const wearing = worn?.def === d.id && !worn.drop;
+      return `<div class="row gearrow">${this.gearTile(d, null, `gbuy:${d.id}`)}<div class="meta"><b>${d.name}</b><div class="chips">${this.statChips(d.stats, worn?.stats)}</div></div>
+        ${wearing ? '<span class="maxed">WORN</span>' : `<button class="btn" data-act="gbuy:${d.id}" ${game.money < d.price ? 'disabled' : ''}>${d.price ? cash(d.price) : 'FREE'}</button>`}</div>`;
+    }).join('');
+    return mode + slots + tiers + rows + `<p class="note">Green beats what you wear. Pieces found fishing are stronger, with bonus stats.</p>`;
+  }
+
+  /** The bag: a grid of everything you aren't wearing; tap one to see it; SELL ALL (not Legendaries). */
+  private bagHtml(game: Game, from: 'character' | 'gearshop'): string {
+    const cells = Array.from({ length: GEAR_BAG }, (_, i) => {
+      const it = game.gearBag[i];
+      return it ? this.gearTile(game.gearDef(it), it, `gsel:bag:${it.id}`) : '<span class="gtile empty"></span>';
+    }).join('');
+    const total = game.gearBag.filter((g) => game.gearDef(g).tier !== 'legendary').reduce((s, g) => s + game.gearValue(g), 0);
+    this.gearFrom = from;
+    return `<div class="gbag">${cells}</div><button class="btn wide red" data-act="gsellall" ${total ? '' : 'disabled'}>SELL ALL ${cash(total)}</button>`;
+  }
+
+  /** Your fisher in what you wear, the five slots, your total stats, and the bag. */
+  private characterHtml(game: Game): string {
+    const o = game.look();
+    const fisher = fisherIcon({ shirt: o.shirt, trousers: o.trousers, boots: o.boots, hat: o.hat ? { ...o.hat, style: o.hat.style as HatStyle } : { style: 'straw', color: '#f4cca1', trim: '#f4cca1' } });
+    const slots = GEAR_SLOTS.map((s) => {
+      const it = game.equipped[s];
+      return it ? this.gearTile(game.gearDef(it), it, `gsel:eq:${s}`) : `<button class="gtile empty" data-act="gsel:eq:${s}"><img src="${pixelIcon(SLOT_ICON[s], 2)}" alt="${s}" class="ghost"></button>`;
+    }).join('');
+    const totals: Partial<Record<StatId, number>> = {};
+    for (const s of STAT_ORDER) { const v = game.gearStat(s); if (v) totals[s] = v; }
+    return `<div class="charhead"><img class="fisher" src="${fisher}" alt="you"><div class="gslots">${slots}</div></div>
+      <div class="chips">${this.statChips(totals) || '<span class="chip">No bonuses</span>'}</div>${this.bagHtml(game, 'character')}`;
+  }
+
+  /** The piece you tapped (in the bag, or worn in a slot). */
+  private gearSelected(game: Game): { item: GearItem | null; def: GearDef | null; worn: boolean } {
+    if (this.gsel.where === 'eq') { const it = game.equipped[this.gsel.key as GearSlot]; return { item: it, def: it ? game.gearDef(it) : null, worn: true }; }
+    const it = game.gearBag.find((g) => g.id === Number(this.gsel.key)) ?? null;
+    return { item: it, def: it ? game.gearDef(it) : null, worn: false };
+  }
+
+  private gearItemTitle(game: Game): string {
+    return this.gearSelected(game).def?.name ?? 'Empty';
+  }
+
+  /** A piece close up: tier, stats against what you wear in that slot, a Legendary's effect; EQUIP / TAKE OFF / SELL. */
+  private gearItemHtml(game: Game): string {
+    const { item, def, worn } = this.gearSelected(game);
+    if (!item || !def) return `<p class="empty">Nothing worn here. Equip something from your bag or buy at the Gear Shop.</p>`;
+    const vs = worn ? undefined : game.equipped[def.slot]?.stats;
+    const keys = STAT_ORDER.filter((s) => item.stats[s] || vs?.[s]);
+    const rows = keys.map((s) => {
+      const v = item.stats[s] ?? 0, o = vs?.[s] ?? 0, d = v - o;
+      return `<div class="statrow"><span>${STATS[s].name}</span><b>+${v}%</b>${vs ? `<i class="${d > 0 ? 'up' : d < 0 ? 'down' : ''}">${d > 0 ? '+' : ''}${d}</i>` : ''}</div>`;
+    }).join('');
+    const head = `<div class="row">${this.gearTile(def, item, 'close')}<div class="meta"><b style="color:${GEAR_TIERS[def.tier].color}">${GEAR_TIERS[def.tier].name} ${def.slot}</b>
+      <div class="sub"><small>${item.drop ? (item.fine ? 'Fine find: stronger, extra bonuses' : 'Found fishing: stronger, with bonus stats') : 'Shop piece'}</small></div></div></div>`;
+    const effect = def.effect ? `<p class="note legend">${def.blurb}</p>` : '';
+    const buttons = worn
+      ? (def.slot === 'rod' ? '<p class="note">You always fish with a rod: equip another to swap.</p>' : `<button class="btn wide plain" data-act="gunequip:${def.slot}" ${game.gearBag.length >= GEAR_BAG ? 'disabled' : ''}>TAKE OFF</button>`)
+      : `<div class="vchoices"><button class="btn" data-act="gequip:${item.id}">EQUIP</button><button class="btn red" data-act="gsell:${item.id}">SELL ${cash(game.gearValue(item))}</button></div>`;
+    return head + `<div class="statlist">${rows}${vs ? '<small class="vs">vs what you wear</small>' : ''}</div>` + effect + buttons;
   }
 
   // ---------- the Exotic Market ----------

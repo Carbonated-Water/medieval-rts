@@ -4,7 +4,7 @@ import tilesUrl from './assets/kenney/tiles.png';
 import { BOOTS, CLOTHES, HAND_OUTFITS, RODS, TIERS, VARIANTS, type FishDef, type Variant } from './data';
 import type { Game, Line } from './game';
 import {
-  HAND, PAL, alertCanvas, baitShopCanvas, boatCanvas, bobberCanvas, craneCanvas, harborCanvas, jettyCanvas, lighthouseCanvas, warehouseCanvas, fishCanvas, fisherCanvas, holderCanvas, plankCanvas, schoolCanvas, stallCanvas, type Pose,
+  HAND, PAL, alertCanvas, baitShopCanvas, boatCanvas, bobberCanvas, craneCanvas, harborCanvas, gearShopCanvas, jettyCanvas, type HatStyle, lighthouseCanvas, warehouseCanvas, fishCanvas, fisherCanvas, holderCanvas, plankCanvas, schoolCanvas, stallCanvas, type Pose,
 } from './pixelart';
 
 export type Place = 'market' | 'school' | 'bait' | 'tackle' | 'dock';
@@ -272,7 +272,7 @@ export class Scene {
     // Little grass tufts and flowers, kept clear of the school.
     for (let i = 0; i < Math.round(V.w / 9); i++) {
       const x = Math.round((i * 37 + 11) % V.w), y = Math.round(V.path + 20 + ((i * 53) % Math.max(1, V.h - V.path - 40)));
-      if ((Math.abs(x - V.schoolX) < 26 || Math.abs(x - V.baitX) < 24) && y < V.path + 56) continue;
+      if ((Math.abs(x - V.schoolX) < 26 || Math.abs(x - V.baitX) < 24 || Math.abs(x - this.gearShopX()) < 24) && y < V.path + 56) continue;
       if (i % 4 === 0) meadow.rect(x, y, 1, 1).fill([PAL.white, PAL.goldLight, PAL.redLight][i % 3]!).rect(x, y + 1, 1, 2).fill(PAL.greenDark);
       else meadow.rect(x, y, 1, 3).fill(PAL.greenLight).rect(x - 1, y + 1, 1, 2).fill(PAL.greenLight).rect(x + 1, y + 1, 1, 2).fill(PAL.greenDark);
     }
@@ -308,6 +308,7 @@ export class Scene {
     shop('tackle', () => stallCanvas('TACKLE', [PAL.waterDeep, PAL.sky], PAL.waterDeeper, 'tackle'), V.tackleX, V.path - 2, 1);
     shop('school', schoolCanvas, V.schoolX, V.path + 12, 0);
     shop('baitshop', baitShopCanvas, V.baitX, V.path + 12, 0);
+    shop('gearshop', gearShopCanvas, this.gearShopX(), V.path + 12, 0);
     // Worms poke out of the dirt bank (redrawn every frame).
     this.wormFx = add(new Graphics());
     this.world.addChild(layer);
@@ -369,6 +370,16 @@ export class Scene {
   hitJetty(cx: number, cy: number): boolean {
     const x = cx / this.scale, y = cy / this.scale, p = this.lighthouseSpot();
     return this.game.company && x > p.x + 10 && x < p.x + 54 && y > p.y - 30 && y < p.y + 4;
+  }
+
+  /** The Gear Shop sits at the meadow's left edge, below the Market. */
+  private gearShopX(): number {
+    return Math.max(20, Math.round(this.V.w * 0.1));
+  }
+
+  hitGearShop(cx: number, cy: number): boolean {
+    const x = cx / this.scale, y = cy / this.scale, V = this.V;
+    return y > V.path + 10 && y < V.path + 46 && Math.abs(x - this.gearShopX()) < 20;
   }
 
   /** Is a screen point on the harbor (office, pier or a moored boat)? */
@@ -723,15 +734,15 @@ export class Scene {
 
   private drawPlayer(): void {
     const f = this.feet();
-    const o = CLOTHES[this.game.clothes]!, boots = BOOTS[this.game.boots]!.color;
-    const pose = this.pose();
-    this.player.texture = this.cached(`fisher:${o.shirt}:${o.trousers}:${boots ?? ''}:${pose}`,
-      () => fisherCanvas({ shirt: o.shirt, trousers: o.trousers, boots: boots ?? undefined }, pose));
+    const o = this.game.look(), pose = this.pose();
+    const hat = o.hat ? { ...o.hat, style: o.hat.style as HatStyle } : undefined;
+    this.player.texture = this.cached(`fisher:${o.shirt}:${o.trousers}:${o.boots ?? ''}:${hat ? `${hat.style}${hat.color}${hat.trim}` : 'none'}:${pose}`,
+      () => fisherCanvas({ shirt: o.shirt, trousers: o.trousers, boots: o.boots, hat: hat ?? { style: 'straw', color: '#f4cca1', trim: '#f4cca1' } }, pose));
     this.player.position.set(f.x, f.y);
     this.player.scale.x = this.facing;
     // The rod in hand.
     const hand = this.handPos(f), tip = this.rodTip(0);
-    this.rodLine.clear().moveTo(hand.x, hand.y).lineTo(tip.x, tip.y).stroke({ color: RODS[this.game.rod]!.color, width: 1 });
+    this.rodLine.clear().moveTo(hand.x, hand.y).lineTo(tip.x, tip.y).stroke({ color: this.game.look().rod, width: 1 });
   }
 
   /** Every line in the water: its rod (holders), the line, the bobber, and a "!" when it bites. */
@@ -743,7 +754,7 @@ export class Scene {
       if (!h.visible) return;
       const base = this.holderBase(slot), tip = this.rodTip(slot);
       h.position.set(base.x, base.y + 2);
-      g.moveTo(base.x, base.y - 4).lineTo(tip.x, tip.y).stroke({ color: RODS[this.game.rod]!.color, width: 1 });
+      g.moveTo(base.x, base.y - 4).lineTo(tip.x, tip.y).stroke({ color: this.game.look().rod, width: 1 });
     });
     this.bobbers.forEach((b, slot) => { b.visible = false; this.alerts[slot]!.visible = false; });
     this.drawHands(g);

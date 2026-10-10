@@ -146,6 +146,147 @@ export const GEAR: Record<GearKind, { title: string; levels: { name: string; pri
   boots: { title: 'Boots', levels: BOOTS },
 };
 
+// ---------- gear: what you wear and fish with ----------
+
+export type GearSlot = 'rod' | 'hat' | 'shirt' | 'pants' | 'boots';
+export const GEAR_SLOTS: GearSlot[] = ['rod', 'hat', 'shirt', 'pants', 'boots'];
+export type GearTier = 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond' | 'legendary';
+/** Tiers: a rod's tier is the rarest fish tier it lands (Legendary rods land everything too). */
+export const GEAR_TIERS: Record<GearTier, { name: string; color: string; rank: number; fishTier: Tier }> = {
+  bronze: { name: 'Bronze', color: '#b0703a', rank: 1, fishTier: 1 },
+  silver: { name: 'Silver', color: '#c8ccd4', rank: 2, fishTier: 2 },
+  gold: { name: 'Gold', color: '#f4b41b', rank: 3, fishTier: 3 },
+  platinum: { name: 'Platinum', color: '#9fe0e8', rank: 4, fishTier: 4 },
+  diamond: { name: 'Diamond', color: '#7ad8ff', rank: 5, fishTier: 5 },
+  legendary: { name: 'Legendary', color: '#ff8a3a', rank: 6, fishTier: 5 },
+};
+export const GEAR_TIER_ORDER: GearTier[] = ['bronze', 'silver', 'gold', 'platinum', 'diamond', 'legendary'];
+/** Gear stats, all percentages. */
+export type StatId = 'size' | 'luck' | 'patience' | 'reflex' | 'strength' | 'fortune' | 'stride';
+export const STATS: Record<StatId, { name: string; blurb: string }> = {
+  size: { name: 'Size', blurb: 'Bigger fish, worth more' },
+  luck: { name: 'Luck', blurb: 'Rarer fish bite more often' },
+  patience: { name: 'Patience', blurb: 'Bites come sooner' },
+  reflex: { name: 'Reflex', blurb: 'More time to hit REEL' },
+  strength: { name: 'Strength', blurb: 'Land fish too strong for your rod' },
+  fortune: { name: 'Fortune', blurb: 'Giant, Golden and Shiny more often' },
+  stride: { name: 'Stride', blurb: 'Walk faster' },
+};
+export const STAT_ORDER: StatId[] = ['size', 'luck', 'patience', 'reflex', 'strength', 'fortune', 'stride'];
+/** A piece of gear as the shop sells it. Legendary pieces (voyages only) add a unique `effect`. */
+export interface GearDef {
+  id: string; slot: GearSlot; tier: GearTier; name: string; stats: Partial<Record<StatId, number>>; price: number;
+  /** Look: style of its slot and two colours (main, accent). */
+  style: string; colors: [string, string];
+  effect?: string; blurb?: string;
+}
+export const GEAR_ITEMS: GearDef[] = [
+  // rod
+  { id: 'twigrod', slot: 'rod', tier: 'bronze', name: "Twig Rod", stats: { reflex: 5, luck: 5 }, price: 0, style: 'stick', colors: ['#8a6038', '#5a3a20'] },
+  { id: 'willowswitch', slot: 'rod', tier: 'bronze', name: "Willow Switch", stats: { strength: 10 }, price: 30, style: 'stick', colors: ['#a08a50', '#6a5a30'] },
+  { id: 'canepole', slot: 'rod', tier: 'bronze', name: "Cane Pole", stats: { luck: 10 }, price: 50, style: 'cane', colors: ['#c8b070', '#8a6a38'] },
+  { id: 'bamboorod', slot: 'rod', tier: 'silver', name: "Bamboo Rod", stats: { reflex: 10, luck: 10 }, price: 100, style: 'cane', colors: ['#c8b060', '#7a5a30'] },
+  { id: 'ashrod', slot: 'rod', tier: 'silver', name: "Ash Rod", stats: { strength: 20 }, price: 150, style: 'split', colors: ['#d8c8a0', '#6b4526'] },
+  { id: 'springsteelrod', slot: 'rod', tier: 'silver', name: "Spring Steel Rod", stats: { reflex: 15, strength: 5 }, price: 250, style: 'split', colors: ['#a8b0b8', '#434a5f'] },
+  { id: 'fiberglassrod', slot: 'rod', tier: 'gold', name: "Fiberglass Rod", stats: { luck: 20, reflex: 15 }, price: 900, style: 'split', colors: ['#e0e0e0', '#dd442c'] },
+  { id: 'heronrod', slot: 'rod', tier: 'gold', name: "Heron Rod", stats: { strength: 25, luck: 10 }, price: 1300, style: 'split', colors: ['#8a9ab0', '#f4ac66'] },
+  { id: 'tidewalkerrod', slot: 'rod', tier: 'gold', name: "Tidewalker Rod", stats: { reflex: 35 }, price: 2000, style: 'carbon', colors: ['#2a8a8a', '#a0f0e0'] },
+  { id: 'carbonrod', slot: 'rod', tier: 'platinum', name: "Carbon Rod", stats: { luck: 30, strength: 25 }, price: 5000, style: 'carbon', colors: ['#303438', '#2f6fd6'] },
+  { id: 'stormcaller', slot: 'rod', tier: 'platinum', name: "Stormcaller", stats: { reflex: 30, luck: 25 }, price: 7000, style: 'carbon', colors: ['#4a5a7a', '#f0e040'] },
+  { id: 'ironwoodrod', slot: 'rod', tier: 'platinum', name: "Ironwood Rod", stats: { strength: 55 }, price: 10000, style: 'carbon', colors: ['#5a3a2a', '#959ab1'] },
+  { id: 'mythrilrod', slot: 'rod', tier: 'diamond', name: "Mythril Rod", stats: { luck: 40, reflex: 40 }, price: 25000, style: 'ornate', colors: ['#70d8e8', '#f4b41b'] },
+  { id: 'starfallrod', slot: 'rod', tier: 'diamond', name: "Starfall Rod", stats: { strength: 50, luck: 30 }, price: 40000, style: 'ornate', colors: ['#2a2a5a', '#fee481'] },
+  { id: 'kingfisherrod', slot: 'rod', tier: 'diamond', name: "Kingfisher Rod", stats: { reflex: 30, strength: 25, luck: 25 }, price: 60000, style: 'ornate', colors: ['#2f6fd6', '#fc683b'] },
+  // hat
+  { id: 'strawhat', slot: 'hat', tier: 'bronze', name: "Straw Hat", stats: { luck: 10 }, price: 50, style: 'straw', colors: ['#fee481', '#dd442c'] },
+  { id: 'bandana', slot: 'hat', tier: 'bronze', name: "Bandana", stats: { reflex: 10 }, price: 80, style: 'bandana', colors: ['#dd442c', '#ffffff'] },
+  { id: 'woolcap', slot: 'hat', tier: 'bronze', name: "Wool Cap", stats: { fortune: 10 }, price: 120, style: 'beanie', colors: ['#6a8aa0', '#dce1e7'] },
+  { id: 'buckethat', slot: 'hat', tier: 'silver', name: "Bucket Hat", stats: { luck: 20 }, price: 400, style: 'bucket', colors: ['#6a8a50', '#3a5a28'] },
+  { id: 'gullfeathercap', slot: 'hat', tier: 'silver', name: "Gull Feather Cap", stats: { luck: 12, fortune: 8 }, price: 600, style: 'cap', colors: ['#e8e8f0', '#959ab1'] },
+  { id: 'sunvisor', slot: 'hat', tier: 'silver', name: "Sun Visor", stats: { reflex: 20 }, price: 900, style: 'cap', colors: ['#fc683b', '#ffffff'] },
+  { id: 'captainscap', slot: 'hat', tier: 'gold', name: "Captain's Cap", stats: { luck: 20, reflex: 15 }, price: 3000, style: 'cap', colors: ['#2f6fd6', '#ffffff'] },
+  { id: 'souwester', slot: 'hat', tier: 'gold', name: "Sou'wester", stats: { luck: 35 }, price: 4500, style: 'bucket', colors: ['#f0c020', '#c08010'] },
+  { id: 'luckyberet', slot: 'hat', tier: 'gold', name: "Lucky Beret", stats: { fortune: 25, luck: 10 }, price: 6000, style: 'beanie', colors: ['#2eb082', '#f4b41b'] },
+  { id: 'explorerhelmet', slot: 'hat', tier: 'platinum', name: "Explorer Helmet", stats: { reflex: 30, luck: 25 }, price: 15000, style: 'helmet', colors: ['#e8e0c8', '#8a6a38'] },
+  { id: 'pearlheadband', slot: 'hat', tier: 'platinum', name: "Pearl Headband", stats: { fortune: 35, luck: 20 }, price: 22000, style: 'bandana', colors: ['#f0e8f0', '#9fe0e8'] },
+  { id: 'owleyegoggles', slot: 'hat', tier: 'platinum', name: "Owl-Eye Goggles", stats: { reflex: 55 }, price: 30000, style: 'goggles', colors: ['#6b4526', '#434a5f'] },
+  { id: 'admiralsbicorne', slot: 'hat', tier: 'diamond', name: "Admiral's Bicorne", stats: { luck: 50, reflex: 30 }, price: 60000, style: 'bicorne', colors: ['#1a2a5a', '#f4b41b'] },
+  { id: 'coralcrown', slot: 'hat', tier: 'diamond', name: "Coral Crown", stats: { fortune: 50, luck: 30 }, price: 100000, style: 'crown', colors: ['#f07a90', '#fee481'] },
+  { id: 'moonlithood', slot: 'hat', tier: 'diamond', name: "Moonlit Hood", stats: { luck: 30, reflex: 25, fortune: 25 }, price: 150000, style: 'hood', colors: ['#2a2a5a', '#c8d8f0'] },
+  // shirt
+  { id: 'oldtshirt', slot: 'shirt', tier: 'bronze', name: "Old T-Shirt", stats: { size: 10 }, price: 50, style: 'tee', colors: ['#e8d8b0', '#c0a878'] },
+  { id: 'stripedtee', slot: 'shirt', tier: 'bronze', name: "Striped Tee", stats: { size: 5, patience: 5 }, price: 80, style: 'tee', colors: ['#2f6fd6', '#ffffff'] },
+  { id: 'linenshirt', slot: 'shirt', tier: 'bronze', name: "Linen Shirt", stats: { strength: 10 }, price: 120, style: 'tee', colors: ['#f0ecd8', '#c8b88a'] },
+  { id: 'flannelshirt', slot: 'shirt', tier: 'silver', name: "Flannel Shirt", stats: { size: 20 }, price: 400, style: 'sweater', colors: ['#c0402c', '#3a2a2a'] },
+  { id: 'knitsweater', slot: 'shirt', tier: 'silver', name: "Knit Sweater", stats: { size: 12, patience: 8 }, price: 600, style: 'sweater', colors: ['#c0402c', '#fee481'] },
+  { id: 'rugbyshirt', slot: 'shirt', tier: 'silver', name: "Rugby Shirt", stats: { size: 10, strength: 10 }, price: 900, style: 'tee', colors: ['#2eb082', '#ffffff'] },
+  { id: 'rainjacket', slot: 'shirt', tier: 'gold', name: "Rain Jacket", stats: { size: 35 }, price: 3000, style: 'jacket', colors: ['#f0c020', '#3a4a6a'] },
+  { id: 'fisherssmock', slot: 'shirt', tier: 'gold', name: "Fisher's Smock", stats: { size: 20, patience: 15 }, price: 4500, style: 'coat', colors: ['#8aa0b0', '#3a4a5a'] },
+  { id: 'oilskincoat', slot: 'shirt', tier: 'gold', name: "Oilskin Coat", stats: { size: 15, strength: 20 }, price: 6000, style: 'coat', colors: ['#c09040', '#5a3a1a'] },
+  { id: 'anglersvest', slot: 'shirt', tier: 'platinum', name: "Angler's Vest", stats: { size: 55 }, price: 15000, style: 'vest', colors: ['#6a7a3a', '#cb815e'] },
+  { id: 'deckhandjacket', slot: 'shirt', tier: 'platinum', name: "Deckhand Jacket", stats: { size: 30, patience: 25 }, price: 22000, style: 'jacket', colors: ['#2a3a6a', '#dd442c'] },
+  { id: 'stormparka', slot: 'shirt', tier: 'platinum', name: "Storm Parka", stats: { size: 30, strength: 25 }, price: 30000, style: 'jacket', colors: ['#dd442c', '#434a5f'] },
+  { id: 'prowaderssuit', slot: 'shirt', tier: 'diamond', name: "Pro Waders Suit", stats: { size: 80 }, price: 60000, style: 'suit', colors: ['#2a5a4a', '#dce1e7'] },
+  { id: 'silkcaptainscoat', slot: 'shirt', tier: 'diamond', name: "Silk Captain's Coat", stats: { size: 50, patience: 30 }, price: 100000, style: 'coat', colors: ['#ffffff', '#f4b41b'] },
+  { id: 'leviathanhide', slot: 'shirt', tier: 'diamond', name: "Leviathan Hide", stats: { size: 40, strength: 40 }, price: 150000, style: 'jacket', colors: ['#203850', '#5a8aa0'] },
+  // pants
+  { id: 'rolledjeans', slot: 'pants', tier: 'bronze', name: "Rolled Jeans", stats: { patience: 10 }, price: 50, style: 'trousers', colors: ['#4a6aa0', '#2a3a5a'] },
+  { id: 'cargoshorts', slot: 'pants', tier: 'bronze', name: "Cargo Shorts", stats: { fortune: 10 }, price: 80, style: 'shorts', colors: ['#c8a060', '#8a6a38'] },
+  { id: 'worktrousers', slot: 'pants', tier: 'bronze', name: "Work Trousers", stats: { size: 10 }, price: 120, style: 'trousers', colors: ['#6a5a40', '#3a3020'] },
+  { id: 'canvaspants', slot: 'pants', tier: 'silver', name: "Canvas Pants", stats: { patience: 20 }, price: 400, style: 'trousers', colors: ['#a89a70', '#5a4a30'] },
+  { id: 'patchedoveralls', slot: 'pants', tier: 'silver', name: "Patched Overalls", stats: { patience: 10, fortune: 10 }, price: 600, style: 'overalls', colors: ['#4a6aa0', '#dd442c'] },
+  { id: 'raintrousers', slot: 'pants', tier: 'silver', name: "Rain Trousers", stats: { size: 10, patience: 10 }, price: 900, style: 'trousers', colors: ['#f0c020', '#c08010'] },
+  { id: 'waterproofbibs', slot: 'pants', tier: 'gold', name: "Waterproof Bibs", stats: { patience: 35 }, price: 3000, style: 'overalls', colors: ['#3a6a9a', '#f4b41b'] },
+  { id: 'luckyslacks', slot: 'pants', tier: 'gold', name: "Lucky Slacks", stats: { fortune: 35 }, price: 4500, style: 'trousers', colors: ['#2eb082', '#f4b41b'] },
+  { id: 'fieldpants', slot: 'pants', tier: 'gold', name: "Field Pants", stats: { patience: 20, size: 15 }, price: 6000, style: 'trousers', colors: ['#6a7a3a', '#3a4a1a'] },
+  { id: 'hipwaders', slot: 'pants', tier: 'platinum', name: "Hip Waders", stats: { patience: 55 }, price: 15000, style: 'waders', colors: ['#3f6a3a', '#2a2a2a'] },
+  { id: 'treasurehunterpants', slot: 'pants', tier: 'platinum', name: "Treasure Hunter Pants", stats: { fortune: 40, patience: 15 }, price: 22000, style: 'trousers', colors: ['#8a5a2a', '#f4b41b'] },
+  { id: 'explorercargos', slot: 'pants', tier: 'platinum', name: "Explorer Cargos", stats: { patience: 30, fortune: 25 }, price: 30000, style: 'shorts', colors: ['#c8b080', '#6a5a30'] },
+  { id: 'chestwaders', slot: 'pants', tier: 'diamond', name: "Chest Waders", stats: { patience: 80 }, price: 60000, style: 'waders', colors: ['#2a4a3a', '#1a1a1a'] },
+  { id: 'gildedbreeches', slot: 'pants', tier: 'diamond', name: "Gilded Breeches", stats: { fortune: 50, size: 30 }, price: 100000, style: 'trousers', colors: ['#f4b41b', '#9f5a52'] },
+  { id: 'tideweavetrousers', slot: 'pants', tier: 'diamond', name: "Tideweave Trousers", stats: { patience: 40, fortune: 40 }, price: 150000, style: 'trousers', colors: ['#2a8a9a', '#a0f0e0'] },
+  // boots
+  { id: 'sandals', slot: 'boots', tier: 'bronze', name: "Sandals", stats: { stride: 20 }, price: 50, style: 'sandals', colors: ['#a8784a', '#6b4526'] },
+  { id: 'flipflops', slot: 'boots', tier: 'bronze', name: "Flip-Flops", stats: { stride: 10, fortune: 5 }, price: 80, style: 'sandals', colors: ['#2cc5f6', '#ffffff'] },
+  { id: 'canvasshoes', slot: 'boots', tier: 'bronze', name: "Canvas Shoes", stats: { stride: 10, patience: 5 }, price: 120, style: 'shoes', colors: ['#e8e0d0', '#dd442c'] },
+  { id: 'rubberboots', slot: 'boots', tier: 'silver', name: "Rubber Boots", stats: { stride: 45 }, price: 400, style: 'boots', colors: ['#3f8a3a', '#2a5a28'] },
+  { id: 'deckshoes', slot: 'boots', tier: 'silver', name: "Deck Shoes", stats: { stride: 25, patience: 10 }, price: 600, style: 'shoes', colors: ['#8a5a2a', '#ffffff'] },
+  { id: 'clogs', slot: 'boots', tier: 'silver', name: "Clogs", stats: { stride: 20, fortune: 10 }, price: 900, style: 'shoes', colors: ['#f0c020', '#8a6a38'] },
+  { id: 'hikingboots', slot: 'boots', tier: 'gold', name: "Hiking Boots", stats: { stride: 75 }, price: 3000, style: 'boots', colors: ['#6b4526', '#dd442c'] },
+  { id: 'trailrunners', slot: 'boots', tier: 'gold', name: "Trail Runners", stats: { stride: 50, patience: 10 }, price: 4500, style: 'shoes', colors: ['#fc683b', '#2a2a2a'] },
+  { id: 'waderboots', slot: 'boots', tier: 'gold', name: "Wader Boots", stats: { stride: 40, size: 15 }, price: 6000, style: 'tall', colors: ['#3f5a3a', '#2a2a2a'] },
+  { id: 'sealskinboots', slot: 'boots', tier: 'platinum', name: "Sealskin Boots", stats: { stride: 90, patience: 10 }, price: 15000, style: 'tall', colors: ['#8a8a9a', '#5a5a6a'] },
+  { id: 'gripsoleboots', slot: 'boots', tier: 'platinum', name: "Gripsole Boots", stats: { stride: 60, fortune: 25 }, price: 22000, style: 'boots', colors: ['#5a4a3a', '#f4b41b'] },
+  { id: 'riverstriderboots', slot: 'boots', tier: 'platinum', name: "Riverstrider Boots", stats: { stride: 70, patience: 20 }, price: 30000, style: 'tall', colors: ['#2a6a8a', '#a0d0f0'] },
+  { id: 'sevenleagueboots', slot: 'boots', tier: 'diamond', name: "Seven-League Boots", stats: { stride: 110 }, price: 60000, style: 'tall', colors: ['#8e44c9', '#f4b41b'] },
+  { id: 'windrunners', slot: 'boots', tier: 'diamond', name: "Windrunners", stats: { stride: 80, patience: 25 }, price: 100000, style: 'shoes', colors: ['#e0f0ff', '#7ad8ff'] },
+  { id: 'treasuretreads', slot: 'boots', tier: 'diamond', name: "Treasure Treads", stats: { stride: 70, fortune: 40 }, price: 150000, style: 'boots', colors: ['#f4b41b', '#8a5a2a'] },
+  // Legendary: voyages only
+  { id: 'leviathansspine', slot: 'rod', tier: 'legendary', name: "Leviathan's Spine", stats: { strength: 80, luck: 50 }, price: 2000000, style: 'ornate', colors: ['#2a1a4a', '#ff8a3a'], effect: 'runTire', blurb: "Letting a run go tires fish 50% faster" },
+  { id: 'abyssallantern', slot: 'rod', tier: 'legendary', name: "Abyssal Lantern", stats: { reflex: 60, luck: 60 }, price: 2000000, style: 'ornate', colors: ['#1a2a3a', '#f0f080'], effect: 'darkGlow', blurb: "In the Abyss the bar never goes fully dark" },
+  { id: 'oldsaltscap', slot: 'hat', tier: 'legendary', name: "Old Salt's Cap", stats: { luck: 70, fortune: 40 }, price: 2000000, style: 'cap', colors: ['#3a4a6a', '#f4b41b'], effect: 'supply', blurb: "+1 supply on every voyage" },
+  { id: 'crownofthedeep', slot: 'hat', tier: 'legendary', name: "Crown of the Deep", stats: { fortune: 90, luck: 40 }, price: 2000000, style: 'crown', colors: ['#f4b41b', '#2cc5f6'], effect: 'pearls', blurb: "+50% Pearls from legends" },
+  { id: 'krakenhide', slot: 'shirt', tier: 'legendary', name: "Kraken Hide", stats: { size: 120 }, price: 2000000, style: 'jacket', colors: ['#7a2a5a', '#e080b0'], effect: 'hull', blurb: "+1 hull on every voyage" },
+  { id: 'stormcaptainscoat', slot: 'shirt', tier: 'legendary', name: "Storm Captain's Coat", stats: { size: 80, patience: 40 }, price: 2000000, style: 'coat', colors: ['#4a2a5a', '#f4b41b'], effect: 'storm', blurb: "Storms never damage the hull" },
+  { id: 'tidewalkergreaves', slot: 'pants', tier: 'legendary', name: "Tidewalker Greaves", stats: { patience: 100, fortune: 30 }, price: 2000000, style: 'waders', colors: ['#2a6a7a', '#a0f0e0'], effect: 'snag', blurb: "Snags come free 50% faster" },
+  { id: 'mermaidscaletrousers', slot: 'pants', tier: 'legendary', name: "Mermaid Scale Trousers", stats: { fortune: 100 }, price: 2000000, style: 'waders', colors: ['#2cc5f6', '#f4b41b'], effect: 'wreck', blurb: "Wreck dives never damage the hull" },
+  { id: 'sealegs', slot: 'boots', tier: 'legendary', name: "Sea Legs", stats: { stride: 150, patience: 30 }, price: 2000000, style: 'tall', colors: ['#1a3a5a', '#fee481'], effect: 'firstMove', blurb: "The first move of each voyage is free" },
+  { id: 'ghosttreads', slot: 'boots', tier: 'legendary', name: "Ghost Treads", stats: { stride: 120, fortune: 50 }, price: 2000000, style: 'shoes', colors: ['#e0e8f0', '#7ad8ff'], effect: 'waves', blurb: "The ocean’s green band is wider" },
+];
+export const gearById = (id: string) => GEAR_ITEMS.find((g) => g.id === id);
+/** The gear bag holds this many pieces you aren't wearing. */
+export const GEAR_BAG = 24;
+/** Selling pays this share of the shop price (more for better-rolled drops). */
+export const GEAR_SELL = 0.4;
+/** What a new run starts wearing. */
+export const STARTER_GEAR: Partial<Record<GearSlot, string>> = { rod: 'twigrod', hat: 'strawhat', shirt: 'oldtshirt', pants: 'rolledjeans' };
+/** Old saves: rod, clothes and boots levels become these pieces. */
+export const LEGACY_GEAR = {
+  rod: ['twigrod', 'bamboorod', 'fiberglassrod', 'carbonrod', 'mythrilrod'],
+  clothes: ['oldtshirt', 'flannelshirt', 'rainjacket', 'anglersvest', 'prowaderssuit'],
+  boots: [null, 'sandals', 'rubberboots', 'hikingboots', 'sevenleagueboots'],
+};
+
 // ---------- rare variants, rolled on every catch ----------
 
 export type Variant = 'giant' | 'golden' | 'shiny';

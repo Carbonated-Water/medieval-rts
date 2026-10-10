@@ -199,6 +199,17 @@ arrows walk, Space casts / reels, E opens the building you stand at.
   beats tapping (spamming loses); letting go during a run is safe and tires
   the fish; reeling during a run, even tapping, snaps the line.
 
+## Gear (in progress, 2026-10-10)
+
+- Slots rod/hat/shirt/pants/boots; tiers Bronze..Diamond, Legendary from
+  voyages only (kept on retire). Stats % : Size, Luck, Patience, Reflex,
+  Strength, Fortune, Stride. 75 shop pieces + 10 Legendaries (data.ts).
+- Gear Shop (meadow, tap): buy and sell. Character screen: slots, totals,
+  bag of 24, compare card. Rod tier = rarest fish tier landed.
+- Next: drops while fishing (~1 in 40 catches, mostly Bronze): the same
+  piece but 5-30% stronger plus 1-2 bonus stats (Fine: top rolls). Then
+  Legendaries from voyages.
+
 ## Roadmap (agreed order, 2026-10-09)
 
 1. ~~Multiple lines + rare variants~~ (done)

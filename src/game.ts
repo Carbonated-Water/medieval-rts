@@ -7,6 +7,7 @@ import {
   MIN_BITE_WAIT, REEL_WINDOW, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, START_WORMS, STRENGTH_PER_LEVEL, TIERS,
   TOO_STRONG_WEIGHT, VARIANTS, VARIANT_ORDER, WORMS_PER_PICK, WORM_SPAWN_SECONDS, WORM_SPOTS, baitById,
   type AchStat, type AchievementDef, type BaitId, type FishDef, type GearKind, type SkillId, type Tier, type Variant,
+  GEAR_BAG, GEAR_SELL, GEAR_SLOTS, GEAR_TIERS, LEGACY_GEAR, STARTER_GEAR, gearById, type GearDef, type GearSlot, type StatId,
   BILLFISH, SEA_FISH, SHELLFISH, TREE_FISH, pearlsFor, treeFishById, type TreeFish, COLLECTORS, EXOTIC, LEGENDS, VOYAGE, type LegendDef, type Region,
 } from './data';
 import * as V from './voyage';
@@ -63,6 +64,10 @@ export interface SaveData {
   retirements?: number;
   /** Sea species your boats have ever landed (the sea's journal); survives retiring. */
   seaSeen?: string[];
+  /** Gear: what you're wearing (by slot) and the bag of pieces you aren't. */
+  equipped?: Partial<Record<GearSlot, GearItem | null>>;
+  gearBag?: GearItem[];
+  nextGearId?: number;
   /** Voyages: the Flagship, its rest, the voyage under way, legends landed (kept on retire). */
   flagship?: boolean;
   flagshipRest?: number;
@@ -134,6 +139,12 @@ export type Line =
 /** Every fish in the game: river, sea, the Fish Tree, and the expedition legends. */
 const ALL_FISH: FishDef[] = [...FISH, ...SEA_FISH, ...SHELLFISH, ...BILLFISH, ...TREE_FISH, ...LEGENDS];
 
+/**
+ * A piece of gear you own: which catalogue piece, and its stats (the shop's
+ * for a bought piece; better, with bonus stats, for one found fishing).
+ */
+export interface GearItem { id: number; def: string; stats: Partial<Record<StatId, number>>; drop?: boolean; fine?: boolean }
+
 /** An expedition fish in the exotic hold: which legend, how heavy, what it's worth. */
 export interface Exotic { id: number; fish: string; kg: number; value: number }
 /** A collector's offer on a listed fish (seconds left before it's withdrawn). */
@@ -185,6 +196,9 @@ export class Game {
   fishTree: string[] = [];
   retirements = 0;
   seaSeen: string[] = [];
+  equipped: Record<GearSlot, GearItem | null> = { rod: null, hat: null, shirt: null, pants: null, boots: null };
+  gearBag: GearItem[] = [];
+  nextGearId = 1;
   flagship = false;
   flagshipRest = 0;
   voyage: V.VoyageState | null = null;
@@ -254,10 +268,114 @@ export class Game {
     this.clothes = clamp(this.clothes, 0, CLOTHES.length - 1);
     this.boots = clamp(this.boots, 0, BOOTS.length - 1);
     for (const id of Object.keys(SKILLS) as SkillId[]) this.setLevel(id, clamp(this.level(id), SKILLS[id].start, SKILLS[id].max));
+    this.equipped = { rod: null, hat: null, shirt: null, pants: null, boots: null, ...(save?.equipped ?? {}) };
+    if (!save?.equipped) {
+      // Before gear: the rod, clothes and boots you'd bought become the matching pieces.
+      const legacy: Partial<Record<GearSlot, string | null>> = { ...STARTER_GEAR, rod: LEGACY_GEAR.rod[this.rod], shirt: LEGACY_GEAR.clothes[this.clothes], boots: LEGACY_GEAR.boots[this.boots] };
+      for (const slot of GEAR_SLOTS) { const id = legacy[slot]; this.equipped[slot] = id ? this.makeGear(gearById(id)!) : null; }
+    }
+    if (!this.equipped.rod) this.equipped.rod = this.makeGear(gearById(STARTER_GEAR.rod!)!);
   }
 
+  /** The rarest fish tier your rod lands. */
   get rodTier(): Tier {
-    return RODS[this.rod]!.tier;
+    return GEAR_TIERS[this.gearOf('rod')!.tier].fishTier;
+  }
+
+  // ---------- gear ----------
+
+  private makeGear(def: GearDef, stats = def.stats, extra: Partial<GearItem> = {}): GearItem {
+    return { id: this.nextGearId++, def: def.id, stats: { ...stats }, ...extra };
+  }
+
+  /** The catalogue piece behind something you own (or wear in a slot). */
+  gearDef(item: GearItem): GearDef {
+    return gearById(item.def)!;
+  }
+
+  gearOf(slot: GearSlot): GearDef | null {
+    const it = this.equipped[slot];
+    return it ? this.gearDef(it) : null;
+  }
+
+  /** What you look like in your gear (bare where a slot is empty), and your rod's colour. */
+  look(): { shirt: string; trousers: string; boots?: string; hat?: { style: string; color: string; trim: string }; rod: string } {
+    const hat = this.gearOf('hat'), shirt = this.gearOf('shirt'), pants = this.gearOf('pants'), boots = this.gearOf('boots');
+    return {
+      shirt: shirt?.colors[0] ?? '#f4cca1', trousers: pants?.colors[0] ?? '#e8e0d0', boots: boots?.colors[0],
+      hat: hat ? { style: hat.style, color: hat.colors[0], trim: hat.colors[1] } : undefined, rod: this.gearOf('rod')!.colors[0],
+    };
+  }
+
+  /** A stat summed over everything you're wearing (percent). */
+  gearStat(s: StatId): number {
+    return GEAR_SLOTS.reduce((n, slot) => n + (this.equipped[slot]?.stats[s] ?? 0), 0);
+  }
+
+  /** What a piece sells for: a share of its shop price, more for a better roll (at least $5). */
+  gearValue(item: GearItem): number {
+    const def = this.gearDef(item);
+    const base = Object.values(def.stats).reduce((a, b) => a + (b ?? 0), 0);
+    const mine = Object.values(item.stats).reduce((a, b) => a + (b ?? 0), 0);
+    return Math.max(5, Math.round((def.price * GEAR_SELL * (base ? mine / base : 1)) / 5) * 5);
+  }
+
+  /** Buy a piece from the shop and put it on; what you wore goes to the bag (sold if the bag is full). */
+  buyGearPiece(id: string): { sold: number } | null {
+    const def = gearById(id);
+    if (!def || def.tier === 'legendary' || this.money < def.price) return null;
+    this.money -= def.price;
+    return this.wear(this.makeGear(def));
+  }
+
+  /** Put a piece on (from anywhere); returns what the old one sold for if the bag was full. */
+  private wear(item: GearItem): { sold: number } {
+    const slot = this.gearDef(item).slot, old = this.equipped[slot];
+    this.equipped[slot] = item;
+    let sold = 0;
+    if (old) {
+      if (this.gearBag.length < GEAR_BAG) this.gearBag.push(old);
+      else { sold = this.gearValue(old); this.money += sold; this.earned += sold; }
+    }
+    return { sold };
+  }
+
+  /** Swap a piece from the bag onto you. */
+  equipGear(id: number): boolean {
+    const i = this.gearBag.findIndex((g) => g.id === id);
+    if (i < 0) return false;
+    const [item] = this.gearBag.splice(i, 1);
+    this.wear(item!);
+    return true;
+  }
+
+  /** Take a piece off into the bag (not the rod: you always fish with one). */
+  unequipGear(slot: GearSlot): boolean {
+    const it = this.equipped[slot];
+    if (!it || slot === 'rod' || this.gearBag.length >= GEAR_BAG) return false;
+    this.gearBag.push(it);
+    this.equipped[slot] = null;
+    return true;
+  }
+
+  /** Sell a piece from the bag. */
+  sellGear(id: number): number {
+    const i = this.gearBag.findIndex((g) => g.id === id);
+    if (i < 0) return 0;
+    const n = this.gearValue(this.gearBag.splice(i, 1)[0]!);
+    this.money += n;
+    this.earned += n;
+    return n;
+  }
+
+  /** Sell everything in the bag except Legendary pieces. */
+  sellAllGear(): number {
+    const keep = this.gearBag.filter((g) => this.gearDef(g).tier === 'legendary');
+    const n = this.gearBag.filter((g) => !keep.includes(g)).reduce((s, g) => s + this.gearValue(g), 0);
+    this.gearBag = keep;
+    this.money += n;
+    this.earned += n;
+    return n;
   }
 
   // ---------- upgrade levels ----------
@@ -530,7 +648,7 @@ export class Game {
 
   /** Bite weight: tier base × rarity × step^(tier-1); fishing level and bait both add to the step. */
   private weight(f: FishDef, skill: number, bait: BaitId, rodTier: Tier = this.rodTier): number {
-    const step = 1 + SKILL_TIER_BONUS * (skill - 1) + baitById(bait).lure;
+    const step = 1 + SKILL_TIER_BONUS * (skill - 1) + baitById(bait).lure + this.gearStat('luck') / 100;
     // Too-strong fish bite at a steady share of the rod's top tier: levels and bait don't make snaps more common.
     const share = tierShare(FISH, this.riverFish(), f);
     if (f.tier > rodTier) return TIERS[f.tier].weight * f.rarity * share * Math.pow(step, rodTier - 1) * TOO_STRONG_WEIGHT;
@@ -560,9 +678,11 @@ export class Game {
   }
 
   /** Bites come sooner with better bait and rods. */
-  biteWait(bait: BaitId = 'worm', rod = this.rod): number {
+  biteWait(bait: BaitId = 'worm', rod?: number): number {
     const [lo, hi] = BITE_WAIT;
-    const wait = (lo + this.rng() * (hi - lo)) * baitById(bait).wait * (1 - 0.06 * rod);
+    // Your own lines: the rod's tier and Patience; a hired hand's: its rod level.
+    const mine = rod === undefined, level = mine ? Math.min(4, GEAR_TIERS[this.gearOf('rod')!.tier].rank - 1) : rod;
+    const wait = ((lo + this.rng() * (hi - lo)) * baitById(bait).wait * (1 - 0.06 * level)) / (mine ? 1 + this.gearStat('patience') / 100 : 1);
     return Math.max(MIN_BITE_WAIT, wait);
   }
 
@@ -621,17 +741,17 @@ export class Game {
   }
 
   reelWindow(): number {
-    return REEL_WINDOW + REFLEX_PER_LEVEL * this.reflexes;
+    return (REEL_WINDOW + REFLEX_PER_LEVEL * this.reflexes) * (1 + this.gearStat('reflex') / 100);
   }
 
   /** Chance to land a fish one tier above the rod instead of snapping. */
   strengthChance(): number {
-    return STRENGTH_PER_LEVEL * this.strength;
+    return Math.min(0.95, STRENGTH_PER_LEVEL * this.strength + (this.gearStat('strength') / 100) * 0.5);
   }
 
   /** Walking speed multiplier from boots. */
   walkSpeed(): number {
-    return 1 + BOOTS[this.boots]!.speed;
+    return 1 + this.gearStat('stride') / 100;
   }
 
   /** What a catch sells for right now (Haggling, dev mode). */
@@ -746,17 +866,18 @@ export class Game {
   }
 
   /** Roll for a rare variant (rarest first, at most one). */
-  rollVariant(): Variant | undefined {
-    for (const v of VARIANT_ORDER) if (this.rng() < VARIANTS[v].chance) return v;
+  rollVariant(boost = 1): Variant | undefined {
+    for (const v of VARIANT_ORDER) if (this.rng() < VARIANTS[v].chance * boost) return v;
     return undefined;
   }
 
   /** A fish is landed: maybe a variant, weigh it (clothes make it bigger), price it, bag it, log it. */
   /** A fish is landed (by you, or by a hired hand into the pier crate): variant, weight, price, journal. */
   private land(fish: FishDef, byHand = false, bait: BaitId = 'worm'): Catch {
-    const variant = this.rollVariant();
+    // Your gear: Fortune for variants, Size for weight (hired hands don't wear yours).
+    const variant = this.rollVariant(byHand ? 1 : 1 + this.gearStat('fortune') / 100);
     const v = variant ? VARIANTS[variant] : { size: 1, value: 1 };
-    const ratio = (0.6 + this.rng() * 0.8) * (byHand ? 1 : 1 + CLOTHES[this.clothes]!.size) * v.size * baitById(bait).size;
+    const ratio = (0.6 + this.rng() * 0.8) * (byHand ? 1 : 1 + this.gearStat('size') / 100) * v.size * baitById(bait).size;
     const kg = Math.round(fish.kg * ratio * 100) / 100;
     const value = Math.max(1, Math.round(fish.price * ratio * v.value));
     const c: Catch = { id: this.nextId++, fish: fish.id, kg, value, ...(variant ? { variant } : {}) };
@@ -1388,6 +1509,7 @@ export class Game {
       pierSections: this.pierSections, managerBudget: this.managerBudget,
       pearls: this.pearls, fishTree: this.fishTree, retirements: this.retirements, seaSeen: this.seaSeen,
       exoticHold: this.exoticHold, listings: this.listings, wanted: this.wanted, nextExoticId: this.nextExoticId,
+      equipped: this.equipped, gearBag: this.gearBag, nextGearId: this.nextGearId,
       flagship: this.flagship, flagshipRest: this.flagshipRest, voyage: this.voyage, landed: this.landed,
       hands: this.hands.map((h) => ({ ...h, line: { type: 'idle' as const }, react: null })), crate: this.crate,
     };

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_REPEAT, BOOTS, CAPTAIN_WAGE, COMPANY_PRICE, CREW_BASE, GROUNDS, HANDS_MAX, handCost, PIER_SPOTS, PIER_SECTIONS, SELLER_BAG, SHELLFISH,
   COMPANY_UNLOCK_EARNED, LETTERS, TRACK_GROWTH, TRACK_MAX, TRACK_ORDER, CLOTHES, DEV_MULTIPLIER, FISH, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_MAX, VARIANTS,
-  MAX_GROUND_WORMS, START_WORMS, STRENGTH_PER_LEVEL, WORM_SPAWN_SECONDS, skillCost, TREE_FISH, pearlsFor,
+  MAX_GROUND_WORMS, START_WORMS, STRENGTH_PER_LEVEL, WORM_SPAWN_SECONDS, skillCost, TREE_FISH, pearlsFor, gearById,
 } from './data';
 import { Game, fishById, type Line } from './game';
 
@@ -125,21 +125,63 @@ describe('fishing', () => {
 });
 
 describe('gear', () => {
-  it('each line is bought in order, one level at a time, and costs money', () => {
-    const start = RODS[1]!.price + RODS[2]!.price - 1; // enough for Bamboo, then $1 short of Fiberglass
-    const g = new Game({ money: start });
-    expect(g.nextGear('rod')!.name).toBe('Bamboo Rod');
-    expect(g.buyGear('rod')).toBe(true);
-    expect(g.money).toBe(start - RODS[1]!.price);
-    expect(g.rodTier).toBe(2);
-    expect(g.nextGear('rod')!.name).toBe('Fiberglass Rod');
-    expect(g.buyGear('rod')).toBe(false); // can't afford
+  it('rod holders and the Autofisher (the Tackle shop) are bought in order, one level at a time', () => {
     const rich = new Game({ money: 1e9 });
-    for (const kind of ['rod', 'holders', 'auto', 'clothes', 'boots'] as const) {
+    for (const kind of ['holders', 'auto'] as const) {
       while (rich.buyGear(kind));
       expect(rich.nextGear(kind)).toBeNull();
     }
-    expect(rich.gearLevel('boots')).toBe(BOOTS.length - 1);
+  });
+
+  it('a new run starts in the starter set; buying a piece puts it on and the old one goes to the bag', () => {
+    const g = new Game({ money: 1000 });
+    expect(g.gearOf('rod')!.id).toBe('twigrod');
+    expect(g.gearOf('hat')!.id).toBe('strawhat');
+    expect(g.rodTier).toBe(1);
+    expect(g.buyGearPiece('bamboorod')).toBeTruthy();
+    expect(g.money).toBe(1000 - gearById('bamboorod')!.price);
+    expect(g.rodTier).toBe(2);
+    expect(g.gearBag.map((x) => x.def)).toEqual(['twigrod']);
+    expect(g.buyGearPiece('mythrilrod')).toBeNull(); // can't afford
+  });
+
+  it('old saves: rod, clothes and boots levels become the matching pieces', () => {
+    const g = new Game({ rod: 4, clothes: 2, boots: 3 });
+    expect([g.gearOf('rod')!.id, g.gearOf('shirt')!.id, g.gearOf('boots')!.id]).toEqual(['mythrilrod', 'rainjacket', 'hikingboots']);
+    expect(g.rodTier).toBe(5);
+    expect(new Game({}).gearOf('boots')).toBeNull(); // barefoot
+  });
+
+  it('gear stats work: Size, Stride, Reflex, Strength, Patience add up over what you wear', () => {
+    const g = new Game({}, rng(3));
+    const base = { window: g.reelWindow(), walk: g.walkSpeed(), strong: g.strengthChance() };
+    g.equipped.boots = { id: 99, def: 'sevenleagueboots', stats: { stride: 110 } };
+    g.equipped.hat = { id: 98, def: 'owleyegoggles', stats: { reflex: 55 } };
+    g.equipped.shirt = { id: 97, def: 'leviathanhide', stats: { size: 40, strength: 40 } };
+    expect(g.walkSpeed()).toBeCloseTo(2.1);
+    expect(g.reelWindow()).toBeGreaterThan(base.window * 1.5);
+    expect(g.strengthChance()).toBeCloseTo(base.strong + 0.2);
+    expect(g.gearStat('size')).toBe(40);
+  });
+
+  it('equip, unequip, sell; SELL ALL keeps Legendaries; the rod cannot be taken off', () => {
+    const g = new Game({ money: 1e6 });
+    g.buyGearPiece('bucketHat'.toLowerCase());
+    expect(g.gearOf('hat')!.id).toBe('buckethat');
+    const straw = g.gearBag.find((x) => x.def === 'strawhat')!;
+    expect(g.equipGear(straw.id)).toBe(true);
+    expect(g.gearOf('hat')!.id).toBe('strawhat');
+    expect(g.unequipGear('rod')).toBe(false);
+    expect(g.unequipGear('hat')).toBe(true);
+    expect(g.gearOf('hat')).toBeNull();
+    g.gearBag.push({ id: 500, def: 'searlegs'.replace('r', ''), stats: { stride: 150 } });
+    const money = g.money;
+    const sold = g.sellAllGear();
+    expect(sold).toBeGreaterThan(0);
+    expect(g.money).toBe(money + sold);
+    expect(g.gearBag.map((x) => x.def)).toEqual(['sealegs']);
+    expect(g.sellGear(500)).toBeGreaterThan(0);
+    expect(g.gearBag).toHaveLength(0);
   });
 
   it('clothes make catches bigger and pricier', () => {
@@ -173,7 +215,8 @@ describe('skills', () => {
   });
 
   it('reflexes widen the reel window', () => {
-    expect(new Game({ reflexes: 10 }).reelWindow()).toBeCloseTo(new Game().reelWindow() + 10 * REFLEX_PER_LEVEL);
+    const g = new Game(), k = 1 + g.gearStat('reflex') / 100; // the starter rod adds a little Reflex
+    expect(new Game({ reflexes: 10 }).reelWindow()).toBeCloseTo(g.reelWindow() + 10 * REFLEX_PER_LEVEL * k);
   });
 
   it('haggling raises sale prices', () => {
@@ -422,6 +465,7 @@ describe('bait', () => {
 
   it('pricier bait brings rarer fish and quicker bites', () => {
     const g = new Game({ rod: 4, skill: 5 }, rng(6));
+    g.equipped.rod!.stats = {}; // bait alone, without the rod's Luck
     expect(g.tierOdds(5, 'gold')[5]!).toBeGreaterThan(g.tierOdds(5, 'worm')[5]! * 10);
     const avgWait = (bait: 'worm' | 'gold') => { let s = 0; for (let i = 0; i < 500; i++) s += g.biteWait(bait); return s / 500; };
     expect(avgWait('gold')).toBeLessThan(avgWait('worm') * 0.5);

@@ -1,4 +1,4 @@
-import type { FishDef, Variant } from './data';
+import type { FishDef, GearSlot, Variant } from './data';
 
 /**
  * Pixel sprites drawn in code, in the Kenney Pixel Platformer palette (dark
@@ -183,7 +183,8 @@ export function fishCanvas(f: FishDef, variant?: Variant, silhouette = false): H
 
 // ---------- the fisherman ----------
 
-export interface Outfit { shirt: string; trousers: string; boots?: string }
+/** What the fisher wears: shirt and trouser colours, boots (if any), and a hat (style and colours; default the straw hat). */
+export interface Outfit { shirt: string; trousers: string; boots?: string; hat?: { style: HatStyle; color: string; trim: string } }
 export type Pose = 'idle' | 'walk1' | 'walk2' | 'cast';
 
 /** Fisherman facing right, 13×22 plus outline. Where his hand is (for the rod) is `HAND[pose]`. */
@@ -204,13 +205,92 @@ export function fisherCanvas(o: Outfit, pose: Pose): HTMLCanvasElement {
     r(3, 12, 6, 1, shade(o.shirt, -0.2));
     // Arm: forward holding the rod, or raised for the cast.
     if (pose === 'cast') { r(8, 6, 2, 3, o.shirt); r(9, 4, 2, 2, PAL.skin); } else { r(8, 8, 2, 3, o.shirt); r(9, 10, 2, 2, PAL.skin); }
-    // Head, eye, straw hat with a red band.
+    // Head and eye, then the hat.
     r(3, 3, 6, 4, PAL.skin);
     r(8, 4, 1, 2, PAL.skinDark);
     r(7, 4, 1, 1, PAL.outline);
-    r(1, 2, 10, 1, PAL.goldLight);
-    r(3, 0, 6, 2, PAL.goldLight);
-    r(3, 1, 6, 1, PAL.red);
+    drawHat(r, o.hat ?? { style: 'straw', color: PAL.goldLight, trim: PAL.red });
+  }));
+}
+
+/** Hat styles (gear). */
+export type HatStyle = 'straw' | 'cap' | 'bucket' | 'beanie' | 'helmet' | 'hood' | 'crown' | 'bandana' | 'bicorne' | 'goggles';
+/** A hat on the fisher's head (body coordinates: the head is x 3..8, y 3..6). */
+function drawHat(r: (x: number, y: number, w: number, h: number, c: string) => void, h: { style: HatStyle; color: string; trim: string }): void {
+  const c = h.color, t = h.trim;
+  switch (h.style) {
+    case 'straw': r(1, 2, 10, 1, c); r(3, 0, 6, 2, c); r(3, 1, 6, 1, t); break;
+    case 'cap': r(3, 1, 6, 2, c); r(8, 2, 3, 1, t); break;
+    case 'bucket': r(3, 0, 6, 2, c); r(2, 2, 8, 1, t); break;
+    case 'beanie': r(3, 1, 6, 2, c); r(3, 2, 6, 1, t); r(5, 0, 2, 1, t); break;
+    case 'helmet': r(2, 1, 8, 2, c); r(3, 0, 6, 1, c); r(2, 2, 8, 1, t); break;
+    case 'hood': r(2, 1, 8, 2, c); r(2, 3, 1, 4, c); r(9, 3, 1, 3, c); r(3, 0, 6, 1, c); break;
+    case 'crown': r(3, 1, 6, 2, c); r(3, 0, 1, 1, c); r(5, 0, 2, 1, c); r(8, 0, 1, 1, c); r(4, 2, 1, 1, t); r(7, 2, 1, 1, t); break;
+    case 'bandana': r(3, 1, 6, 2, c); r(4, 2, 1, 1, t); r(7, 2, 1, 1, t); r(2, 2, 1, 2, c); break;
+    case 'bicorne': r(1, 1, 10, 2, c); r(4, 0, 4, 1, c); r(5, 1, 2, 1, t); break;
+    case 'goggles': r(3, 1, 6, 2, c); r(3, 3, 6, 1, t); r(7, 3, 2, 1, PAL.waterLight); break;
+  }
+}
+
+// ---------- gear icons (the character screen and shops) ----------
+
+export type { GearSlot } from './data';
+export type ShirtStyle = 'tee' | 'sweater' | 'jacket' | 'coat' | 'vest' | 'suit';
+export type PantsStyle = 'shorts' | 'trousers' | 'overalls' | 'waders';
+export type BootsStyle = 'sandals' | 'shoes' | 'boots' | 'tall';
+export type RodStyle = 'stick' | 'cane' | 'split' | 'carbon' | 'ornate';
+/**
+ * Icon masks, 16 wide: a = main colour, b = its shade, c = accent, w = white
+ * highlight. Outlined after drawing. Rods are drawn in code (a diagonal).
+ */
+const GEAR_MASKS: Record<string, string[]> = {
+  'hat:straw': ['................', '.....aaaaaa.....', '....aaaaaaaa....', '....aaaaaaaa....', '....cccccccc....', '.aaaaaaaaaaaaaa.', 'aaaaaaaaaaaaaaaa', '.bbbbbbbbbbbbbb.'],
+  'hat:cap': ['................', '.....aaaaa......', '...aaaaaaaaa....', '..aaaaaaaaaaa...', '..aaaaawaaaaa...', '..ccccccccccc...', '..bbbbbbbbbbbbbb', '...........bbbb.'],
+  'hat:bucket': ['................', '....aaaaaaaa....', '...aaaaaaaaaa...', '...aaaaaaaaaa...', '...cccccccccc...', '..aaaaaaaaaaaa..', '.abbbbbbbbbbbba.', '................'],
+  'hat:beanie': ['.......cc.......', '......cccc......', '....aaaaaaaa....', '...aaaaaaaaaa...', '...aaaaaaaaaa...', '...bbbbbbbbbb...', '...bcbcbcbcbc...', '................'],
+  'hat:helmet': ['.....aaaaaa.....', '...aaaaaaaaaa...', '..aaawaaaaaaaa..', '..aawaaaaaaaaa..', '..aaaaaaaaaaaa..', '..cccccccccccc..', '..bb........bb..', '................'],
+  'hat:hood': ['....aaaaaaaa....', '...aaaaaaaaaa...', '..aaabbbbbbaaa..', '..aab......baa..', '..aab......baa..', '..aaab....baaa..', '...aaaaaaaaaa...', '................'],
+  'hat:crown': ['..a...a..a...a..', '..aa.aaaaaa.aa..', '..aaaaaaaaaaaa..', '..acaacaacaaca..', '..aaaaaaaaaaaa..', '..bbbbbbbbbbbb..', '................', '................'],
+  'hat:bandana': ['................', '....aaaaaaaa....', '...aaaaaaaaaa...', '..acaacaacaaa...', '..aaaaaaaaaaaaa.', '............aaa.', '............a.a.', '................'],
+  'hat:bicorne': ['.aa..........aa.', '.aaa........aaa.', '..aaaaaaaaaaaa..', '..aaaaaccaaaaa..', '...aaaaaaaaaa...', '....bbbbbbbb....', '................', '................'],
+  'hat:goggles': ['................', '...aaaaaaaaaa...', '..aaaaaaaaaaaa..', '.aawwaaaaaawwaa.', '.acccaaaaaaccca.', '.acwcabbbbacwca.', '..ccc......ccc..', '................'],
+  'shirt:tee': ['....aa....aa....', '..aaaaaaaaaaaa..', '.aaaaaaaaaaaaaa.', '.aaaaaaaaaaaaaa.', '..baaaaaaaaaab..', '...aaaaaaaaaa...', '...aaaaaaaaaa...', '...aaaaaaaaaa...', '...bbbbbbbbbb...'],
+  'shirt:sweater': ['....cc....cc....', '..aaaaaaaaaaaa..', '.aaaaaaaaaaaaaa.', '.aacaaaaaaaacaa.', '.aaaaaaaaaaaaaa.', '.caaaaaaaaaaaac.', '...aaaaaaaaaa...', '...aaaaaaaaaa...', '...cccccccccc...'],
+  'shirt:jacket': ['....ac....ca....', '..aaaccwccaaaa..', '.aaaaaacaaaaaaa.', '.aaaaaacaaaaaaa.', '.baaaaacaaaaaab.', '.b.aaaacaaaaa.b.', '...aaaacaaaaa...', '...acaacaacaa...', '...bbbbcbbbbbb..'],
+  'shirt:coat': ['....ac....ca....', '..aaaaccccaaaa..', '.aaaaaacaaaaaaa.', '.aaaaacaaaaaaaa.', '.baaaaacaaaaaab.', '.b.aaaacaaaaa.b.', '...aaaacaaaaa...', '...aaaacaaaaa...', '...aaaacaaaaa...', '...bbbbbbbbbb...'],
+  'shirt:vest': ['....aa....aa....', '...aaaw..waaa...', '...aaaa..aaaa...', '...acca..acca...', '...aaaa..aaaa...', '...acca..acca...', '...aaaa..aaaa...', '...bbbb..bbbb...'],
+  'shirt:suit': ['....cc....cc....', '..cccaaaaaaccc..', '.ccccaaaaaacccc.', '.cc.aaaaaaaa.cc.', '....aaaawaaa....', '....aaaaaaaa....', '...aaaaaaaaaa...', '...aaaaaaaaaa...', '...bbbbbbbbbb...'],
+  'pants:shorts': ['...aaaaaaaaaa...', '...cccccccccc...', '...aaaaaaaaaa...', '...aaaaaaaaaa...', '...aaaa..aaaa...', '...bbbb..bbbb...'],
+  'pants:trousers': ['...aaaaaaaaaa...', '...cccccccccc...', '...aaaaaaaaaa...', '...aaaa..aaaa...', '...aaaa..aaaa...', '...aaaa..aaaa...', '...aaaa..aaaa...', '...aaaa..aaaa...', '...bbbb..bbbb...'],
+  'pants:overalls': ['...c........c...', '...c.aaaaaa.c...', '...aaaawaaaaa...', '...aaaaaaaaaa...', '...aaaaaaaaaa...', '...aaaa..aaaa...', '...aaaa..aaaa...', '...aaaa..aaaa...', '...bbbb..bbbb...'],
+  'pants:waders': ['...aaaaaaaaaa...', '...aaaacaaaaa...', '...aaaaaaaaaa...', '...aaaaaaaaaa...', '...aaaa..aaaa...', '...aaaa..aaaa...', '...aaaa..aaaa...', '...cccc..cccc...', '..ccccc..ccccc..'],
+  'boots:sandals': ['................', '................', '................', '.c..c....c..c...', '.cccc....cccc...', 'aaaaaa..aaaaaa..', 'bbbbbb..bbbbbb..'],
+  'boots:shoes': ['................', '................', '..aaa......aaa..', '.aaaaac...aaaaac', 'aaaaaaa..aaaaaaa', 'bbbbbbb..bbbbbbb'],
+  'boots:boots': ['..aaa......aaa..', '..aaa......aaa..', '..aca......aca..', '..aaaa.....aaaa.', '.aaaaaa...aaaaaa', 'bbbbbbb..bbbbbbb'],
+  'boots:tall': ['..ccc......ccc..', '..aaa......aaa..', '..aaa......aaa..', '..aaa......aaa..', '..aaa......aaa..', '..aaaa.....aaaa.', '.aaaaaa...aaaaaa', 'bbbbbbb..bbbbbbb'],
+};
+
+/** An item's icon: its slot's style mask in its colours (rods: a diagonal rod with a grip, reel and tip). */
+export function gearCanvas(slot: GearSlot, style: string, main: string, accent: string): HTMLCanvasElement {
+  const shadeOf = shade(main, -0.3);
+  return outline(makeCanvas(18, 18, (ctx) => {
+    if (slot === 'rod') {
+      const s = style as RodStyle;
+      const len = s === 'stick' ? 11 : 13;
+      for (let k = 0; k < len; k++) { px(ctx, 3 + k, 14 - k, main); if (s === 'split' && k % 3 === 0) px(ctx, 3 + k, 14 - k, accent); }
+      if (s === 'carbon' || s === 'ornate') for (let k = 0; k < len; k += 2) px(ctx, 4 + k, 14 - k, shadeOf);
+      rect(ctx, 2, 13, 3, 3, accent); // grip
+      if (s !== 'stick' && s !== 'cane') { rect(ctx, 5, 12, 2, 2, PAL.greyMid); px(ctx, 5, 12, PAL.white); } // reel
+      px(ctx, 3 + len, 14 - len, s === 'ornate' ? PAL.gold : PAL.white); // tip
+      if (s === 'ornate') { px(ctx, 9, 8, PAL.gold); px(ctx, 12, 5, PAL.gold); }
+      return;
+    }
+    const mask = GEAR_MASKS[`${slot}:${style}`] ?? GEAR_MASKS['hat:straw']!;
+    const top = Math.floor((18 - mask.length) / 2);
+    mask.forEach((row, y) => [...row].forEach((ch, x) => {
+      const col = ch === 'a' ? main : ch === 'b' ? shadeOf : ch === 'c' ? accent : ch === 'w' ? PAL.white : null;
+      if (col) px(ctx, 1 + x, top + y, col);
+    }));
   }));
 }
 /** Hand position in the fisherman canvas, per pose. */
@@ -452,6 +532,40 @@ export function jettyCanvas(): HTMLCanvasElement {
     rect(ctx, 10, 15, 2, 7, PAL.dirtDark); rect(ctx, 34, 15, 2, 7, PAL.dirtDark);
     rect(ctx, 9, 18, 28, 4, PAL.dirt); rect(ctx, 17, 16, 9, 2, PAL.waterLight); rect(ctx, 26, 16, 2, 2, PAL.waterDeep);
     sign(ctx, 23, 0, 'EXOTIC');
+  }));
+}
+
+/** A gear piece's icon as an image URL (cached by piece). */
+const gearIcons = new Map<string, string>();
+export function gearIcon(def: { id: string; slot: GearSlot; style: string; colors: [string, string] }, scale = 3): string {
+  const key = `${def.id}:${scale}`;
+  let url = gearIcons.get(key);
+  if (!url) {
+    const src = gearCanvas(def.slot, def.style, def.colors[0], def.colors[1]);
+    const big = makeCanvas(src.width * scale, src.height * scale, (ctx) => ctx.drawImage(src, 0, 0, src.width * scale, src.height * scale));
+    url = big.toDataURL();
+    gearIcons.set(key, url);
+  }
+  return url;
+}
+
+/** The fisher as an image URL (the character screen). */
+export function fisherIcon(o: Outfit, scale = 4): string {
+  const src = fisherCanvas(o, 'idle');
+  return makeCanvas(src.width * scale, src.height * scale, (ctx) => ctx.drawImage(src, 0, 0, src.width * scale, src.height * scale)).toDataURL();
+}
+
+/** The Gear Shop: a little outfitter's with a hat and a shirt in the window. */
+export function gearShopCanvas(): HTMLCanvasElement {
+  const W = 38, H = 32;
+  return outline(makeCanvas(W, H, (ctx) => {
+    rect(ctx, 2, 10, W - 4, H - 11, PAL.sandLight);
+    for (let y = 6; y < 11; y++) rect(ctx, 1 + (10 - y), y, W - 2 - (10 - y) * 2, 1, y % 2 ? '#2f6fd6' : PAL.white);
+    rect(ctx, 5, 14, 16, 10, PAL.outline); rect(ctx, 6, 15, 14, 8, PAL.waterLight);
+    rect(ctx, 8, 16, 5, 2, PAL.goldLight); rect(ctx, 7, 18, 7, 1, PAL.goldLight); // hat
+    rect(ctx, 15, 17, 4, 5, PAL.red); // shirt
+    rect(ctx, 24, 15, 9, 16, PAL.dirtDeep); px(ctx, 31, 23, PAL.gold);
+    sign(ctx, W / 2, 0, 'GEAR');
   }));
 }
 
