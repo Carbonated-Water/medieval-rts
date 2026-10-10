@@ -4,6 +4,19 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  12 legends, worth x10, with a twist per region
+  WHAT: Coast (Kelp Wyrm $20M, Coral Colossus $25M, Tide Serpent $30M, Sun
+        King $35M), Open Ocean (Ghost Marlin $60M, Storm Shark $70M, Glacier
+        Halibut $80M, Thunder Tuna $90M), Abyss (Abyss King $150M, Lantern
+        Queen $180M, Bone Eel $220M, The Old One $400M). Twists: coast snags
+        (reel to pull free, tension climbs slowly; letting go wears the line
+        and a worn line breaks), ocean waves (the green band slides and
+        narrows), abyss darkness (the bar and tension prompts show only when
+        the lure flashes; the line still reddens when tight). The Old One has
+        all three. Region water colours; Lighthouse tabs per region. Sensible
+        play: coast 20-30 s, ocean 30-45 s, abyss ~40 s, The Old One ~60 s.
+  WHY:  The user asked for richer legends and different mechanics per region.
+
 2026-10-09  Dev: test fish for the Exotic Market
   WHAT: In dev mode the market HOLD tab has DEV: ADD TEST FISH (a random
         legend into the hold). Hidden otherwise.

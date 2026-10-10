@@ -408,6 +408,21 @@ export const FIGHT = {
   runHold: 1.1,
   runEase: 0.15,
   runTire: 0.04,
+  /** Snags: one every snagEvery s of calm; reeling frees snagFree a second (x reel spin); letting go wears snagWear a second. */
+  snagEvery: [7, 12] as [number, number],
+  snagFree: 0.55,
+  snagWear: 0.35,
+  /** On a snag, tension climbs this much a second while reeling and eases this much when you let go. */
+  snagReel: 0.15,
+  snagEase: 0.2,
+  /** Waves: the green band slides +-waveAmp and narrows by up to waveNarrow. */
+  waveSpeed: 0.9,
+  waveAmp: 0.12,
+  waveNarrow: 0.12,
+  waveRough: 0.23,
+  /** Darkness: the lure lights the bar for flashLen s every flashEvery s. */
+  flashEvery: [2.2, 3.5] as [number, number],
+  flashLen: 0.7,
   /** The green band of tension; below `slack` the line is loose; at 1 it snaps. */
   green: [0.35, 0.8] as [number, number],
   slack: 0.08,
@@ -418,12 +433,29 @@ export const FIGHT = {
   surgeLen: 1.5,
 };
 
-/** A legendary you fight on an expedition: how much fight it has, how hard it pulls, how often and how hard it surges. */
-export interface LegendDef extends FishDef { stamina: number; pull: number; surgePower: number; surgeEvery: number; blurb: string }
+/** Where a legend lives: its region decides the twist in its fight. */
+export type Region = 'coast' | 'ocean' | 'abyss';
+export const REGIONS: Record<Region, { name: string; twist: string }> = {
+  coast: { name: 'Coast', twist: 'Snags: reel to pull the line free' },
+  ocean: { name: 'Open Ocean', twist: 'Waves: the green moves with the swell' },
+  abyss: { name: 'The Abyss', twist: 'Darkness: the bar shows only when the lure flashes' },
+};
+
+/** A legendary you fight on an expedition: its region and fight twists, how much fight it has, how hard it pulls, how often and how hard it runs. */
+export interface LegendDef extends FishDef { region: Region; twists: ('snag' | 'waves' | 'dark')[]; stamina: number; pull: number; surgePower: number; surgeEvery: number; blurb: string }
 export const LEGENDS: LegendDef[] = [
-  { id: 'kelpwyrm', name: 'Kelp Wyrm', tier: 5, price: 2000000, kg: 90, rarity: 1, colors: ['#3a7a3a', '#a8e080', '#f0c040'], shape: 6.5, stamina: 50, pull: 0.12, surgePower: 2.6, surgeEvery: 5, blurb: 'Lazy, but it thrashes' },
-  { id: 'ghostmarlin', name: 'Ghost Marlin', tier: 5, price: 6000000, kg: 500, rarity: 1, colors: ['#c8d8f0', '#ffffff', '#8098c8'], shape: 4.4, look: 'billed', stamina: 80, pull: 0.2, surgePower: 3, surgeEvery: 4, blurb: 'Fast and proud' },
-  { id: 'abyssking', name: 'Abyss King', tier: 5, price: 15000000, kg: 3000, rarity: 1, colors: ['#2a1a4a', '#8060c0', '#f04080'], shape: 3.6, stamina: 100, pull: 0.28, surgePower: 2.3, surgeEvery: 3, blurb: 'It does not tire' },
+  { id: 'kelpwyrm', name: 'Kelp Wyrm', region: 'coast', twists: ['snag'], tier: 5, price: 20000000, kg: 90, rarity: 1, colors: ['#3a7a3a', '#a8e080', '#f0c040'], shape: 6.5, stamina: 50, pull: 0.12, surgePower: 2.6, surgeEvery: 5, blurb: 'Lazy, but it thrashes' },
+  { id: 'coralcolossus', name: 'Coral Colossus', region: 'coast', twists: ['snag'], tier: 5, price: 25000000, kg: 400, rarity: 1, colors: ['#c05a40', '#f0c0a0', '#f07a90'], shape: 2.4, stamina: 70, pull: 0.14, surgePower: 2.4, surgeEvery: 6, blurb: 'Heavy, slow runs' },
+  { id: 'tideserpent', name: 'Tide Serpent', region: 'coast', twists: ['snag'], tier: 5, price: 30000000, kg: 250, rarity: 1, colors: ['#2a8a8a', '#a0f0e0', '#1a5a6a'], shape: 7, stamina: 60, pull: 0.16, surgePower: 2.6, surgeEvery: 3.5, blurb: 'Quick, frequent runs' },
+  { id: 'sunking', name: 'Sun King', region: 'coast', twists: ['snag'], tier: 5, price: 35000000, kg: 1200, rarity: 1, colors: ['#e0b020', '#fff0a0', '#e07020'], shape: 1.3, stamina: 80, pull: 0.12, surgePower: 3.2, surgeEvery: 7, blurb: 'Gentle, then one huge run' },
+  { id: 'ghostmarlin', name: 'Ghost Marlin', region: 'ocean', twists: ['waves'], tier: 5, price: 60000000, kg: 500, rarity: 1, colors: ['#c8d8f0', '#ffffff', '#8098c8'], shape: 4.4, look: 'billed', stamina: 80, pull: 0.2, surgePower: 3, surgeEvery: 4, blurb: 'Fast and proud' },
+  { id: 'stormshark', name: 'Storm Shark', region: 'ocean', twists: ['waves'], tier: 5, price: 70000000, kg: 800, rarity: 1, colors: ['#5a6a80', '#d0d8e0', '#f0e040'], shape: 4, stamina: 95, pull: 0.24, surgePower: 2.6, surgeEvery: 4, blurb: 'Relentless pull' },
+  { id: 'glacierhalibut', name: 'Glacier Halibut', region: 'ocean', twists: ['waves'], tier: 5, price: 80000000, kg: 600, rarity: 1, colors: ['#a0c0d8', '#f0f8ff', '#6080a0'], shape: 2, stamina: 130, pull: 0.18, surgePower: 2.4, surgeEvery: 5, blurb: 'Huge, very long fight' },
+  { id: 'thundertuna', name: 'Thunder Tuna', region: 'ocean', twists: ['waves'], tier: 5, price: 90000000, kg: 700, rarity: 1, colors: ['#2a3a7a', '#e0e8f0', '#f0d020'], shape: 3.2, stamina: 85, pull: 0.22, surgePower: 3.4, surgeEvery: 3, blurb: 'Short, violent runs' },
+  { id: 'abyssking', name: 'Abyss King', region: 'abyss', twists: ['dark'], tier: 5, price: 150000000, kg: 3000, rarity: 1, colors: ['#2a1a4a', '#8060c0', '#f04080'], shape: 3.6, stamina: 100, pull: 0.28, surgePower: 2.3, surgeEvery: 3, blurb: 'It does not tire' },
+  { id: 'lanternqueen', name: 'Lantern Queen', region: 'abyss', twists: ['dark'], tier: 5, price: 180000000, kg: 900, rarity: 1, colors: ['#2a2a3a', '#5a5a7a', '#f0f080'], shape: 2, stamina: 110, pull: 0.26, surgePower: 2.6, surgeEvery: 3.5, blurb: 'Lures you in, then bolts' },
+  { id: 'boneeel', name: 'Bone Eel', region: 'abyss', twists: ['dark'], tier: 5, price: 220000000, kg: 350, rarity: 1, colors: ['#d8d0c0', '#ffffff', '#8a8070'], shape: 7.5, stamina: 120, pull: 0.3, surgePower: 2.4, surgeEvery: 2.8, blurb: 'Twisting, unpredictable' },
+  { id: 'theoldone', name: 'The Old One', region: 'abyss', twists: ['snag', 'waves', 'dark'], tier: 5, price: 400000000, kg: 8000, rarity: 1, colors: ['#1a2a2a', '#4a7a6a', '#c0f0a0'], shape: 4.6, stamina: 180, pull: 0.3, surgePower: 2.8, surgeEvery: 3, blurb: 'The deepest legend. Every twist at once' },
 ];
 
 /**

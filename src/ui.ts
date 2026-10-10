@@ -2,7 +2,7 @@ import {
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_ORDER, COMPANY_PRICE, COMPANY_UNLOCK_EARNED, DEV_MULTIPLIER, GROUNDS, HARBOR_UPGRADES,
   MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, PIER_STAFF, HANDS_MAX,
   TRACKS, TRACK_MAX, TRACK_ORDER, WAREHOUSE, type HarborUpgradeId, type TrackId, HAND_NAMES, HAND_SKILL_MAX, LETTERS, RODS, FISH, GEAR, REFLEX_PER_LEVEL, SKILLS, STRENGTH_PER_LEVEL, HAGGLE_PER_LEVEL,
-  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, TREE_FISH, type TreeFish, LEGENDS, EXOTIC,
+  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, TREE_FISH, type TreeFish, LEGENDS, EXOTIC, REGIONS,
 } from './data';
 import { type Boat, type Exotic, type Game, fishById } from './game';
 import { Notices, lineHtml, timeAgo } from './notify';
@@ -13,7 +13,7 @@ import type { Place } from './scene';
 export type Panel = 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'ledger' | 'boat' | 'tree' | 'retire' | 'lighthouse' | 'exotic' | 'listing' | 'shipyard' | 'harborup' | 'pier' | 'pierstaff' | 'hand' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
 
 export type Action =
-  | 'cast' | 'reel' | 'close' | 'back' | 'reset' | 'toggleDev' | Panel | `fight:${string}` | 'fightDone'
+  | 'cast' | 'reel' | 'close' | 'back' | 'reset' | 'toggleDev' | Panel | `fight:${string}` | 'fightDone' | `lhRegion:${'coast' | 'ocean' | 'abyss'}`
   | `exTab:${'hold' | 'listed' | 'wanted'}` | `exList:${number}` | `exUnlist:${number}` | `exOpen:${number}` | `exSell:${number}:${number}` | `exGive:${number}` | 'exDev' | 'boatPrev' | 'boatNext' | `coTab:${'harbor' | 'ledger' | 'harborup'}`
   | `achTab:${'base' | 'tree'}` | `treeTier:${number}` | `treeSel:${string}` | `unlock:${string}` | 'doRetire' | `journalTier:${number}`
   | 'sellAll' | `sellFish:${string}` | `buy:${GearKind}` | `train:${SkillId}` | 'claimAll' | `trophy:${string}`
@@ -71,6 +71,8 @@ export class UI {
   open: Panel | null = null;
   /** Trophy shown in the detail strip. */
   pick: string | null = null;
+  /** Lighthouse: which region's legends are shown. */
+  lhRegion: 'coast' | 'ocean' | 'abyss' = 'coast';
   /** Exotic Market: which tab, and which listing is open. */
   exTab: 'hold' | 'listed' | 'wanted' = 'hold';
   exSel = 0;
@@ -601,9 +603,11 @@ export class UI {
   /** The Lighthouse: where expeditions will sail from. For now, practice fights against the legends. */
   private lighthouseHtml(game: Game): string {
     if (!game.company) return `<div class="row"><div class="slot">${icon('lock')}</div><div class="meta"><b>Boarded up</b><div class="sub"><small>Own the Fishing Co. first</small></div></div></div>`;
-    const rows = LEGENDS.map((l, k) => `<div class="row"><div class="slot"><img class="fit" src="${fishIcon(l, false, 48, 28)}" alt=""></div><div class="meta"><b>${l.name}</b>
-      <div class="sub">${level(k + 1, 3)}<small>${l.blurb}</small></div></div><button class="btn" data-act="fight:${l.id}">FIGHT</button></div>`).join('');
-    return rows + '<p class="note">Practice fights. Hold to reel, let go when it runs. Voyages to find them come next.</p>';
+    const r = this.lhRegion;
+    const tabs = `<div class="tiers three">${(['coast', 'ocean', 'abyss'] as const).map((k) => `<button class="tab${r === k ? ' on' : ''}" style="--c:${k === 'coast' ? '#2eb082' : k === 'ocean' ? '#2f6fd6' : '#4a3a7a'}" data-act="lhRegion:${k}">${REGIONS[k].name.toUpperCase()}</button>`).join('')}</div>`;
+    const rows = LEGENDS.filter((l) => l.region === r).map((l) => `<div class="row"><div class="slot"><img class="fit" src="${fishIcon(l, false, 48, 28)}" alt=""></div><div class="meta"><b>${l.name} <span class="small">$${kmb(l.price)}</span></b>
+      <div class="sub"><small>${l.blurb}</small></div></div><button class="btn" data-act="fight:${l.id}">FIGHT</button></div>`).join('');
+    return tabs + `<p class="note">${REGIONS[r].twist}.</p>` + rows + '<p class="note">Practice fights. Voyages to find them come next.</p>';
   }
 
   // ---------- the Exotic Market ----------

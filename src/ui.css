@@ -48,6 +48,18 @@ button { font: inherit; color: inherit; cursor: pointer; padding: 0; border: 0; 
 #fight { position: fixed; inset: 0; z-index: 20; display: none; flex-direction: column; background: #123a5a; touch-action: none; user-select: none; -webkit-user-select: none; }
 #fight.show { display: flex; }
 body.fighting .banner, body.fighting #notes { visibility: hidden; }
+/* Region looks and twists. */
+#fight.region-coast .water { background: linear-gradient(#7ad0c0 0 18%, #1e7a6a 18% 19%, #1a6a5a 19%, #0c3a30); }
+#fight.region-abyss .water { background: linear-gradient(#2a3a5a 0 18%, #10182a 18% 19%, #0a1020 19%, #020408); }
+#fight .tension .z, #fight .tension .mark { transition: opacity 0.15s; }
+#fight.dark .tension .z, #fight.dark .tension .mark { opacity: 0.06; }
+#fight .snag { display: none; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: center; margin-top: 6px; }
+#fight.snagged .snag { display: grid; }
+#fight .snag small { font: 16px/1 'Kenney Mini'; color: #fff; text-shadow: 1px 1px 0 #0a1a2a; }
+#fight .snag .bar { height: 10px; background: #0a1a2a; box-shadow: 0 0 0 2px #fff; }
+#fight .snag .bar i { display: block; height: 100%; }
+#fight .snag .free i { background: #8fe388; } #fight .snag .wear i { background: #ff6a4a; }
+#fight.snagged .hold { background: linear-gradient(90deg, #fee481 calc(var(--spin, 0) * 100%), #e9d7a7 0); }
 #fight .water { position: relative; flex: 1; overflow: hidden; background: linear-gradient(#5ab0e0 0 18%, #1e6a9a 18% 19%, #175a86 19%, #0c2e4a); }
 #fight .surface { position: absolute; left: 0; right: 0; top: 18%; height: 4px; background: repeating-linear-gradient(90deg, #8fd8f8 0 8px, transparent 8px 16px); }
 #fight .rope { position: absolute; inset: 0; width: 100%; height: 100%; }

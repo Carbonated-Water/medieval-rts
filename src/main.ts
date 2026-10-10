@@ -183,6 +183,7 @@ function onAction(a: Action): void {
     if (legend) { ui.open = null; fightView.start(new Fight(legend)); }
   } else if (a === 'fightDone') { fightView.close(); ui.open = 'lighthouse'; }
   else if (a.startsWith('exTab:')) ui.exTab = a.slice(6) as 'hold' | 'listed' | 'wanted';
+  else if (a.startsWith('lhRegion:')) ui.lhRegion = a.slice(9) as 'coast' | 'ocean' | 'abyss';
   else if (a === 'exDev' && game.dev) { const l = LEGENDS[Math.floor(Math.random() * LEGENDS.length)]!; game.addExotic(l.id); }
   else if (a.startsWith('exList:')) { if (game.listExotic(Number(a.slice(7)))) note.float('LISTED', innerWidth / 2, innerHeight / 2, 'plain'); }
   else if (a.startsWith('exOpen:')) { ui.exSel = Number(a.slice(7)); ui.open = 'listing'; }

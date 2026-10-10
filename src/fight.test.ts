@@ -14,14 +14,21 @@ const play = (legend = LEGENDS[0]!, hold: Player, seed = 1) => {
   while (!f.end && f.time < 300) f.update(1 / 60, hold(f, st));
   return { end: f.end, secs: Math.round(f.time) };
 };
-/** Reel in stretches: hold until the tension is high, let go until it eases (like a person, not flickering at a line). */
+/** Reel in stretches inside the green band (as it is now): hold until the tension is high, let go until it eases. */
 const stretches = (f: Fight, st: { on: boolean }) => {
-  if (st.on && f.tension >= FIGHT.green[1] - 0.08) st.on = false;
-  else if (!st.on && f.tension <= FIGHT.green[0] + 0.15) st.on = true;
+  const [g0, g1] = f.band;
+  if (st.on && f.tension >= g1 - 0.06) st.on = false;
+  else if (!st.on && f.tension <= g0 + 0.1) st.on = true;
   return st.on;
 };
-/** A sensible player: reels in stretches and lets go when the fish warns or runs. */
-const sensible: Player = (f, st) => (f.warn > 0 || f.surging ? (st.on = false) : stretches(f, st));
+/** On a snag, keep reeling and let go only for a breath near the red. */
+const unsnag = (f: Fight, st: { on: boolean }) => {
+  if (st.on && f.tension >= 0.88) st.on = false;
+  else if (!st.on && f.tension <= 0.78) st.on = true;
+  return st.on;
+};
+/** A sensible player: reels in stretches, reels through snags, and lets go when the fish warns or runs. */
+const sensible: Player = (f, st) => (f.warn > 0 || f.surging ? (st.on = false) : f.snagged ? unsnag(f, st) : stretches(f, st));
 /** A stubborn one: reels in stretches, and keeps reeling when the fish runs. */
 const stubborn: Player = (f, st) => f.surging || stretches(f, st);
 /** A spammer: taps as fast as they can (on and off every few frames). */
@@ -43,8 +50,8 @@ describe('big-fish fight', () => {
       return r.secs;
     });
     expect(times[0]!).toBeGreaterThan(8);
-    expect(times[2]!).toBeGreaterThan(times[0]!);
-    expect(times[2]!).toBeLessThan(120);
+    expect(times[times.length - 1]!).toBeGreaterThan(times[0]!); // The Old One outlasts the Kelp Wyrm
+    expect(Math.max(...times)).toBeLessThan(150);
   });
 
   it('spamming taps loses: the reel never spins up and the line goes slack or snaps', () => {
@@ -62,5 +69,35 @@ describe('big-fish fight', () => {
     expect(f.end).toBeNull();
     expect(f.tension).toBeLessThan(0.79);
     expect(f.stamina).toBeLessThan(0.5);
+  });
+
+  it('coast snags: reeling pulls the line free; letting go wears it through', () => {
+    const coast = LEGENDS.find((l) => l.region === 'coast')!;
+    const a = new Fight(coast, rng(2));
+    a.snagged = true;
+    for (let k = 0; k < 600 && a.snagged; k++) a.update(1 / 60, a.tension < 0.8);
+    expect(a.snagged).toBe(false);
+    expect(a.end).toBeNull();
+    const b = new Fight(coast, rng(2));
+    b.snagged = true;
+    for (let k = 0; k < 600 && !b.end; k++) b.update(1 / 60, false);
+    expect(b.end).toBe('worn');
+  });
+
+  it('ocean waves move and narrow the green band', () => {
+    const f = new Fight(LEGENDS.find((l) => l.region === 'ocean')!, rng(3));
+    const seen = new Set<string>();
+    for (let k = 0; k < 900; k++) { f.update(1 / 60, false); seen.add(f.band[0].toFixed(2)); f.tension = 0.4; f.slack = 0; }
+    expect(seen.size).toBeGreaterThan(10);
+    expect(new Fight(LEGENDS[0]!, rng(3)).band).toEqual(FIGHT.green);
+  });
+
+  it('abyss darkness: the bar is lit only in flashes', () => {
+    const f = new Fight(LEGENDS.find((l) => l.region === 'abyss')!, rng(4));
+    let lit = 0, dark = 0;
+    for (let k = 0; k < 600; k++) { f.update(1 / 60, false); f.tension = 0.4; f.slack = 0; if (f.lit) lit++; else dark++; }
+    expect(lit).toBeGreaterThan(0);
+    expect(dark).toBeGreaterThan(lit * 2);
+    expect(new Fight(LEGENDS[0]!, rng(4)).lit).toBe(true);
   });
 });
