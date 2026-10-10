@@ -33,8 +33,10 @@ const note = ui.notices;
 let dirty = false;
 
 /** The big-fish fight screen (expeditions); results get a banner. */
+/** Is the fight on screen a voyage's (its result goes to the voyage) or a practice one? */
+let voyageFight = false;
 const fightView = new FightView((f) => {
-  if (f.end === 'caught') note.banner(pixelIcon('trophy'), 'LANDED', f.fish.name, 'rare');
+  if (voyageFight) { game.voyageFought(f.end === 'caught'); voyageFight = false; dirty = true; }
 });
 
 /** Snapshots of game.made, one a second, for the last minute: the $/sec readout is the difference. */
@@ -71,7 +73,7 @@ canvas.addEventListener('click', (e) => {
   // The harbor across the river opens its panel from anywhere.
   if (scene.hitBobber(e.clientX, e.clientY) >= 0) { game.reel(scene.hitBobber(e.clientX, e.clientY)); return; }
   if (scene.hitJetty(e.clientX, e.clientY)) { ui.open = 'exotic'; return; }
-  if (scene.hitLighthouse(e.clientX, e.clientY)) { ui.open = 'lighthouse'; return; }
+  if (scene.hitLighthouse(e.clientX, e.clientY)) { ui.open = game.voyage ? 'voyage' : 'lighthouse'; return; }
   if (scene.hitHarbor(e.clientX, e.clientY)) { ui.open = 'harbor'; return; }
   // Hired fishermen and the crate on the wide pier.
   const hand = scene.hitHand(e.clientX, e.clientY);
@@ -113,7 +115,7 @@ function onAction(a: Action): void {
     if (!game.cast() && !game.activeBait) { const at = scene.fisherScreen(); note.float('NO BAIT', at.x, at.y, 'bad'); }
   }
   else if (a === 'reel') game.reel();
-  else if (a === 'market' || a === 'tackle' || a === 'baitshop' || a === 'pouch' || a === 'harbor' || a === 'pier' || a === 'shipyard' || a === 'harborup' || a === 'pierstaff' || a === 'ledger' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'inbox' || a === 'settings' || a === 'tree' || a === 'retire' || a === 'lighthouse' || a === 'exotic') ui.open = ui.open === a ? null : a;
+  else if (a === 'market' || a === 'tackle' || a === 'baitshop' || a === 'pouch' || a === 'harbor' || a === 'pier' || a === 'shipyard' || a === 'harborup' || a === 'pierstaff' || a === 'ledger' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'inbox' || a === 'settings' || a === 'tree' || a === 'retire' || a === 'lighthouse' || a === 'exotic' || a === 'voyage') ui.open = ui.open === a ? null : a;
   else if (a.startsWith('bait:')) game.selectBait(a.slice(5) as BaitId);
   else if (a === 'buyCompany') {
     if (game.buyCompany()) { ui.open = null; note.clearBanners(); note.banner(pixelIcon('boat'), 'THE FISHING CO.', 'is yours', 'rare'); }
@@ -181,7 +183,23 @@ function onAction(a: Action): void {
   else if (a.startsWith('fight:')) {
     const legend = LEGENDS.find((l) => l.id === a.slice(6));
     if (legend) { ui.open = null; fightView.start(new Fight(legend)); }
-  } else if (a === 'fightDone') { fightView.close(); ui.open = 'lighthouse'; }
+  } else if (a === 'fightDone') { fightView.close(); ui.open = game.voyage ? 'voyage' : 'lighthouse'; }
+  else if (a === 'buyFlagship') { if (game.buyFlagship()) note.banner(pixelIcon('boat'), 'THE FLAGSHIP', 'Ready to sail', 'rare'); }
+  else if (a.startsWith('sail:')) { if (game.startVoyage(a.slice(5))) ui.open = 'voyage'; }
+  else if (a.startsWith('vsail:')) game.voyageSail(Number(a.slice(6)));
+  else if (a.startsWith('vchoose:')) game.voyageChoose(Number(a.slice(8)));
+  else if (a === 'vlegend') game.voyageToLegend();
+  else if (a === 'vfight' && game.voyage?.stage === 'fight') {
+    // The real thing: the result goes to the voyage.
+    voyageFight = true;
+    ui.open = null;
+    fightView.start(new Fight(LEGENDS.find((l) => l.id === game.voyage!.legend)!));
+  } else if (a === 'vhome') {
+    const out = game.endVoyage();
+    if (out?.result === 'caught') note.banner(pixelIcon('trophy'), 'HOME WITH A LEGEND', `+${out.pearls} Pearls${out.sold ? ` · hold full, sold $${out.sold.toLocaleString()}` : ''}`, 'rare');
+    else if (out) note.banner(pixelIcon('boat'), 'HOME', out.haul ? `Haul $${out.haul.toLocaleString()}` : 'Empty-handed', 'plain');
+    ui.open = 'lighthouse';
+  }
   else if (a.startsWith('exTab:')) ui.exTab = a.slice(6) as 'hold' | 'listed' | 'wanted';
   else if (a.startsWith('lhRegion:')) ui.lhRegion = a.slice(9) as 'coast' | 'ocean' | 'abyss';
   else if (a === 'exDev' && game.dev) { const l = LEGENDS[Math.floor(Math.random() * LEGENDS.length)]!; game.addExotic(l.id); }

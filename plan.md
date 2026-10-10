@@ -191,8 +191,10 @@ arrows walk, Space casts / reels, E opens the building you stand at.
   snags, ocean waves, abyss darkness; The Old One has all three.
 - Exotic Market (done, 2026-10-09): jetty by the lighthouse; hold 6, 3
   listings with collector offers, WANTED board. Fills from voyages.
-- Slices: 1) lighthouse + fight (done: practice fights), 2) map and voyage,
-  3) Flagship and rewards.
+- Voyages (done): Flagship $10M, 20 min rest; 3-row map, 5 supplies, 3
+  hull; regions open as you land legends; Pearls per legend landed.
+- Slices: 1) lighthouse + fight (done), 2) map and voyage (done),
+  3) Flagship upgrades, expedition journal page, rare gear.
 - Fight rules (tested): the reel spins up while held, so steady reeling
   beats tapping (spamming loses); letting go during a run is safe and tires
   the fish; reeling during a run, even tapping, snaps the line.

@@ -7,8 +7,9 @@ import {
   MIN_BITE_WAIT, REEL_WINDOW, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, START_WORMS, STRENGTH_PER_LEVEL, TIERS,
   TOO_STRONG_WEIGHT, VARIANTS, VARIANT_ORDER, WORMS_PER_PICK, WORM_SPAWN_SECONDS, WORM_SPOTS, baitById,
   type AchStat, type AchievementDef, type BaitId, type FishDef, type GearKind, type SkillId, type Tier, type Variant,
-  BILLFISH, SEA_FISH, SHELLFISH, TREE_FISH, pearlsFor, treeFishById, type TreeFish, COLLECTORS, EXOTIC, LEGENDS,
+  BILLFISH, SEA_FISH, SHELLFISH, TREE_FISH, pearlsFor, treeFishById, type TreeFish, COLLECTORS, EXOTIC, LEGENDS, VOYAGE, type LegendDef, type Region,
 } from './data';
+import * as V from './voyage';
 
 export interface Catch {
   id: number;
@@ -62,6 +63,11 @@ export interface SaveData {
   retirements?: number;
   /** Sea species your boats have ever landed (the sea's journal); survives retiring. */
   seaSeen?: string[];
+  /** Voyages: the Flagship, its rest, the voyage under way, legends landed (kept on retire). */
+  flagship?: boolean;
+  flagshipRest?: number;
+  voyage?: V.VoyageState | null;
+  landed?: Record<string, number>;
   /** The Exotic Market. */
   exoticHold?: Exotic[];
   listings?: Listing[];
@@ -179,6 +185,10 @@ export class Game {
   fishTree: string[] = [];
   retirements = 0;
   seaSeen: string[] = [];
+  flagship = false;
+  flagshipRest = 0;
+  voyage: V.VoyageState | null = null;
+  landed: Record<string, number> = {};
   exoticHold: Exotic[] = [];
   listings: Listing[] = [];
   wanted: Wanted[] = [];
@@ -308,6 +318,84 @@ export class Game {
     return true;
   }
 
+  // ---------- voyages ----------
+
+  buyFlagship(): boolean {
+    if (!this.company || this.flagship || this.money < VOYAGE.flagship) return false;
+    this.money -= VOYAGE.flagship;
+    this.flagship = true;
+    return true;
+  }
+
+  /** A region opens once you've landed a legend of the one before (Coast is always open). */
+  regionOpen(r: Region): boolean {
+    const landedIn = (x: Region) => LEGENDS.some((l) => l.region === x && this.landed[l.id]);
+    return r === 'coast' || (r === 'ocean' ? landedIn('coast') : landedIn('ocean'));
+  }
+
+  /** Can you sail for this legend? Its region open (The Old One: after the other three of the Abyss). */
+  legendOpen(l: LegendDef): boolean {
+    if (!this.regionOpen(l.region)) return false;
+    if (l.id !== 'theoldone') return true;
+    return LEGENDS.filter((x) => x.region === 'abyss' && x.id !== 'theoldone').every((x) => this.landed[x.id]);
+  }
+
+  /** The Flagship is bought, rested (or dev mode) and not already out. */
+  canSail(): boolean {
+    return this.flagship && !this.voyage && (this.flagshipRest <= 0 || this.dev);
+  }
+
+  startVoyage(legend: string): boolean {
+    const l = LEGENDS.find((x) => x.id === legend);
+    if (!l || !this.canSail() || !this.legendOpen(l)) return false;
+    this.voyage = V.newVoyage(legend, this.rng);
+    return true;
+  }
+
+  voyageSail(i: number): boolean {
+    return !!this.voyage && V.sail(this.voyage, i);
+  }
+
+  voyageChoose(k: number): void {
+    if (this.voyage) V.choose(this.voyage, k, this.rng);
+  }
+
+  voyageToLegend(): boolean {
+    return !!this.voyage && V.sailToLegend(this.voyage);
+  }
+
+  /** The fight at the legend's spot ended. */
+  voyageFought(caught: boolean): void {
+    const v = this.voyage;
+    if (!v) return;
+    const l = V.legendOf(v);
+    V.fightOver(v, caught, Math.round(l.kg * (0.7 + this.rng() * 0.7)));
+  }
+
+  /**
+   * Home: bank the haul; a landed legend goes into the exotic hold (sold at
+   * its value if the hold is full), counts for unlocks and pays Pearls. The
+   * Flagship rests.
+   */
+  endVoyage(): { haul: number; exotic: Exotic | null; sold: number; pearls: number; result: V.VoyageState['result'] } | null {
+    const v = this.voyage;
+    if (!v || v.stage !== 'over') return null;
+    const out = { haul: v.haul, exotic: null as Exotic | null, sold: 0, pearls: 0, result: v.result };
+    this.money += v.haul;
+    this.earned += v.haul;
+    if (v.result === 'caught') {
+      const l = V.legendOf(v);
+      this.landed[l.id] = (this.landed[l.id] ?? 0) + 1;
+      out.exotic = this.addExotic(l.id, v.kg);
+      if (!out.exotic) { out.sold = this.exoticValue(l.id, v.kg ?? l.kg); this.money += out.sold; this.earned += out.sold; }
+      out.pearls = V.pearlsFor(l);
+      this.pearls += out.pearls;
+    }
+    this.voyage = null;
+    this.flagshipRest = VOYAGE.rest;
+    return out;
+  }
+
   // ---------- the Exotic Market ----------
 
   private span = ([lo, hi]: [number, number]) => lo + this.rng() * (hi - lo);
@@ -418,7 +506,7 @@ export class Game {
     const gain = this.pearlsOnRetire();
     if (gain < 1) return null;
     return {
-      pearls: this.pearls + gain, fishTree: [...this.fishTree], retirements: this.retirements + 1, seaSeen: [...this.seaSeen],
+      pearls: this.pearls + gain, fishTree: [...this.fishTree], retirements: this.retirements + 1, seaSeen: [...this.seaSeen], landed: { ...this.landed },
       journal: this.journal, claimed: [...this.claimed], dev: this.dev,
     };
   }
@@ -624,6 +712,7 @@ export class Game {
     this.tickBoats(dt);
     this.tickHarbor(dt);
     this.tickExotic(dt);
+    if (this.flagshipRest > 0) this.flagshipRest = Math.max(0, this.flagshipRest - dt);
     this.tickHands(dt);
     this.lines.forEach((line, i) => {
       if (line.type === 'idle') return;
@@ -1299,6 +1388,7 @@ export class Game {
       pierSections: this.pierSections, managerBudget: this.managerBudget,
       pearls: this.pearls, fishTree: this.fishTree, retirements: this.retirements, seaSeen: this.seaSeen,
       exoticHold: this.exoticHold, listings: this.listings, wanted: this.wanted, nextExoticId: this.nextExoticId,
+      flagship: this.flagship, flagshipRest: this.flagshipRest, voyage: this.voyage, landed: this.landed,
       hands: this.hands.map((h) => ({ ...h, line: { type: 'idle' as const }, react: null })), crate: this.crate,
     };
   }

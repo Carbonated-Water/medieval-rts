@@ -2,18 +2,20 @@ import {
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_ORDER, COMPANY_PRICE, COMPANY_UNLOCK_EARNED, DEV_MULTIPLIER, GROUNDS, HARBOR_UPGRADES,
   MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, PIER_STAFF, HANDS_MAX,
   TRACKS, TRACK_MAX, TRACK_ORDER, WAREHOUSE, type HarborUpgradeId, type TrackId, HAND_NAMES, HAND_SKILL_MAX, LETTERS, RODS, FISH, GEAR, REFLEX_PER_LEVEL, SKILLS, STRENGTH_PER_LEVEL, HAGGLE_PER_LEVEL,
-  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, TREE_FISH, type TreeFish, LEGENDS, EXOTIC, REGIONS,
+  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, TREE_FISH, type TreeFish, LEGENDS, EXOTIC, REGIONS, VOYAGE,
 } from './data';
 import { type Boat, type Exotic, type Game, fishById } from './game';
+import * as V from './voyage';
 import { Notices, lineHtml, timeAgo } from './notify';
 import { pixelFishIcon as fishIcon, pixelIcon, type IconName } from './pixelart';
 import type { Place } from './scene';
 
 /** One panel per job: the market sells fish, the tackle shop sells gear, the school trains skills. */
-export type Panel = 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'ledger' | 'boat' | 'tree' | 'retire' | 'lighthouse' | 'exotic' | 'listing' | 'shipyard' | 'harborup' | 'pier' | 'pierstaff' | 'hand' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
+export type Panel = 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'ledger' | 'boat' | 'tree' | 'retire' | 'lighthouse' | 'exotic' | 'listing' | 'voyage' | 'shipyard' | 'harborup' | 'pier' | 'pierstaff' | 'hand' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
 
 export type Action =
   | 'cast' | 'reel' | 'close' | 'back' | 'reset' | 'toggleDev' | Panel | `fight:${string}` | 'fightDone' | `lhRegion:${'coast' | 'ocean' | 'abyss'}`
+  | 'buyFlagship' | `sail:${string}` | `vsail:${number}` | `vchoose:${number}` | 'vlegend' | 'vfight' | 'vhome'
   | `exTab:${'hold' | 'listed' | 'wanted'}` | `exList:${number}` | `exUnlist:${number}` | `exOpen:${number}` | `exSell:${number}:${number}` | `exGive:${number}` | 'exDev' | 'boatPrev' | 'boatNext' | `coTab:${'harbor' | 'ledger' | 'harborup'}`
   | `achTab:${'base' | 'tree'}` | `treeTier:${number}` | `treeSel:${string}` | `unlock:${string}` | 'doRetire' | `journalTier:${number}`
   | 'sellAll' | `sellFish:${string}` | `buy:${GearKind}` | `train:${SkillId}` | 'claimAll' | `trophy:${string}`
@@ -82,7 +84,7 @@ export class UI {
   /** Where ◄ goes from a panel (null: it has no parent, only X). */
   parentOf(panel: Panel | null): Panel | null {
     if (panel === 'boat' || panel === 'shipyard') return this.coTab;
-    return ({ hand: 'pier', pierstaff: 'pier', tree: 'settings', retire: 'settings', listing: 'exotic' } as Partial<Record<Panel, Panel>>)[panel ?? 'market'] ?? null;
+    return ({ hand: 'pier', pierstaff: 'pier', tree: 'settings', retire: 'settings', listing: 'exotic', voyage: 'lighthouse' } as Partial<Record<Panel, Panel>>)[panel ?? 'market'] ?? null;
   }
   /** Trophy page: the originals, or the Fish Tree's. */
   achTab: 'base' | 'tree' = 'base';
@@ -202,6 +204,7 @@ export class UI {
             : panel === 'journal' ? [`Journal ${Object.keys(game.journal).length}/${FISH.length + TREE_FISH.filter((f) => f.side === 'river').length}`, this.journalHtml(game)]
             : panel === 'tree' ? ['Fish Tree', this.treeHtml(game)]
             : panel === 'lighthouse' ? ['Lighthouse', this.lighthouseHtml(game)]
+            : panel === 'voyage' ? [game.voyage ? V.legendOf(game.voyage).spot : 'Voyage', this.voyageHtml(game)]
             : panel === 'exotic' ? ['Exotic Market', this.exoticHtml(game)]
             : panel === 'listing' ? [this.listingTitle(game), this.listingHtml(game)]
             : panel === 'retire' ? ['Retire', this.retireHtml(game)]
@@ -603,11 +606,66 @@ export class UI {
   /** The Lighthouse: where expeditions will sail from. For now, practice fights against the legends. */
   private lighthouseHtml(game: Game): string {
     if (!game.company) return `<div class="row"><div class="slot">${icon('lock')}</div><div class="meta"><b>Boarded up</b><div class="sub"><small>Own the Fishing Co. first</small></div></div></div>`;
-    const r = this.lhRegion;
-    const tabs = `<div class="tiers three">${(['coast', 'ocean', 'abyss'] as const).map((k) => `<button class="tab${r === k ? ' on' : ''}" style="--c:${k === 'coast' ? '#2eb082' : k === 'ocean' ? '#2f6fd6' : '#4a3a7a'}" data-act="lhRegion:${k}">${REGIONS[k].name.toUpperCase()}</button>`).join('')}</div>`;
-    const rows = LEGENDS.filter((l) => l.region === r).map((l) => `<div class="row"><div class="slot"><img class="fit" src="${fishIcon(l, false, 48, 28)}" alt=""></div><div class="meta"><b>${l.name} <span class="small">$${kmb(l.price)}</span></b>
-      <div class="sub"><small>${l.blurb}</small></div></div><button class="btn" data-act="fight:${l.id}">FIGHT</button></div>`).join('');
-    return tabs + `<p class="note">${REGIONS[r].twist}.</p>` + rows + '<p class="note">Practice fights. Voyages to find them come next.</p>';
+    const r = this.lhRegion, rest = Math.ceil(game.flagshipRest);
+    // The Flagship: buy it, at sea (resume), resting, or ready.
+    const ship = !game.flagship
+      ? `<div class="row"><div class="slot">${icon('boat')}</div><div class="meta"><b>The Flagship</b><div class="sub"><small>Sail to the legends</small></div></div>
+        <button class="btn" data-act="buyFlagship" ${game.money < VOYAGE.flagship ? 'disabled' : ''}>${cash(VOYAGE.flagship)}</button></div>`
+      : game.voyage ? `<div class="row"><div class="slot">${icon('boat')}</div><div class="meta"><b>At sea</b><div class="sub"><small>${V.legendOf(game.voyage).spot}</small></div></div><button class="btn" data-act="voyage">RESUME</button></div>`
+      : `<div class="row tight"><div class="slot">${icon('boat')}</div><div class="meta"><b>The Flagship</b><div class="sub"><small>${game.canSail() ? 'Ready to sail' : `Resting ${Math.floor(rest / 60)}:${String(rest % 60).padStart(2, '0')}`}</small></div></div></div>`;
+    const tabs = `<div class="tiers three">${(['coast', 'ocean', 'abyss'] as const).map((k) => `<button class="tab${r === k ? ' on' : ''}" style="--c:${k === 'coast' ? '#2eb082' : k === 'ocean' ? '#2f6fd6' : '#4a3a7a'}" data-act="lhRegion:${k}">${game.regionOpen(k) ? '' : icon('lock', 2)}${REGIONS[k].name.toUpperCase()}</button>`).join('')}</div>`;
+    const rows = LEGENDS.filter((l) => l.region === r).map((l) => {
+      const open = game.legendOpen(l), n = game.landed[l.id] ?? 0;
+      const btn = !open ? `<span class="maxed">${icon('lock', 2)}</span>`
+        : game.canSail() ? `<button class="btn" data-act="sail:${l.id}">SAIL</button>` : `<button class="btn plain" data-act="fight:${l.id}">TRY</button>`;
+      return `<div class="row"><div class="slot"><img class="fit" src="${fishIcon(l, !open, 48, 28)}" alt=""></div><div class="meta"><b>${open ? l.name : '???'} <span class="small">$${kmb(l.price)}${n ? ` · x${n}` : ''}</span></b>
+        <div class="sub"><small>${open ? `${l.spot} · ${l.blurb}` : l.id === 'theoldone' ? 'Land the rest of the Abyss' : 'Land a legend of the region before'}</small></div></div>${btn}</div>`;
+    }).join('');
+    return ship + tabs + `<p class="note">${REGIONS[r].twist}.</p>` + rows;
+  }
+
+  // ---------- voyages ----------
+
+  /**
+   * The voyage: supplies, hull and haul; the map (lighthouse at the bottom,
+   * the legend's spot at the top, paths between spots, the ones you can
+   * reach glowing); then the card for where you are: a spot's choices, the
+   * fight, or the summary and HOME.
+   */
+  private voyageHtml(game: Game): string {
+    const v = game.voyage;
+    if (!v) return '<p class="empty">No voyage under way.</p>';
+    const l = V.legendOf(v);
+    const stat = `<div class="vstat"><span>${icon('bag', 2)}${v.supplies} ${v.supplies === 1 ? 'supply' : 'supplies'}</span><span>${icon('anchor', 2)}${'#'.repeat(v.hull).replace(/#/g, '<i class="hp"></i>')}${'<i class="hp lost"></i>'.repeat(Math.max(0, VOYAGE.hull - v.hull))}</span><span>${icon('coin', 2)}$${kmb(v.haul)}</span></div>`;
+    // Positions in the map box (percent): rows from the bottom up, spots spread across.
+    const yOf = (row: number) => (row < 0 ? 90 : row >= v.rows.length ? 9 : 70 - row * 21);
+    const xOf = (row: number, i: number) => (row < 0 || row >= v.rows.length ? 50 : ((i + 0.5) / v.rows[row]!.length) * 100);
+    const lines: string[] = [];
+    const link = (r1: number, i1: number, r2: number, i2: number) => {
+      const on = (r1 === v.row && i1 === (r1 < 0 ? 0 : v.at)) && (r2 === v.rows.length ? v.stage === 'map' && v.row === v.rows.length - 1 : V.canReach(v, i2));
+      lines.push(`<line x1="${xOf(r1, i1)}" y1="${yOf(r1)}" x2="${xOf(r2, i2)}" y2="${yOf(r2)}" class="${on ? 'on' : ''}"/>`);
+    };
+    v.rows[0]!.forEach((_, i) => link(-1, 0, 0, i));
+    for (let r = 0; r < v.rows.length - 1; r++) v.rows[r]!.forEach((_, i) => v.rows[r + 1]!.forEach((_, k) => {
+      const here = (i + 0.5) / v.rows[r]!.length, there = (k + 0.5) / v.rows[r + 1]!.length;
+      if (Math.abs(here - there) <= 0.5) link(r, i, r + 1, k);
+    }));
+    v.rows[v.rows.length - 1]!.forEach((_, i) => link(v.rows.length - 1, i, v.rows.length, 0));
+    const KIND: Record<V.SpotKind, IconName> = { fish: 'net', event: 'quest', wreck: 'wreck', trader: 'coin' };
+    const spots = v.rows.map((row, r) => row.map((s, i) => {
+      const here = r === v.row && i === v.at, past = r < v.row, reach = V.canReach(v, i) && r === v.row + 1;
+      return `<button class="vspot${here ? ' here' : ''}${past ? ' past' : ''}${reach ? ' reach' : ''}" style="left:${xOf(r, i)}%;top:${yOf(r)}%" ${reach ? `data-act="vsail:${i}"` : 'disabled'}>${icon(here ? 'boat' : KIND[s.kind], 2)}</button>`;
+    }).join('')).join('');
+    const toLegend = v.stage === 'map' && v.row === v.rows.length - 1;
+    const legend = `<button class="vspot legend${toLegend ? ' reach' : ''}${v.stage === 'fight' || v.stage === 'over' ? ' here' : ''}" style="left:50%;top:${yOf(v.rows.length)}%" ${toLegend ? 'data-act="vlegend"' : 'disabled'}><img class="fit" src="${fishIcon(l, false, 48, 28)}" alt=""></button>`;
+    const home = `<span class="vspot home${v.row < 0 ? ' here' : ''}" style="left:50%;top:${yOf(-1)}%">${icon(v.row < 0 ? 'boat' : 'anchor', 2)}</span>`;
+    const map = `<div class="vmap"><svg viewBox="0 0 100 100" preserveAspectRatio="none">${lines.join('')}</svg>${home}${spots}${legend}</div>`;
+    let card = `<p class="vnote">${v.note}</p>`;
+    if (v.stage === 'map') card += `<p class="note">${toLegend ? `Sail on to ${l.spot} to fight the ${l.name}.` : 'Choose where to sail next. Each move costs a supply.'}</p>`;
+    else if (v.stage === 'spot') card += `<div class="vchoices">${V.choices(v).map((c, k) => `<button class="btn${c.label.startsWith('SAIL') ? ' plain' : ''}" data-act="vchoose:${k}">${c.label}${c.cost ? `<small>${c.cost}</small>` : ''}</button>`).join('')}</div>`;
+    else if (v.stage === 'fight') card += `<button class="btn wide" data-act="vfight">FIGHT THE ${l.name.toUpperCase()}</button>`;
+    else card += `<p class="note">${v.result === 'failed' ? 'The haul is lost.' : `Haul: $${kmb(v.haul)}${v.result === 'caught' ? ` · ${l.name} ${(v.kg ?? 0).toLocaleString()} kg · +${V.pearlsFor(l)} Pearls` : ''}`}</p><button class="btn wide" data-act="vhome">HOME</button>`;
+    return stat + map + card;
   }
 
   // ---------- the Exotic Market ----------

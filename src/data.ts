@@ -442,20 +442,20 @@ export const REGIONS: Record<Region, { name: string; twist: string }> = {
 };
 
 /** A legendary you fight on an expedition: its region and fight twists, how much fight it has, how hard it pulls, how often and how hard it runs. */
-export interface LegendDef extends FishDef { region: Region; twists: ('snag' | 'waves' | 'dark')[]; stamina: number; pull: number; surgePower: number; surgeEvery: number; blurb: string }
+export interface LegendDef extends FishDef { spot: string; region: Region; twists: ('snag' | 'waves' | 'dark')[]; stamina: number; pull: number; surgePower: number; surgeEvery: number; blurb: string }
 export const LEGENDS: LegendDef[] = [
-  { id: 'kelpwyrm', name: 'Kelp Wyrm', region: 'coast', twists: ['snag'], tier: 5, price: 20000000, kg: 90, rarity: 1, colors: ['#3a7a3a', '#a8e080', '#f0c040'], shape: 6.5, stamina: 50, pull: 0.12, surgePower: 2.6, surgeEvery: 5, blurb: 'Lazy, but it thrashes' },
-  { id: 'coralcolossus', name: 'Coral Colossus', region: 'coast', twists: ['snag'], tier: 5, price: 25000000, kg: 400, rarity: 1, colors: ['#c05a40', '#f0c0a0', '#f07a90'], shape: 2.4, stamina: 70, pull: 0.14, surgePower: 2.4, surgeEvery: 6, blurb: 'Heavy, slow runs' },
-  { id: 'tideserpent', name: 'Tide Serpent', region: 'coast', twists: ['snag'], tier: 5, price: 30000000, kg: 250, rarity: 1, colors: ['#2a8a8a', '#a0f0e0', '#1a5a6a'], shape: 7, stamina: 60, pull: 0.16, surgePower: 2.6, surgeEvery: 3.5, blurb: 'Quick, frequent runs' },
-  { id: 'sunking', name: 'Sun King', region: 'coast', twists: ['snag'], tier: 5, price: 35000000, kg: 1200, rarity: 1, colors: ['#e0b020', '#fff0a0', '#e07020'], shape: 1.3, stamina: 80, pull: 0.12, surgePower: 3.2, surgeEvery: 7, blurb: 'Gentle, then one huge run' },
-  { id: 'ghostmarlin', name: 'Ghost Marlin', region: 'ocean', twists: ['waves'], tier: 5, price: 60000000, kg: 500, rarity: 1, colors: ['#c8d8f0', '#ffffff', '#8098c8'], shape: 4.4, look: 'billed', stamina: 80, pull: 0.2, surgePower: 3, surgeEvery: 4, blurb: 'Fast and proud' },
-  { id: 'stormshark', name: 'Storm Shark', region: 'ocean', twists: ['waves'], tier: 5, price: 70000000, kg: 800, rarity: 1, colors: ['#5a6a80', '#d0d8e0', '#f0e040'], shape: 4, stamina: 95, pull: 0.24, surgePower: 2.6, surgeEvery: 4, blurb: 'Relentless pull' },
-  { id: 'glacierhalibut', name: 'Glacier Halibut', region: 'ocean', twists: ['waves'], tier: 5, price: 80000000, kg: 600, rarity: 1, colors: ['#a0c0d8', '#f0f8ff', '#6080a0'], shape: 2, stamina: 130, pull: 0.18, surgePower: 2.4, surgeEvery: 5, blurb: 'Huge, very long fight' },
-  { id: 'thundertuna', name: 'Thunder Tuna', region: 'ocean', twists: ['waves'], tier: 5, price: 90000000, kg: 700, rarity: 1, colors: ['#2a3a7a', '#e0e8f0', '#f0d020'], shape: 3.2, stamina: 85, pull: 0.22, surgePower: 3.4, surgeEvery: 3, blurb: 'Short, violent runs' },
-  { id: 'abyssking', name: 'Abyss King', region: 'abyss', twists: ['dark'], tier: 5, price: 150000000, kg: 3000, rarity: 1, colors: ['#2a1a4a', '#8060c0', '#f04080'], shape: 3.6, stamina: 100, pull: 0.28, surgePower: 2.3, surgeEvery: 3, blurb: 'It does not tire' },
-  { id: 'lanternqueen', name: 'Lantern Queen', region: 'abyss', twists: ['dark'], tier: 5, price: 180000000, kg: 900, rarity: 1, colors: ['#2a2a3a', '#5a5a7a', '#f0f080'], shape: 2, stamina: 110, pull: 0.26, surgePower: 2.6, surgeEvery: 3.5, blurb: 'Lures you in, then bolts' },
-  { id: 'boneeel', name: 'Bone Eel', region: 'abyss', twists: ['dark'], tier: 5, price: 220000000, kg: 350, rarity: 1, colors: ['#d8d0c0', '#ffffff', '#8a8070'], shape: 7.5, stamina: 120, pull: 0.3, surgePower: 2.4, surgeEvery: 2.8, blurb: 'Twisting, unpredictable' },
-  { id: 'theoldone', name: 'The Old One', region: 'abyss', twists: ['snag', 'waves', 'dark'], tier: 5, price: 400000000, kg: 8000, rarity: 1, colors: ['#1a2a2a', '#4a7a6a', '#c0f0a0'], shape: 4.6, stamina: 180, pull: 0.3, surgePower: 2.8, surgeEvery: 3, blurb: 'The deepest legend. Every twist at once' },
+  { id: 'kelpwyrm', spot: 'Kelp Forest', name: 'Kelp Wyrm', region: 'coast', twists: ['snag'], tier: 5, price: 20000000, kg: 90, rarity: 1, colors: ['#3a7a3a', '#a8e080', '#f0c040'], shape: 6.5, stamina: 50, pull: 0.12, surgePower: 2.6, surgeEvery: 5, blurb: 'Lazy, but it thrashes' },
+  { id: 'coralcolossus', spot: 'Reef Wall', name: 'Coral Colossus', region: 'coast', twists: ['snag'], tier: 5, price: 25000000, kg: 400, rarity: 1, colors: ['#c05a40', '#f0c0a0', '#f07a90'], shape: 2.4, stamina: 70, pull: 0.14, surgePower: 2.4, surgeEvery: 6, blurb: 'Heavy, slow runs' },
+  { id: 'tideserpent', spot: 'Tidal Caves', name: 'Tide Serpent', region: 'coast', twists: ['snag'], tier: 5, price: 30000000, kg: 250, rarity: 1, colors: ['#2a8a8a', '#a0f0e0', '#1a5a6a'], shape: 7, stamina: 60, pull: 0.16, surgePower: 2.6, surgeEvery: 3.5, blurb: 'Quick, frequent runs' },
+  { id: 'sunking', spot: 'Sunbeam Shallows', name: 'Sun King', region: 'coast', twists: ['snag'], tier: 5, price: 35000000, kg: 1200, rarity: 1, colors: ['#e0b020', '#fff0a0', '#e07020'], shape: 1.3, stamina: 80, pull: 0.12, surgePower: 3.2, surgeEvery: 7, blurb: 'Gentle, then one huge run' },
+  { id: 'ghostmarlin', spot: 'Blue Expanse', name: 'Ghost Marlin', region: 'ocean', twists: ['waves'], tier: 5, price: 60000000, kg: 500, rarity: 1, colors: ['#c8d8f0', '#ffffff', '#8098c8'], shape: 4.4, look: 'billed', stamina: 80, pull: 0.2, surgePower: 3, surgeEvery: 4, blurb: 'Fast and proud' },
+  { id: 'stormshark', spot: 'Storm Belt', name: 'Storm Shark', region: 'ocean', twists: ['waves'], tier: 5, price: 70000000, kg: 800, rarity: 1, colors: ['#5a6a80', '#d0d8e0', '#f0e040'], shape: 4, stamina: 95, pull: 0.24, surgePower: 2.6, surgeEvery: 4, blurb: 'Relentless pull' },
+  { id: 'glacierhalibut', spot: 'Iceberg Field', name: 'Glacier Halibut', region: 'ocean', twists: ['waves'], tier: 5, price: 80000000, kg: 600, rarity: 1, colors: ['#a0c0d8', '#f0f8ff', '#6080a0'], shape: 2, stamina: 130, pull: 0.18, surgePower: 2.4, surgeEvery: 5, blurb: 'Huge, very long fight' },
+  { id: 'thundertuna', spot: 'Lightning Banks', name: 'Thunder Tuna', region: 'ocean', twists: ['waves'], tier: 5, price: 90000000, kg: 700, rarity: 1, colors: ['#2a3a7a', '#e0e8f0', '#f0d020'], shape: 3.2, stamina: 85, pull: 0.22, surgePower: 3.4, surgeEvery: 3, blurb: 'Short, violent runs' },
+  { id: 'abyssking', spot: 'The Trench', name: 'Abyss King', region: 'abyss', twists: ['dark'], tier: 5, price: 150000000, kg: 3000, rarity: 1, colors: ['#2a1a4a', '#8060c0', '#f04080'], shape: 3.6, stamina: 100, pull: 0.28, surgePower: 2.3, surgeEvery: 3, blurb: 'It does not tire' },
+  { id: 'lanternqueen', spot: 'Lantern Depths', name: 'Lantern Queen', region: 'abyss', twists: ['dark'], tier: 5, price: 180000000, kg: 900, rarity: 1, colors: ['#2a2a3a', '#5a5a7a', '#f0f080'], shape: 2, stamina: 110, pull: 0.26, surgePower: 2.6, surgeEvery: 3.5, blurb: 'Lures you in, then bolts' },
+  { id: 'boneeel', spot: 'Ghost Wreck', name: 'Bone Eel', region: 'abyss', twists: ['dark'], tier: 5, price: 220000000, kg: 350, rarity: 1, colors: ['#d8d0c0', '#ffffff', '#8a8070'], shape: 7.5, stamina: 120, pull: 0.3, surgePower: 2.4, surgeEvery: 2.8, blurb: 'Twisting, unpredictable' },
+  { id: 'theoldone', spot: 'The Maw', name: 'The Old One', region: 'abyss', twists: ['snag', 'waves', 'dark'], tier: 5, price: 400000000, kg: 8000, rarity: 1, colors: ['#1a2a2a', '#4a7a6a', '#c0f0a0'], shape: 4.6, stamina: 180, pull: 0.3, surgePower: 2.8, surgeEvery: 3, blurb: 'The deepest legend. Every twist at once' },
 ];
 
 /**
@@ -480,6 +480,21 @@ export const EXOTIC = {
   wantedPay: [1.7, 2.4] as [number, number],
 };
 export const COLLECTORS = ['Baron Gill', 'Madame Koi', 'Old Moss', 'Captain Reyes', 'The Countess', 'Dr. Finley', 'Lady Marlowe', 'Mr. Tanaka'];
+
+/**
+ * Voyages: the Flagship (bought at the lighthouse) sails a small map to a
+ * legend. Supplies (one per move) and hull (lose it and the haul is lost);
+ * fishing grounds and treasure pay by region; Pearls per legend landed; the
+ * Flagship rests between voyages (dev mode skips the rest).
+ */
+export const VOYAGE = {
+  flagship: 10_000_000,
+  rest: 1200,
+  supplies: 5,
+  hull: 3,
+  haul: { coast: 1_500_000, ocean: 4_000_000, abyss: 10_000_000 } as Record<Region, number>,
+  pearls: { coast: 3, ocean: 6, abyss: 12, old: 40 },
+};
 
 /** The harbor: berths (how many boats), automation, and the warehouse (offline earnings cap). */
 export const BERTHS: { boats: number; price: number }[] = [

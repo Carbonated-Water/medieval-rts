@@ -518,6 +518,8 @@ const ICON_ROWS = {
   back: ['...oo...', '..oyo...', '.oyyoooo', 'oyyyyyyo', 'oyyyyyyo', '.oyyoooo', '..oyo...', '...oo...'],
   prev: ['....oo', '...oyo', '..oyyo', '.oyyyo', '.oyyyo', '..oyyo', '...oyo', '....oo'],
   next: ['oo....', 'oyo...', 'oyyo..', 'oyyyo.', 'oyyyo.', 'oyyo..', 'oyo...', 'oo....'],
+  quest: ['..oooo..', '.oYYYYo.', 'oYYooYYo', '.oo.oYYo', '...oYYo.', '...oYo..', '...oo...', '...oYo..'],
+  wreck: ['.....o..', '....oKo.', '.o..oKo.', 'oKo.oo..', '.oBBBBBo', '..oBBBBo', '...oooo.', 'UUUUUUUU'],
   pearl: ['..oooo..', '.owwwwo.', 'owwUwwUo', 'owwwwwUo', 'owwwwwUo', 'oUwwwUUo', '.oUUUUo.', '..oooo..'],
   coin: ['..oooo..', '.oYYYyo.', 'oYYyyyyo', 'oYyYyyyo', 'oYyYyyyo', 'oyyyyyyo', '.oyyyyo.', '..oooo..'],
   trophy: ['oo.oooo.oo', 'oyoYyyyoyo', 'oyoYyyyoyo', '.ooYyyyoo.', '..oyyyyo..', '...oyyo...', '....oo....', '...oyyo...', '..oooooo..', '..oyyyyo..', '..oooooo..'],

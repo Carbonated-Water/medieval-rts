@@ -4,6 +4,19 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Voyages
+  WHAT: Buy the Flagship ($10M) at the Lighthouse, pick a region and legend,
+        SAIL. A map of three rows of 2-3 spots (fishing grounds, events,
+        wrecks, traders; reshuffled every voyage) to the legend's spot; 5
+        supplies (1 per move), 3 hull; 8 events with choices and odds.
+        Out of hull or supplies: home without the haul. At the top, the real
+        fight: landed legends go to the Exotic hold (sold at value if full),
+        pay Pearls (3/6/12, The Old One 40) and open the next region; a lost
+        fight keeps the haul. Flagship rests 20 min (dev skips). voyage.ts
+        is pure and tested; a careful captain reaches the legend ~99%.
+  WHY:  Phase 3 slice 2: the voyage map and a full voyage, as designed with
+        the user (one sitting, keep the ship and lose the haul, fight at the end).
+
 2026-10-09  12 legends, worth x10, with a twist per region
   WHAT: Coast (Kelp Wyrm $20M, Coral Colossus $25M, Tide Serpent $30M, Sun
         King $35M), Open Ocean (Ghost Marlin $60M, Storm Shark $70M, Glacier
