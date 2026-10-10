@@ -412,6 +412,28 @@ export function craneCanvas(): HTMLCanvasElement {
   }));
 }
 
+/** The lighthouse on the far bank (expeditions): rock, striped tower, lantern; boarded and dark until the company is yours. */
+export function lighthouseCanvas(open: boolean): HTMLCanvasElement {
+  const W = 24, H = 56;
+  return outline(makeCanvas(W, H, (ctx) => {
+    // Rocky point.
+    rect(ctx, 1, H - 7, W - 2, 6, PAL.greyDark); rect(ctx, 3, H - 9, W - 8, 3, PAL.greyMid); rect(ctx, 5, H - 4, 4, 2, PAL.grey);
+    // Tower: tapering, red and white bands (grey and boarded when closed).
+    for (let y = 14; y < H - 8; y++) {
+      const half = Math.round(5 + ((y - 14) / (H - 22)) * 3);
+      const band = Math.floor((y - 14) / 6) % 2;
+      rect(ctx, W / 2 - half, y, half * 2, 1, open ? (band ? PAL.red : PAL.white) : band ? PAL.greyDark : PAL.greyMid);
+    }
+    rect(ctx, W / 2 - 2, H - 15, 4, 6, PAL.dirtDeep);
+    if (!open) for (const y of [24, 32]) rect(ctx, W / 2 - 6, y, 12, 2, PAL.dirtDark);
+    // Gallery, lantern room, roof.
+    rect(ctx, W / 2 - 7, 12, 14, 2, PAL.outline);
+    rect(ctx, W / 2 - 4, 5, 8, 7, open ? PAL.goldLight : PAL.greyDark);
+    if (open) rect(ctx, W / 2 - 2, 6, 4, 5, '#fff3b0');
+    rect(ctx, W / 2 - 5, 3, 10, 2, PAL.red); rect(ctx, W / 2 - 2, 1, 4, 2, PAL.red);
+  }));
+}
+
 /** One stretch of dock planks (tiles vertically). */
 export function plankCanvas(w: number): HTMLCanvasElement {
   return makeCanvas(w, 4, (ctx) => {

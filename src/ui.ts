@@ -2,7 +2,7 @@ import {
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_ORDER, COMPANY_PRICE, COMPANY_UNLOCK_EARNED, DEV_MULTIPLIER, GROUNDS, HARBOR_UPGRADES,
   MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, PIER_STAFF, HANDS_MAX,
   TRACKS, TRACK_MAX, TRACK_ORDER, WAREHOUSE, type HarborUpgradeId, type TrackId, HAND_NAMES, HAND_SKILL_MAX, LETTERS, RODS, FISH, GEAR, REFLEX_PER_LEVEL, SKILLS, STRENGTH_PER_LEVEL, HAGGLE_PER_LEVEL,
-  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, TREE_FISH, type TreeFish,
+  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, TREE_FISH, type TreeFish, LEGENDS,
 } from './data';
 import { type Boat, type Game, fishById } from './game';
 import { Notices, lineHtml, timeAgo } from './notify';
@@ -10,10 +10,10 @@ import { pixelFishIcon as fishIcon, pixelIcon, type IconName } from './pixelart'
 import type { Place } from './scene';
 
 /** One panel per job: the market sells fish, the tackle shop sells gear, the school trains skills. */
-export type Panel = 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'ledger' | 'boat' | 'tree' | 'retire' | 'shipyard' | 'harborup' | 'pier' | 'pierstaff' | 'hand' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
+export type Panel = 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'ledger' | 'boat' | 'tree' | 'retire' | 'lighthouse' | 'shipyard' | 'harborup' | 'pier' | 'pierstaff' | 'hand' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
 
 export type Action =
-  | 'cast' | 'reel' | 'close' | 'back' | 'reset' | 'toggleDev' | Panel | 'boatPrev' | 'boatNext' | `coTab:${'harbor' | 'ledger' | 'harborup'}`
+  | 'cast' | 'reel' | 'close' | 'back' | 'reset' | 'toggleDev' | Panel | `fight:${string}` | 'fightDone' | 'boatPrev' | 'boatNext' | `coTab:${'harbor' | 'ledger' | 'harborup'}`
   | `achTab:${'base' | 'tree'}` | `treeTier:${number}` | `treeSel:${string}` | `unlock:${string}` | 'doRetire' | `journalTier:${number}`
   | 'sellAll' | `sellFish:${string}` | `buy:${GearKind}` | `train:${SkillId}` | 'claimAll' | `trophy:${string}`
   | `bait:${BaitId}` | `buyBait:${BaitId}:${number}`
@@ -193,6 +193,7 @@ export class UI {
           : panel === 'training' ? ['Fishing School', this.schoolHtml(game)]
             : panel === 'journal' ? [`Journal ${Object.keys(game.journal).length}/${FISH.length + TREE_FISH.filter((f) => f.side === 'river').length}`, this.journalHtml(game)]
             : panel === 'tree' ? ['Fish Tree', this.treeHtml(game)]
+            : panel === 'lighthouse' ? ['Lighthouse', this.lighthouseHtml(game)]
             : panel === 'retire' ? ['Retire', this.retireHtml(game)]
               : panel === 'trophies' ? [`Trophies ${game.claimed.length}/${ACHIEVEMENTS.length}`, this.trophiesHtml(game)]
                 : panel === 'inbox' ? ['Log', this.inboxHtml()]
@@ -587,6 +588,14 @@ export class UI {
           sel.side === 'river' ? 'River: you and your fishermen' : `${BOATS[sel.boat!].name}: ${GROUNDS.find((g) => g.id === sel.ground)!.name} and deeper`}</small></div></div>
         ${game.fishTree.includes(sel.id) ? '<span class="maxed">OWNED</span>' : `<button class="btn" data-act="unlock:${sel.id}" ${game.canUnlock(sel.id) ? '' : 'disabled'}>${icon('pearl', 2)} ${sel.cost}</button>`}</div>`;
     return pearls + tabs + sky + detail;
+  }
+
+  /** The Lighthouse: where expeditions will sail from. For now, practice fights against the legends. */
+  private lighthouseHtml(game: Game): string {
+    if (!game.company) return `<div class="row"><div class="slot">${icon('lock')}</div><div class="meta"><b>Boarded up</b><div class="sub"><small>Own the Fishing Co. first</small></div></div></div>`;
+    const rows = LEGENDS.map((l, k) => `<div class="row"><div class="slot"><img src="${fishIcon(l, false, 48, 28)}" alt=""></div><div class="meta"><b>${l.name}</b>
+      <div class="sub">${level(k + 1, 3)}<small>${l.blurb}</small></div></div><button class="btn" data-act="fight:${l.id}">FIGHT</button></div>`).join('');
+    return rows + '<p class="note">Practice fights. Hold to reel, let go when it runs. Voyages to find them come next.</p>';
   }
 
   /** Retire: what this run turns into, what stays, what goes. */

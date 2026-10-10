@@ -4,6 +4,20 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Phase 3 slice 1: the lighthouse and the big-fish fight
+  WHAT: A lighthouse on a rocky islet off the far bank (boarded until the
+        Fishing Co., then lit with a sweeping beam) opens the Lighthouse panel.
+        The fight (fight.ts, tested): hold to reel, tension rises; green band
+        drains the fish; red top snaps the line; slack too long and it spits
+        the hook; surges come with a warning and holding through one snaps.
+        Full-screen fight view (fightui.ts): fish swims and leaps on surges,
+        line, tension and stamina bars, HOLD area or Space, result card.
+        Three practice legends: Kelp Wyrm ~15 s, Ghost Marlin ~40 s, Abyss
+        King ~65 s for a sensible player.
+  WHY:  Phase 3 is Expeditions (voyages across a sea map, ending in a fight
+        you play yourself); the user asked for a place on the far coast
+        rather than a new tab. The fight comes first: it is the hands-on core.
+
 2026-10-09  Fish Tree costs 15 to 150 Pearls
   WHAT: Costs follow one curve from 15 (tier I root) to 150 (tier V tips),
         ~18% a step; tiers 190 / 310 / 480 / 810 / 1320 Pearls (3110 total).

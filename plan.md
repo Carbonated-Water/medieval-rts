@@ -178,6 +178,20 @@ arrows walk, Space casts / reels, E opens the building you stand at.
 - Journal: a tab per tier (4 originals + 5 tree fish, locked until unlocked).
 - The town (seafood empire) was built and scrapped the same day: too linear.
 
+## Phase 4: Expeditions (in progress, 2026-10-09)
+
+- The lighthouse on an islet off the far bank opens Expeditions (after the
+  Fishing Co.). Played in one sitting: a sea map (Coast, Open Ocean, Abyss;
+  ~12 named spots, routes reshuffled each voyage), 4-6 stops of fishing
+  grounds, events, wrecks, traders, ending at a legendary spot with a fight.
+  Supplies and hull; a bad voyage loses its haul, never the ship. Flagship
+  upgrades: hold, hull, reel, line, sonar. Rewards: expedition-only legends
+  (journal page, trophies), Pearls, rare gear and bait, money. ~30 min rest.
+- Slices: 1) lighthouse + fight (done: practice fights), 2) map and voyage,
+  3) Flagship and rewards.
+- Fight rule: pull x surgePower must stay under ~0.65 so letting go in a
+  surge always saves the line.
+
 ## Roadmap (agreed order, 2026-10-09)
 
 1. ~~Multiple lines + rare variants~~ (done)

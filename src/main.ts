@@ -1,5 +1,7 @@
-import { ACHIEVEMENTS, BOATS, DEV_MULTIPLIER, HAND_NAMES, HARBOR_UPGRADES, LETTERS, TRACKS, type GroundId, type HarborUpgradeId, type TrackId, RODS, SKILLS, VARIANTS, baitById, type BaitId, type BoatType, type GearKind, type SkillId, type Tier } from './data';
+import { ACHIEVEMENTS, BOATS, DEV_MULTIPLIER, HAND_NAMES, HARBOR_UPGRADES, LETTERS, TRACKS, type GroundId, type HarborUpgradeId, type TrackId, RODS, SKILLS, VARIANTS, baitById, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, LEGENDS } from './data';
 import { Game, fishById, type Line, type SaveData } from './game';
+import { Fight } from './fight';
+import { FightView } from './fightui';
 import { Scene, WORM_SPOT_X } from './scene';
 import './ui.css';
 import { pixelFishIcon as fishIcon, pixelIcon } from './pixelart';
@@ -29,6 +31,11 @@ const ui = new UI(onAction);
 const note = ui.notices;
 
 let dirty = false;
+
+/** The big-fish fight screen (expeditions); results get a banner. */
+const fightView = new FightView((f) => {
+  if (f.end === 'caught') note.banner(pixelIcon('trophy'), 'LANDED', f.fish.name, 'rare');
+});
 
 /** Snapshots of game.made, one a second, for the last minute: the $/sec readout is the difference. */
 const madeLog: { t: number; you: number; hands: number; boats: number }[] = [];
@@ -63,6 +70,7 @@ canvas.addEventListener('click', (e) => {
   if (ui.open) return;
   // The harbor across the river opens its panel from anywhere.
   if (scene.hitBobber(e.clientX, e.clientY) >= 0) { game.reel(scene.hitBobber(e.clientX, e.clientY)); return; }
+  if (scene.hitLighthouse(e.clientX, e.clientY)) { ui.open = 'lighthouse'; return; }
   if (scene.hitHarbor(e.clientX, e.clientY)) { ui.open = 'harbor'; return; }
   // Hired fishermen and the crate on the wide pier.
   const hand = scene.hitHand(e.clientX, e.clientY);
@@ -104,7 +112,7 @@ function onAction(a: Action): void {
     if (!game.cast() && !game.activeBait) { const at = scene.fisherScreen(); note.float('NO BAIT', at.x, at.y, 'bad'); }
   }
   else if (a === 'reel') game.reel();
-  else if (a === 'market' || a === 'tackle' || a === 'baitshop' || a === 'pouch' || a === 'harbor' || a === 'pier' || a === 'shipyard' || a === 'harborup' || a === 'pierstaff' || a === 'ledger' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'inbox' || a === 'settings' || a === 'tree' || a === 'retire') ui.open = ui.open === a ? null : a;
+  else if (a === 'market' || a === 'tackle' || a === 'baitshop' || a === 'pouch' || a === 'harbor' || a === 'pier' || a === 'shipyard' || a === 'harborup' || a === 'pierstaff' || a === 'ledger' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'inbox' || a === 'settings' || a === 'tree' || a === 'retire' || a === 'lighthouse') ui.open = ui.open === a ? null : a;
   else if (a.startsWith('bait:')) game.selectBait(a.slice(5) as BaitId);
   else if (a === 'buyCompany') {
     if (game.buyCompany()) { ui.open = null; note.clearBanners(); note.banner(pixelIcon('boat'), 'THE FISHING CO.', 'is yours', 'rare'); }
@@ -169,6 +177,10 @@ function onAction(a: Action): void {
     if (paid) note.banner(pixelIcon('coin'), 'COLLECTED', `$${paid.toLocaleString()}`);
   }
   else if (a === 'close') ui.open = null;
+  else if (a.startsWith('fight:')) {
+    const legend = LEGENDS.find((l) => l.id === a.slice(6));
+    if (legend) { ui.open = null; fightView.start(new Fight(legend)); }
+  } else if (a === 'fightDone') { fightView.close(); ui.open = 'lighthouse'; }
   else if (a === 'back') ui.open = ui.parentOf(ui.open);
   else if (a.startsWith('coTab:')) ui.open = a.slice(6) as 'harbor' | 'ledger' | 'harborup';
   else if (a === 'boatPrev' || a === 'boatNext') {
@@ -331,6 +343,7 @@ let last = performance.now();
 function frame(now: number): void {
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
+  fightView.update(dt);
   const dir = (held.has('KeyD') || held.has('ArrowRight') ? 1 : 0) - (held.has('KeyA') || held.has('ArrowLeft') ? 1 : 0);
   if (!ui.open) scene.nudge(dir, dt);
   game.tick(dt);

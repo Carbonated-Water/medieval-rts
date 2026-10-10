@@ -4,7 +4,7 @@ import tilesUrl from './assets/kenney/tiles.png';
 import { BOOTS, CLOTHES, HAND_OUTFITS, RODS, TIERS, VARIANTS, type FishDef, type Variant } from './data';
 import type { Game, Line } from './game';
 import {
-  HAND, PAL, alertCanvas, baitShopCanvas, boatCanvas, bobberCanvas, craneCanvas, harborCanvas, warehouseCanvas, fishCanvas, fisherCanvas, holderCanvas, plankCanvas, schoolCanvas, stallCanvas, type Pose,
+  HAND, PAL, alertCanvas, baitShopCanvas, boatCanvas, bobberCanvas, craneCanvas, harborCanvas, lighthouseCanvas, warehouseCanvas, fishCanvas, fisherCanvas, holderCanvas, plankCanvas, schoolCanvas, stallCanvas, type Pose,
 } from './pixelart';
 
 export type Place = 'market' | 'school' | 'bait' | 'tackle' | 'dock';
@@ -106,6 +106,7 @@ export class Scene {
   private rodLine = new Graphics();
   private wormFx = new Graphics();
   private harbor = new Sprite();
+  private lighthouse = new Sprite();
   private ship = new Sprite();
   private boatSprites: Sprite[] = [];
   private warehouse = new Sprite();
@@ -245,6 +246,11 @@ export class Scene {
     this.harbor = add(new Sprite());
     this.harbor.anchor.set(0.5, 1);
     this.harbor.position.set(V.harborX, V.riverTop + 1);
+    // Expeditions sail from the lighthouse on its islet off the far bank.
+    this.lighthouse = add(new Sprite());
+    this.lighthouse.anchor.set(0.5, 1);
+    const lh = this.lighthouseSpot();
+    this.lighthouse.position.set(lh.x, lh.y);
     this.ship = add(new Sprite(this.cached('ship', () => boatCanvas(0, true))));
     this.ship.anchor.set(0.5, 1);
     this.ship.alpha = 0.75;
@@ -337,6 +343,21 @@ export class Scene {
   private wormPos(spot: number): { x: number; y: number } {
     const V = this.V;
     return { x: Math.round(WORM_SPOT_X[spot]! * V.w), y: Math.min(V.riverBottom + 20 + (spot % 2) * 6, V.path - 8) };
+  }
+
+  /**
+   * The lighthouse (expeditions) stands on a rocky islet just off the far
+   * bank, on the left: clear of the money board in the corner and of the
+   * boats moored along the harbor's pier.
+   */
+  private lighthouseSpot(): { x: number; y: number } {
+    const V = this.V;
+    return { x: Math.max(16, Math.round(V.w * 0.1)), y: Math.round(V.riverTop + (V.riverBottom - V.riverTop) * 0.45) };
+  }
+
+  hitLighthouse(cx: number, cy: number): boolean {
+    const x = cx / this.scale, y = cy / this.scale, p = this.lighthouseSpot();
+    return Math.abs(x - p.x) < 16 && y > p.y - 58 && y < p.y + 6;
   }
 
   /** Is a screen point on the harbor (office, pier or a moored boat)? */
@@ -636,6 +657,14 @@ export class Scene {
     const V = this.V, game = this.game;
     const state = game.company ? 'open' : game.companyRevealed ? 'forsale' : 'boarded';
     this.harbor.texture = this.cached(`harbor:${state}`, () => harborCanvas(state));
+    this.lighthouse.texture = this.cached(`lighthouse:${game.company}`, () => lighthouseCanvas(game.company));
+    if (game.company) {
+      // A beam sweeping slowly out over the water.
+      const p = this.lighthouseSpot(), lx = p.x, ly = p.y - 48, a = Math.sin(this.time * 0.6) * 0.9;
+      const tip = (k: number) => [lx + Math.cos(a + k) * 80, ly + Math.abs(Math.sin(a + k)) * 14] as const;
+      const [x1, y1] = tip(-0.12), [x2, y2] = tip(0.12);
+      g.poly([lx, ly, x1, y1, x2, y2]).fill({ color: '#fff3b0', alpha: 0.18 });
+    }
     // Teaser: a dark ship drifts along the far bank now and then (20 s across, every 45 s).
     const cycle = this.time % 45;
     this.ship.visible = !game.company && cycle < 20;
