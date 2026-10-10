@@ -36,6 +36,7 @@ const ROMAN: Record<Tier, string> = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V'
 const POS = [{ x: 50, y: 84 }, { x: 24, y: 52 }, { x: 76, y: 52 }, { x: 24, y: 18 }, { x: 76, y: 18 }];
 
 /** Each gear slot's icon (tabs and empty slots). */
+const SLOT_NAME: Record<GearSlot, string> = { rod: 'rod', hat: 'hat', shirt: 'shirt', pants: 'pants', boots: 'boots' };
 const SLOT_ICON: Record<GearSlot, IconName> = { rod: 'rod', hat: 'star', shirt: 'shirt', pants: 'bag', boots: 'boot' };
 
 export const BAIT_ICON: Record<BaitId, IconName> = { worm: 'bait', cricket: 'cricket', shiner: 'shiner', leech: 'leech', glow: 'glow', gold: 'gold' };
@@ -767,6 +768,12 @@ export class UI {
   }
 
   /** A piece close up: tier, stats against what you wear in that slot, a Legendary's effect; EQUIP / TAKE OFF / SELL. */
+  /**
+   * A piece as a card (mobile RPG style): big icon, name, tier; each of its
+   * stats with a green up or red down arrow for how it compares with the piece
+   * you wear in that slot; then how your totals would change; EQUIP / SELL.
+   * A piece you're wearing shows just its stats and TAKE OFF.
+   */
   private gearItemHtml(game: Game): string {
     const { item, def, worn } = this.gearSelected(game);
     if (!item || !def) {
@@ -775,36 +782,31 @@ export class UI {
       return fits.length ? `<p class="note">Pieces in your bag that fit:</p><div class="gbag">${fits.map((g) => this.gearTile(game.gearDef(g), g, `gsel:bag:${g.id}`)).join('')}</div>`
         : '<p class="empty">Nothing here. Buy one at the Gear Shop, or find one fishing.</p>';
     }
+    const tier = GEAR_TIERS[def.tier];
     const kind = item.drop ? (item.fine ? 'Fine find' : 'Found fishing') : 'Shop piece';
-    const tag = (d: GearDef, it: GearItem | null, label: string) => `<div class="cmpcol"><small>${label}</small>${d ? this.gearTile(d, it, 'none') : '<span class="gtile empty"></span>'}
-      <b style="color:${d ? GEAR_TIERS[d.tier].color : 'var(--ink-soft)'}">${d ? GEAR_TIERS[d.tier].name : ''}</b><span class="cmpname">${d ? d.name : 'Nothing'}</span></div>`;
-    const wornItem = worn ? null : game.equipped[def.slot], wornDef = wornItem ? game.gearDef(wornItem) : null;
-    let body: string;
-    if (worn) {
-      // Just this piece: its stats.
-      const rows = STAT_ORDER.filter((s) => item.stats[s]).map((s) => `<div class="cmprow one"><span>${STATS[s].name}</span><b>${item.stats[s]}%</b></div>`).join('');
-      body = `<div class="cmphead">${tag(def, item, `WEARING · ${kind}`)}</div><div class="cmptable">${rows || '<p class="note">No stats.</p>'}</div>`;
-    } else {
-      // Side by side: what you wear, and this one; one row per stat with both values and the difference.
-      const a = wornItem?.stats ?? {}, b = item.stats;
-      const keys = STAT_ORDER.filter((s) => a[s] || b[s]);
-      const better: string[] = [], worse: string[] = [];
-      const rows = keys.map((s) => {
-        const va = a[s] ?? 0, vb = b[s] ?? 0, d = vb - va;
-        if (d > 0) better.push(STATS[s].name); else if (d < 0) worse.push(STATS[s].name);
-        return `<div class="cmprow"><span>${STATS[s].name}</span><b>${va ? `${va}%` : '-'}</b><b>${vb ? `${vb}%` : '-'}</b>
-          <i class="${d > 0 ? 'up' : d < 0 ? 'down' : ''}">${d > 0 ? `+${d}` : d < 0 ? `${d}` : '='}</i></div>`;
+    const head = `<div class="rpghead">${this.gearTile(def, item, 'none')}<div><b class="rpgname">${def.name}</b>
+      <small style="color:${tier.color}">${tier.name} ${SLOT_NAME[def.slot]}</small><small>${worn ? 'You are wearing this' : kind}</small></div></div>`;
+    const other = worn ? null : game.equipped[def.slot];
+    const mine = other?.stats ?? {};
+    const lines = STAT_ORDER.filter((st) => item.stats[st]).map((st) => {
+      const v = item.stats[st]!, d = v - (mine[st] ?? 0);
+      const arrow = worn ? '' : d > 0 ? `<i class="up">\u25b2 ${d}</i>` : d < 0 ? `<i class="down">\u25bc ${-d}</i>` : '<i>=</i>';
+      return `<div class="rpgstat"><span>${STATS[st].name}</span><b>${v}%</b>${arrow}</div>`;
+    }).join('') || '<p class="note">No stats.</p>';
+    let changes = '';
+    if (!worn) {
+      // Totals over everything you wear, before and after swapping this in.
+      const rows = STAT_ORDER.map((st) => {
+        const now = game.gearStat(st), after = now - (mine[st] ?? 0) + (item.stats[st] ?? 0);
+        return now === after ? '' : `<div class="rpgstat small"><span>${STATS[st].name}</span><b>${now}% \u2192 ${after}%</b><i class="${after > now ? 'up' : 'down'}">${after > now ? '\u25b2' : '\u25bc'}</i></div>`;
       }).join('');
-      const verdict = !better.length && !worse.length ? 'The same as what you wear.'
-        : `${better.length ? `Better ${better.join(', ')}` : ''}${better.length && worse.length ? '. ' : ''}${worse.length ? `Worse ${worse.join(', ')}` : ''}.`;
-      body = `<div class="cmphead">${tag(wornDef!, wornItem, 'WEARING')}<span class="cmpvs">vs</span>${tag(def, item, `THIS ONE · ${kind}`)}</div>
-        <div class="cmptable"><div class="cmprow hd"><span></span><b>WEARING</b><b>THIS</b><i></i></div>${rows}</div><p class="cmpverdict">${verdict}</p>`;
+      changes = `<div class="rpgtotal"><small>${other ? `Instead of your ${game.gearDef(other).name}, your totals change:` : 'Nothing worn there now. Your totals change:'}</small>${rows || '<small>No change.</small>'}</div>`;
     }
     const effect = def.effect ? `<p class="note legend">${def.blurb}</p>` : '';
     const buttons = worn
       ? (def.slot === 'rod' ? '<p class="note">You always fish with a rod: equip another to swap.</p>' : `<button class="btn wide plain" data-act="gunequip:${def.slot}" ${game.gearBag.length >= GEAR_BAG ? 'disabled' : ''}>TAKE OFF</button>`)
       : `<div class="vchoices"><button class="btn" data-act="gequip:${item.id}">EQUIP</button><button class="btn red" data-act="gsell:${item.id}">SELL ${cash(game.gearValue(item))}</button></div>`;
-    return body + effect + buttons;
+    return `<div class="rpgcard">${head}<div class="rpgstats">${lines}</div>${changes}</div>` + effect + buttons;
   }
 
   // ---------- the Exotic Market ----------

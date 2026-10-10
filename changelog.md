@@ -4,6 +4,14 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-10  Gear card, mobile RPG style
+  WHAT: Tapping a piece shows one big card: icon, name, tier and slot, its
+        stats each with a green up or red down arrow against the piece you
+        wear there, then how your totals change (Stride 45% -> 12%); EQUIP /
+        SELL. Replaces the two-column comparison.
+  WHY:  The user still found the side-by-side comparison unclear and picked
+        the Archero / AFK style card from three mock-ups.
+
 2026-10-10  Character screen as a paper doll; clear gear comparison
   WHAT: Tap your fisher to open Character. EQUIPPED tab: you on the left,
         HEAD / TORSO / LEGS / FEET / ROD boxes top to bottom with each piece's
