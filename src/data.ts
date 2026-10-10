@@ -674,6 +674,32 @@ export const VOYAGE = {
   pearls: { coast: 3, ocean: 6, abyss: 12, old: 40 },
 };
 
+/** The Pub: sailors you sign to crew the Flagship on voyages without you. */
+export type CrewRole = 'captain' | 'navigator' | 'bosun' | 'harpooner';
+export const CREW_ROLE_ORDER: CrewRole[] = ['captain', 'navigator', 'bosun', 'harpooner'];
+export const PUB = {
+  board: 4, // sailors looking for work
+  refresh: 1800, // new faces every 30 min
+  refreshPrice: 50_000,
+  signPerStar: 20_000, // signing fee
+  cutPerStar: 0.02, // each sailor's share of the haul money
+  haulShare: 0.6, // a crew's haul vs sailing yourself
+  captainPerStar: 0.1, // haul
+  navPerStar: 0.08, // trip time
+  roughBase: 0.4, bosunPerStar: 0.08, // rough seas halve the haul
+  legendBase: 0.2, harpoonPerStar: 0.15, // bringing the legend home
+  trip: { coast: 600, ocean: 1200, abyss: 2400 } as Record<Region, number>,
+  stars: [0.35, 0.65, 0.85, 0.96], // roll below each: 1, 2, 3, 4 stars; else 5
+};
+export const CREW_ROLES: Record<CrewRole, { name: string; does: (stars: number) => string }> = {
+  captain: { name: 'Captain', does: (s) => `+${Math.round(s * PUB.captainPerStar * 100)}% haul` },
+  navigator: { name: 'Navigator', does: (s) => `-${Math.round(s * PUB.navPerStar * 100)}% trip time` },
+  bosun: { name: 'Bosun', does: (s) => `${Math.round((PUB.roughBase - s * PUB.bosunPerStar) * 100)}% rough seas` },
+  harpooner: { name: 'Harpooner', does: (s) => `${Math.round((PUB.legendBase + s * PUB.harpoonPerStar) * 100)}% legend` },
+};
+export const SAILOR_NAMES = ['Old Mags', 'Finn', 'Tib', 'Wren', 'Salty Pete', 'Ida', 'Bram', 'Nell', 'Hob', 'Rosa', 'Gus', 'Mira', 'Jory', 'Edda', 'Cobb', 'Lark',
+  'One-Eye Sal', 'Duff', 'Tilly', 'Ansel', 'Brine', 'Kit', 'Morwen', 'Ned'];
+
 /** The harbor: berths (how many boats), automation, and the warehouse (offline earnings cap). */
 export const BERTHS: { boats: number; price: number }[] = [
   { boats: 3, price: 0 }, { boats: 4, price: 150000 }, { boats: 5, price: 400000 }, { boats: 6, price: 1000000 }, { boats: 8, price: 2500000 },

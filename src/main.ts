@@ -74,6 +74,7 @@ canvas.addEventListener('click', (e) => {
   if (scene.hitBobber(e.clientX, e.clientY) >= 0) { game.reel(scene.hitBobber(e.clientX, e.clientY)); return; }
   if (scene.hitJetty(e.clientX, e.clientY)) { ui.open = 'exotic'; return; }
   if (scene.hitGearShop(e.clientX, e.clientY)) { ui.open = 'gearshop'; return; }
+  if (scene.hitPub(e.clientX, e.clientY)) { ui.open = 'pub'; return; }
   if (scene.hitPlayer(e.clientX, e.clientY)) { ui.charTab = 'gear'; ui.open = 'character'; return; }
   if (scene.hitLighthouse(e.clientX, e.clientY)) { ui.open = game.voyage ? 'voyage' : 'lighthouse'; return; }
   if (scene.hitHarbor(e.clientX, e.clientY)) { ui.open = 'harbor'; return; }
@@ -117,7 +118,7 @@ function onAction(a: Action): void {
     if (!game.cast() && !game.activeBait) { const at = scene.fisherScreen(); note.float('NO BAIT', at.x, at.y, 'bad'); }
   }
   else if (a === 'reel') game.reel();
-  else if (a === 'market' || a === 'tackle' || a === 'baitshop' || a === 'pouch' || a === 'harbor' || a === 'pier' || a === 'shipyard' || a === 'harborup' || a === 'pierstaff' || a === 'ledger' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'inbox' || a === 'settings' || a === 'tree' || a === 'retire' || a === 'lighthouse' || a === 'exotic' || a === 'voyage' || a === 'gearshop' || a === 'character') ui.open = ui.open === a ? null : a;
+  else if (a === 'market' || a === 'tackle' || a === 'baitshop' || a === 'pouch' || a === 'harbor' || a === 'pier' || a === 'shipyard' || a === 'harborup' || a === 'pierstaff' || a === 'ledger' || a === 'training' || a === 'journal' || a === 'trophies' || a === 'inbox' || a === 'settings' || a === 'tree' || a === 'retire' || a === 'lighthouse' || a === 'exotic' || a === 'voyage' || a === 'gearshop' || a === 'character' || a === 'pub') ui.open = ui.open === a ? null : a;
   else if (a.startsWith('bait:')) game.selectBait(a.slice(5) as BaitId);
   else if (a === 'buyCompany') {
     if (game.buyCompany()) { ui.open = null; note.clearBanners(); note.banner(pixelIcon('boat'), 'THE FISHING CO.', 'is yours', 'rare'); }
@@ -183,6 +184,11 @@ function onAction(a: Action): void {
   }
   else if (a === 'close') ui.open = null;
   else if (a.startsWith('gsMode:')) ui.gsMode = a.slice(7) as 'buy' | 'sell';
+  else if (a.startsWith('pubTab:')) ui.pubTab = a.slice(7) as 'board' | 'crew';
+  else if (a.startsWith('lhWho:')) ui.lhWho = a.slice(6) as 'you' | 'crew';
+  else if (a.startsWith('sign:')) { const s = game.pubBoard.find((x) => x.id === Number(a.slice(5))); if (s && game.signSailor(s.id)) note.banner(pixelIcon('crew'), 'SIGNED', `${s.name}, ${s.role}`, 'plain'); }
+  else if (a === 'pubRefresh') game.refreshBoard();
+  else if (a.startsWith('crewSail:')) { if (game.sendCrew(a.slice(9))) { note.banner(pixelIcon('boat'), 'CREW SAILED', LEGENDS.find((l) => l.id === a.slice(9))!.spot, 'plain'); ui.open = null; } }
   else if (a.startsWith('charTab:')) ui.charTab = a.slice(8) as 'gear' | 'bag';
   else if (a.startsWith('gsSlot:')) ui.gsSlot = a.slice(7) as GearSlot;
   else if (a.startsWith('gsTier:')) ui.gsTier = a.slice(7) as GearTier;
@@ -394,6 +400,10 @@ let last = performance.now();
 /** Tackle news: a frenzy starts (Chum Bucket), the Landing Net brings in a second fish. */
 function tackleNews(): void {
   if (game.frenzyNews) { game.frenzyNews = false; note.banner(pixelIcon('bait'), 'FRENZY!', 'Bites come fast', 'rare'); }
+  for (const r of game.crewNews.splice(0)) {
+    const l = LEGENDS.find((x) => x.id === r.legend)!;
+    note.banner(pixelIcon(r.caught ? 'trophy' : 'boat'), r.caught ? `CREW BROUGHT ${l.name.toUpperCase()}` : 'CREW HOME', `Haul ${r.haul.toLocaleString()}${r.caught ? ` · +${r.pearls} Pearls` : ' · the legend got away'}${r.rough ? ' · rough seas' : ''}`, r.caught ? 'rare' : 'plain');
+  }
   for (; game.doubleNews > 0; game.doubleNews--) { const at = scene.fisherScreen(); note.float('DOUBLE!', at.x, at.y - 30, 'rare'); }
 }
 

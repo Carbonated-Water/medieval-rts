@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_REPEAT, BOOTS, CAPTAIN_WAGE, COMPANY_PRICE, CREW_BASE, GROUNDS, HANDS_MAX, handCost, PIER_SPOTS, PIER_SECTIONS, SELLER_BAG, SHELLFISH,
   COMPANY_UNLOCK_EARNED, LETTERS, TRACK_GROWTH, TRACK_MAX, TRACK_ORDER, CLOTHES, DEV_MULTIPLIER, FISH, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_MAX, VARIANTS,
-  MAX_GROUND_WORMS, START_WORMS, STRENGTH_PER_LEVEL, WORM_SPAWN_SECONDS, skillCost, TREE_FISH, pearlsFor, gearById,
+  MAX_GROUND_WORMS, START_WORMS, STRENGTH_PER_LEVEL, WORM_SPAWN_SECONDS, skillCost, TREE_FISH, pearlsFor, gearById, LEGENDS,
 } from './data';
 import { Game, fishById, type Line } from './game';
 
@@ -1065,5 +1065,68 @@ describe('the Exotic Market', () => {
     tick(g, 310);
     const again = new Game(JSON.parse(JSON.stringify(g.save())));
     expect([again.exoticHold, again.listings, again.wanted, again.nextExoticId]).toEqual([g.exoticHold, g.listings, g.wanted, g.nextExoticId]);
+  });
+});
+
+describe('the Pub and crew voyages', () => {
+  const ready = (seed = 1) => {
+    const g = new Game({ money: 1e8, company: true, flagship: true }, rng(seed));
+    g.tick(0.1); // the board fills once the Flagship is yours
+    return g;
+  };
+  const sign = (g: Game, role: 'captain' | 'navigator' | 'bosun' | 'harpooner', stars: number) => { g.crew[role] = { id: 900 + stars, name: 'Test', role, stars }; };
+
+  it('the board fills with the Flagship, refreshes on its clock, and signing seats a sailor for a small fee', () => {
+    expect(new Game({}, rng(1)).pubBoard).toHaveLength(0);
+    const g = ready();
+    expect(g.pubBoard).toHaveLength(4);
+    const first = g.pubBoard[0]!, money = g.money;
+    expect(g.signSailor(first.id)).toBe(true);
+    expect(g.money).toBe(money - first.stars * 20000);
+    expect(g.crew[first.role]).toEqual(first);
+    expect(g.pubBoard).toHaveLength(3);
+    tick(g, 1801);
+    expect(g.pubBoard).toHaveLength(4);
+    expect(g.pubBoard.some((s) => s.id === first.id)).toBe(false);
+  });
+
+  it('needs a Captain; the crew sails, comes home after the trip and pays the haul minus their cut', () => {
+    const g = ready(2);
+    expect(g.sendCrew('kelpwyrm')).toBe(false);
+    sign(g, 'captain', 3);
+    expect(g.sendCrew('kelpwyrm')).toBe(true);
+    expect(g.canSail()).toBe(false); // the Flagship is out
+    const money = g.money;
+    tick(g, 599);
+    expect(g.crewTrip).not.toBeNull();
+    tick(g, 2);
+    expect(g.crewTrip).toBeNull();
+    const r = g.crewNews[0]!;
+    expect(r.cut).toBeGreaterThan(0);
+    expect(g.money - money).toBe(r.haul + r.sold);
+    expect(r.caught).toBe(false); // no harpooner, no legend
+    expect(g.canSail()).toBe(true); // no rest after a crew voyage
+  });
+
+  it('a 5-star harpooner brings the legend home most trips; a navigator shortens the trip', () => {
+    const g = ready(3);
+    sign(g, 'captain', 1); sign(g, 'harpooner', 5);
+    let caught = 0;
+    for (let k = 0; k < 40; k++) { g.sendCrew('kelpwyrm'); tick(g, 601); caught += g.crewNews.splice(0).filter((r) => r.caught).length; g.exoticHold = []; }
+    expect(caught).toBeGreaterThan(30);
+    const before = g.crewTripTime(LEGENDS.find((l) => l.id === 'kelpwyrm')!);
+    sign(g, 'navigator', 5);
+    expect(g.crewTripTime(LEGENDS.find((l) => l.id === 'kelpwyrm')!)).toBeLessThan(before);
+  });
+
+  it('a crew at sea comes home while you are away, past the warehouse limit', () => {
+    const g = ready(4);
+    sign(g, 'captain', 2);
+    g.sendCrew('kelpwyrm');
+    g.crewTrip!.dur = 20 * 3600; // longer than the warehouse keeps the boats going
+    expect(g.offlineHours).toBeLessThan(20);
+    g.catchUp(24 * 3600);
+    expect(g.crewTrip).toBeNull();
+    expect(g.crewNews).toHaveLength(1);
   });
 });

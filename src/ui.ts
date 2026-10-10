@@ -2,21 +2,21 @@ import {
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_ORDER, COMPANY_PRICE, COMPANY_UNLOCK_EARNED, DEV_MULTIPLIER, GROUNDS, HARBOR_UPGRADES,
   MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, PIER_STAFF, HANDS_MAX,
   TRACKS, TRACK_MAX, TRACK_ORDER, WAREHOUSE, type HarborUpgradeId, type TrackId, HAND_NAMES, HAND_SKILL_MAX, LETTERS, RODS, FISH, GEAR, REFLEX_PER_LEVEL, SKILLS, STRENGTH_PER_LEVEL, HAGGLE_PER_LEVEL,
-  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, TREE_FISH, type TreeFish, LEGENDS, EXOTIC, REGIONS, VOYAGE, GEAR_BAG, GEAR_ITEMS, GEAR_SLOTS, GEAR_TIERS, GEAR_TIER_ORDER, STATS, STAT_ORDER, type GearDef, type GearSlot, type GearTier, type StatId,
+  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, TREE_FISH, type TreeFish, PUB, CREW_ROLES, CREW_ROLE_ORDER, LEGENDS, EXOTIC, REGIONS, VOYAGE, GEAR_BAG, GEAR_ITEMS, GEAR_SLOTS, GEAR_TIERS, GEAR_TIER_ORDER, STATS, STAT_ORDER, type GearDef, type GearSlot, type GearTier, type StatId,
 } from './data';
-import { type Boat, type Exotic, type Game, type GearItem, fishById } from './game';
+import { type Boat, type Exotic, type Game, type GearItem, type Sailor, fishById } from './game';
 import * as V from './voyage';
 import { Notices, lineHtml, timeAgo } from './notify';
 import { fisherIcon, gearIcon, pixelFishIcon as fishIcon, pixelIcon, type HatStyle, type IconName } from './pixelart';
 import type { Place } from './scene';
 
 /** One panel per job: the market sells fish, the tackle shop sells gear, the school trains skills. */
-export type Panel = 'gearshop' | 'character' | 'gearitem' | 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'ledger' | 'boat' | 'tree' | 'retire' | 'lighthouse' | 'exotic' | 'listing' | 'voyage' | 'shipyard' | 'harborup' | 'pier' | 'pierstaff' | 'hand' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
+export type Panel = 'pub' | 'gearshop' | 'character' | 'gearitem' | 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'ledger' | 'boat' | 'tree' | 'retire' | 'lighthouse' | 'exotic' | 'listing' | 'voyage' | 'shipyard' | 'harborup' | 'pier' | 'pierstaff' | 'hand' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
 
 export type Action =
   | 'cast' | 'reel' | 'close' | 'back' | 'reset' | 'toggleDev' | Panel
   | `gsMode:${'buy' | 'sell'}` | `gsSlot:${GearSlot}` | `gsTier:${GearTier}` | `gbuy:${string}` | `gsel:${'bag' | 'eq'}:${string}`
-  | `gequip:${number}` | `gunequip:${GearSlot}` | `gsell:${number}` | 'gsellall' | `charTab:${'gear' | 'bag'}` | `fight:${string}` | 'fightDone' | `lhRegion:${'coast' | 'ocean' | 'abyss'}`
+  | `gequip:${number}` | `gunequip:${GearSlot}` | `gsell:${number}` | 'gsellall' | `charTab:${'gear' | 'bag'}` | `pubTab:${'board' | 'crew'}` | `sign:${number}` | 'pubRefresh' | `crewSail:${string}` | `lhWho:${'you' | 'crew'}` | `fight:${string}` | 'fightDone' | `lhRegion:${'coast' | 'ocean' | 'abyss'}`
   | 'buyFlagship' | `sail:${string}` | `vsail:${number}` | `vchoose:${number}` | 'vlegend' | 'vfight' | 'vhome'
   | `exTab:${'hold' | 'listed' | 'wanted'}` | `exList:${number}` | `exUnlist:${number}` | `exOpen:${number}` | `exSell:${number}:${number}` | `exGive:${number}` | 'exDev' | 'boatPrev' | 'boatNext' | `coTab:${'harbor' | 'ledger' | 'harborup'}`
   | `achTab:${'base' | 'tree'}` | `treeTier:${number}` | `treeSel:${string}` | `unlock:${string}` | 'doRetire' | `journalTier:${number}`
@@ -36,6 +36,8 @@ const ROMAN: Record<Tier, string> = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V'
 const POS = [{ x: 50, y: 84 }, { x: 24, y: 52 }, { x: 76, y: 52 }, { x: 24, y: 18 }, { x: 76, y: 18 }];
 
 /** Each gear slot's icon (tabs and empty slots). */
+/** Seconds as m:ss. */
+const clock = (s: number) => { const n = Math.max(0, Math.ceil(s)); return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`; };
 const SLOT_NAME: Record<GearSlot, string> = { rod: 'rod', hat: 'hat', shirt: 'shirt', pants: 'pants', boots: 'boots' };
 const SLOT_ICON: Record<GearSlot, IconName> = { rod: 'rod', hat: 'star', shirt: 'shirt', pants: 'bag', boots: 'boot' };
 
@@ -90,6 +92,9 @@ export class UI {
   charTab: 'gear' | 'bag' = 'gear';
   /** Lighthouse: which region's legends are shown. */
   lhRegion: 'coast' | 'ocean' | 'abyss' = 'coast';
+  /** Lighthouse: who sails, you or your crew. Pub: the board or your crew. */
+  lhWho: 'you' | 'crew' = 'you';
+  pubTab: 'board' | 'crew' = 'board';
   /** Exotic Market: which tab, and which listing is open. */
   exTab: 'hold' | 'listed' | 'wanted' = 'hold';
   exSel = 0;
@@ -227,6 +232,7 @@ export class UI {
             : panel === 'retire' ? ['Retire', this.retireHtml(game)]
               : panel === 'trophies' ? [`Trophies ${game.claimed.length}/${ACHIEVEMENTS.length}`, this.trophiesHtml(game)]
                 : panel === 'inbox' ? ['Log', this.inboxHtml()]
+                : panel === 'pub' ? ['The Pub', this.pubHtml(game)]
                 : panel === 'gearshop' ? ['Gear Shop', this.gearShopHtml(game)]
                 : panel === 'character' ? ['Character', this.characterHtml(game)]
                 : panel === 'gearitem' ? [this.gearItemTitle(game), this.gearItemHtml(game)]
@@ -631,17 +637,53 @@ export class UI {
     const ship = !game.flagship
       ? `<div class="row"><div class="slot">${icon('boat')}</div><div class="meta"><b>The Flagship</b><div class="sub"><small>Sail to the legends</small></div></div>
         <button class="btn" data-act="buyFlagship" ${game.money < VOYAGE.flagship ? 'disabled' : ''}>${cash(VOYAGE.flagship)}</button></div>`
+      : game.crewTrip ? `<div class="row tight"><div class="slot">${icon('crew')}</div><div class="meta"><b>Crew at sea</b><div class="sub"><small>${LEGENDS.find((l) => l.id === game.crewTrip!.legend)!.spot} · ${clock(game.crewTrip.dur - game.crewTrip.t)} left</small></div></div></div>`
       : game.voyage ? `<div class="row"><div class="slot">${icon('boat')}</div><div class="meta"><b>At sea</b><div class="sub"><small>${V.legendOf(game.voyage).spot}</small></div></div><button class="btn" data-act="voyage">RESUME</button></div>`
       : `<div class="row tight"><div class="slot">${icon('boat')}</div><div class="meta"><b>The Flagship</b><div class="sub"><small>${game.canSail() ? 'Ready to sail' : `Resting ${Math.floor(rest / 60)}:${String(rest % 60).padStart(2, '0')}`}</small></div></div></div>`;
     const tabs = `<div class="tiers three">${(['coast', 'ocean', 'abyss'] as const).map((k) => `<button class="tab${r === k ? ' on' : ''}" style="--c:${k === 'coast' ? '#2eb082' : k === 'ocean' ? '#2f6fd6' : '#4a3a7a'}" data-act="lhRegion:${k}">${game.regionOpen(k) ? '' : icon('lock', 2)}${REGIONS[k].name.toUpperCase()}</button>`).join('')}</div>`;
+    // With a Captain signed at the Pub, choose who sails.
+    const crewing = game.canSendCrew(), who = crewing ? this.lhWho : 'you';
+    const whoTabs = crewing ? `<div class="tiers two">${(['you', 'crew'] as const).map((k) => `<button class="tab${who === k ? ' on' : ''}" style="--c:#7a5a3a" data-act="lhWho:${k}">${k === 'you' ? 'YOU SAIL' : 'SEND CREW'}</button>`).join('')}</div>` : '';
+    const odds = game.crewOdds();
+    const note = who === 'crew' ? `${clock(game.crewTripTime(LEGENDS.find((l) => l.region === r)!))} trip · ${Math.round(odds.legend * 100)}% legend · crew cut ${Math.round(odds.cut * 100)}%` : `${REGIONS[r].twist}.`;
     const rows = LEGENDS.filter((l) => l.region === r).map((l) => {
       const open = game.legendOpen(l), n = game.landed[l.id] ?? 0;
       const btn = !open ? `<span class="maxed">${icon('lock', 2)}</span>`
+        : who === 'crew' ? `<button class="btn" data-act="crewSail:${l.id}">SEND</button>`
         : game.canSail() ? `<button class="btn" data-act="sail:${l.id}">SAIL</button>` : `<button class="btn plain" data-act="fight:${l.id}">TRY</button>`;
       return `<div class="row"><div class="slot"><img class="fit" src="${fishIcon(l, !open, 48, 28)}" alt=""></div><div class="meta"><b>${open ? l.name : '???'} <span class="small">$${kmb(l.price)}${n ? ` · x${n}` : ''}</span></b>
         <div class="sub"><small>${open ? `${l.spot} · ${l.blurb}` : l.id === 'theoldone' ? 'Land the rest of the Abyss' : 'Land a legend of the region before'}</small></div></div>${btn}</div>`;
     }).join('');
-    return ship + tabs + `<p class="note">${REGIONS[r].twist}.</p>` + rows;
+    return ship + whoTabs + tabs + `<p class="note">${note}</p>` + rows;
+  }
+
+  // ---------- the Pub ----------
+
+  /** Sailors for hire (RECRUITS) and your four seats (CREW). */
+  private pubHtml(game: Game): string {
+    if (!game.flagship) return `<div class="row"><div class="slot">${icon('lock')}</div><div class="meta"><b>Closed</b><div class="sub"><small>Buy the Flagship at the lighthouse</small></div></div></div>`;
+    const seated = CREW_ROLE_ORDER.filter((r) => game.crew[r]).length;
+    const tabs = `<div class="tiers two"><button class="tab${this.pubTab === 'board' ? ' on' : ''}" style="--c:#7a3a2a" data-act="pubTab:board">RECRUITS</button><button class="tab${this.pubTab === 'crew' ? ' on' : ''}" style="--c:#7a3a2a" data-act="pubTab:crew">CREW ${seated}/4</button></div>`;
+    const stars = (n: number) => `<span class="stars">${Array.from({ length: 5 }, (_, k) => `<img src="${pixelIcon('star', 2)}" class="${k < n ? '' : 'off'}" alt="">`).join('')}</span>`;
+    const who = (s: Sailor) => `<b>${s.name} <span class="small">${CREW_ROLES[s.role].name.toUpperCase()}</span></b>`;
+    if (this.pubTab === 'crew') {
+      const rows = CREW_ROLE_ORDER.map((r) => {
+        const s = game.crew[r];
+        return s ? `<div class="row"><div class="slot">${icon('crew')}</div><div class="meta">${who(s)}<div class="sub">${stars(s.stars)}<small>${CREW_ROLES[r].does(s.stars)}</small></div></div></div>`
+          : `<div class="row"><div class="slot">${icon('crew')}</div><div class="meta"><b class="none">${CREW_ROLES[r].name}</b><div class="sub"><small>Empty seat</small></div></div></div>`;
+      }).join('');
+      const o = game.crewOdds();
+      const sum = game.crew.captain ? `Haul ${Math.round(o.haul * 100)}% of yours · they take ${Math.round(o.cut * 100)}% · legend ${Math.round(o.legend * 100)}% · rough seas ${Math.round(o.rough * 100)}%` : 'Sign a Captain to send the crew out.';
+      return tabs + rows + `<p class="note">${sum}</p>`;
+    }
+    const rows = game.pubBoard.map((s) => {
+      const mine = game.crew[s.role];
+      return `<div class="row"><div class="slot">${icon('crew')}</div><div class="meta">${who(s)}<div class="sub">${stars(s.stars)}<small>${CREW_ROLES[s.role].does(s.stars)}${mine ? ` · yours ${mine.stars}` : ''}</small></div></div>
+        <button class="btn" data-act="sign:${s.id}" ${game.money < game.signFee(s) ? 'disabled' : ''}>${cash(game.signFee(s))}</button></div>`;
+    }).join('') || '<p class="empty">Everyone here signed on. New faces soon.</p>';
+    const left = Math.max(0, Math.ceil(PUB.refresh - game.pubClock));
+    return tabs + rows + `<div class="row tight"><div class="meta"><div class="sub"><small>New faces ${clock(left)}</small></div></div>
+      <button class="btn plain" data-act="pubRefresh" ${game.money < PUB.refreshPrice ? 'disabled' : ''}>${cash(PUB.refreshPrice)}</button></div>`;
   }
 
   // ---------- voyages ----------

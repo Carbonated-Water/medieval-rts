@@ -4,7 +4,7 @@ import tilesUrl from './assets/kenney/tiles.png';
 import { BOOTS, CLOTHES, HAND_OUTFITS, RODS, TIERS, VARIANTS, type FishDef, type Variant } from './data';
 import type { Game, Line } from './game';
 import {
-  HAND, PAL, alertCanvas, baitShopCanvas, boatCanvas, bobberCanvas, craneCanvas, harborCanvas, gearShopCanvas, jettyCanvas, type HatStyle, lighthouseCanvas, warehouseCanvas, fishCanvas, fisherCanvas, holderCanvas, plankCanvas, schoolCanvas, stallCanvas, type Pose,
+  HAND, PAL, alertCanvas, baitShopCanvas, boatCanvas, bobberCanvas, craneCanvas, harborCanvas, gearShopCanvas, pubCanvas, jettyCanvas, type HatStyle, lighthouseCanvas, warehouseCanvas, fishCanvas, fisherCanvas, holderCanvas, plankCanvas, schoolCanvas, stallCanvas, type Pose,
 } from './pixelart';
 
 export type Place = 'market' | 'school' | 'bait' | 'tackle' | 'dock';
@@ -272,7 +272,7 @@ export class Scene {
     // Little grass tufts and flowers, kept clear of the school.
     for (let i = 0; i < Math.round(V.w / 9); i++) {
       const x = Math.round((i * 37 + 11) % V.w), y = Math.round(V.path + 20 + ((i * 53) % Math.max(1, V.h - V.path - 40)));
-      if ((Math.abs(x - V.schoolX) < 26 || Math.abs(x - V.baitX) < 24 || Math.abs(x - this.gearShopX()) < 24) && y < V.path + 56) continue;
+      if ((Math.abs(x - V.schoolX) < 26 || Math.abs(x - V.baitX) < 24 || Math.abs(x - this.gearShopX()) < 24 || Math.abs(x - this.pubX()) < 24) && y < V.path + 56) continue;
       if (i % 4 === 0) meadow.rect(x, y, 1, 1).fill([PAL.white, PAL.goldLight, PAL.redLight][i % 3]!).rect(x, y + 1, 1, 2).fill(PAL.greenDark);
       else meadow.rect(x, y, 1, 3).fill(PAL.greenLight).rect(x - 1, y + 1, 1, 2).fill(PAL.greenLight).rect(x + 1, y + 1, 1, 2).fill(PAL.greenDark);
     }
@@ -309,6 +309,7 @@ export class Scene {
     shop('school', schoolCanvas, V.schoolX, V.path + 12, 0);
     shop('baitshop', baitShopCanvas, V.baitX, V.path + 12, 0);
     shop('gearshop', gearShopCanvas, this.gearShopX(), V.path + 12, 0);
+    shop('pub', pubCanvas, this.pubX(), V.path + 12, 0);
     // Worms poke out of the dirt bank (redrawn every frame).
     this.wormFx = add(new Graphics());
     this.world.addChild(layer);
@@ -375,6 +376,16 @@ export class Scene {
   /** The Gear Shop sits at the meadow's left edge, below the Market. */
   private gearShopX(): number {
     return Math.max(20, Math.round(this.V.w * 0.1));
+  }
+
+  /** The Pub sits at the meadow's right edge, below the Tackle stall. */
+  private pubX(): number {
+    return Math.min(this.V.w - 20, Math.round(this.V.w * 0.9));
+  }
+
+  hitPub(cx: number, cy: number): boolean {
+    const x = cx / this.scale, y = cy / this.scale, V = this.V;
+    return y > V.path + 10 && y < V.path + 46 && Math.abs(x - this.pubX()) < 19;
   }
 
   /** Your fisher (tap to open the Character screen). */

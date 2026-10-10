@@ -569,6 +569,22 @@ export function gearShopCanvas(): HTMLCanvasElement {
   }));
 }
 
+/** The Pub: a timber tavern with warm windows and a hanging sign. */
+export function pubCanvas(): HTMLCanvasElement {
+  const W = 36, H = 32;
+  return outline(makeCanvas(W, H, (ctx) => {
+    rect(ctx, 2, 10, W - 4, H - 11, PAL.dirtDark);
+    for (let x = 4; x < W - 3; x += 6) rect(ctx, x, 10, 1, H - 11, PAL.dirtDeep); // timbers
+    rect(ctx, 2, 18, W - 4, 1, PAL.dirtDeep);
+    for (let y = 5; y < 11; y++) rect(ctx, 1 + (10 - y), y, W - 2 - (10 - y) * 2, 1, y % 2 ? PAL.redDark : PAL.red); // roof
+    rect(ctx, 5, 13, 8, 6, PAL.outline); rect(ctx, 6, 14, 6, 4, PAL.goldLight); px(ctx, 9, 14, PAL.gold); // window
+    rect(ctx, 23, 13, 8, 6, PAL.outline); rect(ctx, 24, 14, 6, 4, PAL.goldLight); px(ctx, 27, 14, PAL.gold);
+    rect(ctx, 14, 20, 8, 11, PAL.outline); rect(ctx, 15, 21, 6, 10, PAL.dirtDeep); px(ctx, 19, 26, PAL.gold); // door
+    rect(ctx, 6, 22, 3, 4, PAL.sand); rect(ctx, 6, 22, 3, 1, PAL.white); // a mug by the door
+    sign(ctx, W / 2, 0, 'PUB');
+  }));
+}
+
 /** One stretch of dock planks (tiles vertically). */
 export function plankCanvas(w: number): HTMLCanvasElement {
   return makeCanvas(w, 4, (ctx) => {

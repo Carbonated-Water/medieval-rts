@@ -7,7 +7,7 @@ import {
   MIN_BITE_WAIT, REEL_WINDOW, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, START_WORMS, STRENGTH_PER_LEVEL, TIERS,
   TOO_STRONG_WEIGHT, VARIANTS, VARIANT_ORDER, WORMS_PER_PICK, WORM_SPAWN_SECONDS, WORM_SPOTS, baitById,
   type AchStat, type AchievementDef, type BaitId, type FishDef, type GearKind, type SkillId, type Tier, type Variant,
-  CHUMS, FRENZY_SPEED, ICEBOXES, NETS, GEAR_BAG, GEAR_SELL, GEAR_SLOTS, GEAR_TIERS, LEGACY_GEAR, STARTER_GEAR, gearById, type GearDef, type GearSlot, type StatId,
+  CHUMS, FRENZY_SPEED, ICEBOXES, NETS, GEAR_BAG, GEAR_SELL, PUB, CREW_ROLE_ORDER, SAILOR_NAMES, type CrewRole, GEAR_SLOTS, GEAR_TIERS, LEGACY_GEAR, STARTER_GEAR, gearById, type GearDef, type GearSlot, type StatId,
   BILLFISH, SEA_FISH, SHELLFISH, TREE_FISH, pearlsFor, treeFishById, type TreeFish, COLLECTORS, EXOTIC, LEGENDS, VOYAGE, type LegendDef, type Region,
 } from './data';
 import * as V from './voyage';
@@ -76,6 +76,12 @@ export interface SaveData {
   flagship?: boolean;
   flagshipRest?: number;
   voyage?: V.VoyageState | null;
+  /** The Pub: your crew, the board of sailors, its clock, a crew voyage under way. */
+  crew?: Partial<Record<CrewRole, Sailor>>;
+  pubBoard?: Sailor[];
+  pubClock?: number;
+  nextSailorId?: number;
+  crewTrip?: CrewTrip | null;
   landed?: Record<string, number>;
   /** The Exotic Market. */
   exoticHold?: Exotic[];
@@ -147,6 +153,13 @@ const ALL_FISH: FishDef[] = [...FISH, ...SEA_FISH, ...SHELLFISH, ...BILLFISH, ..
  * A piece of gear you own: which catalogue piece, and its stats (the shop's
  * for a bought piece; better, with bonus stats, for one found fishing).
  */
+/** A sailor from the Pub. */
+export interface Sailor { id: number; name: string; role: CrewRole; stars: number }
+/** A crew voyage under way: the legend it's after, time, and the crew's stars when they sailed. */
+export interface CrewTrip { legend: string; t: number; dur: number; crew: Partial<Record<CrewRole, number>> }
+/** A crew home: haul paid (after their cut), rough seas, the legend or not. */
+export interface CrewResult { legend: string; haul: number; cut: number; rough: boolean; caught: boolean; pearls: number; sold: number }
+
 export interface GearItem { id: number; def: string; stats: Partial<Record<StatId, number>>; drop?: boolean; fine?: boolean }
 
 /** An expedition fish in the exotic hold: which legend, how heavy, what it's worth. */
@@ -214,6 +227,13 @@ export class Game {
   flagship = false;
   flagshipRest = 0;
   voyage: V.VoyageState | null = null;
+  crew: Partial<Record<CrewRole, Sailor>> = {};
+  pubBoard: Sailor[] = [];
+  pubClock = 0;
+  nextSailorId = 1;
+  crewTrip: CrewTrip | null = null;
+  /** Crews home, for the screen to announce. */
+  crewNews: CrewResult[] = [];
   landed: Record<string, number> = {};
   exoticHold: Exotic[] = [];
   listings: Listing[] = [];
@@ -475,7 +495,7 @@ export class Game {
 
   /** The Flagship is bought, rested (or dev mode) and not already out. */
   canSail(): boolean {
-    return this.flagship && !this.voyage && (this.flagshipRest <= 0 || this.dev);
+    return this.flagship && !this.voyage && !this.crewTrip && (this.flagshipRest <= 0 || this.dev);
   }
 
   startVoyage(legend: string): boolean {
@@ -527,6 +547,108 @@ export class Game {
     this.voyage = null;
     this.flagshipRest = VOYAGE.rest;
     return out;
+  }
+
+  // ---------- the Pub: crew voyages ----------
+
+  private rollSailor(): Sailor {
+    const r = this.rng(), stars = 1 + PUB.stars.filter((p) => r >= p).length;
+    const role = CREW_ROLE_ORDER[Math.floor(this.rng() * CREW_ROLE_ORDER.length)]!;
+    return { id: this.nextSailorId++, name: SAILOR_NAMES[Math.floor(this.rng() * SAILOR_NAMES.length)]!, role, stars };
+  }
+
+  private fillBoard(): void {
+    this.pubBoard = Array.from({ length: PUB.board }, () => this.rollSailor());
+    this.pubClock = 0;
+  }
+
+  /** The Pub opens with the Flagship; new faces on the board every so often. */
+  private tickPub(dt: number): void {
+    if (!this.flagship) return;
+    if (!this.pubBoard.length) this.fillBoard();
+    if ((this.pubClock += dt) >= PUB.refresh) this.fillBoard();
+  }
+
+  /** Pay for new faces now. */
+  refreshBoard(): boolean {
+    if (!this.flagship || this.money < PUB.refreshPrice) return false;
+    this.money -= PUB.refreshPrice;
+    this.fillBoard();
+    return true;
+  }
+
+  signFee(s: Sailor): number {
+    return s.stars * PUB.signPerStar;
+  }
+
+  /** Sign a sailor from the board into their role's seat (the one there goes home). */
+  signSailor(id: number): boolean {
+    const i = this.pubBoard.findIndex((s) => s.id === id);
+    if (i < 0) return false;
+    const s = this.pubBoard[i]!;
+    if (this.money < this.signFee(s)) return false;
+    this.money -= this.signFee(s);
+    this.crew[s.role] = s;
+    this.pubBoard.splice(i, 1);
+    return true;
+  }
+
+  /** What your crew would do on a voyage: haul multiplier, their cut, rough-sea and legend chances, trip time multiplier. */
+  crewOdds(crew: Partial<Record<CrewRole, number>> = this.crewStars()): { haul: number; cut: number; rough: number; legend: number; time: number } {
+    const s = (r: CrewRole) => crew[r] ?? 0;
+    return {
+      haul: PUB.haulShare * (1 + s('captain') * PUB.captainPerStar),
+      cut: CREW_ROLE_ORDER.reduce((n, r) => n + s(r), 0) * PUB.cutPerStar,
+      rough: Math.max(0, PUB.roughBase - s('bosun') * PUB.bosunPerStar),
+      legend: s('harpooner') ? Math.min(0.95, PUB.legendBase + s('harpooner') * PUB.harpoonPerStar) : 0,
+      time: 1 - s('navigator') * PUB.navPerStar,
+    };
+  }
+
+  private crewStars(): Partial<Record<CrewRole, number>> {
+    const out: Partial<Record<CrewRole, number>> = {};
+    for (const r of CREW_ROLE_ORDER) if (this.crew[r]) out[r] = this.crew[r]!.stars;
+    return out;
+  }
+
+  /** How long the crew is gone for this legend's region. */
+  crewTripTime(l: LegendDef): number {
+    return this.dev ? 10 : Math.round(PUB.trip[l.region] * this.crewOdds().time);
+  }
+
+  /** The Flagship is free and you have a Captain. */
+  canSendCrew(): boolean {
+    return this.canSail() && !!this.crew.captain;
+  }
+
+  sendCrew(legend: string): boolean {
+    const l = LEGENDS.find((x) => x.id === legend);
+    if (!l || !this.canSendCrew() || !this.legendOpen(l)) return false;
+    const dur = this.crewTripTime(l);
+    this.crewTrip = { legend, t: 0, dur, crew: this.crewStars() };
+    return true;
+  }
+
+  private tickCrew(dt: number): void {
+    const trip = this.crewTrip;
+    if (!trip || (trip.t += dt) < trip.dur) return;
+    this.crewTrip = null;
+    const l = LEGENDS.find((x) => x.id === trip.legend)!, odds = this.crewOdds(trip.crew);
+    const rough = this.rng() < odds.rough;
+    const haul = Math.round(VOYAGE.haul[l.region] * odds.haul * (0.8 + this.rng() * 0.4) * (rough ? 0.5 : 1) / 1000) * 1000;
+    const cut = Math.round(haul * odds.cut / 1000) * 1000;
+    const out: CrewResult = { legend: l.id, haul: haul - cut, cut, rough, caught: false, pearls: 0, sold: 0 };
+    this.money += out.haul;
+    this.earned += out.haul;
+    if (this.rng() < odds.legend) {
+      out.caught = true;
+      this.landed[l.id] = (this.landed[l.id] ?? 0) + 1;
+      const kg = Math.round(l.kg * (0.7 + this.rng() * 0.7));
+      if (!this.addExotic(l.id, kg)) { out.sold = this.exoticValue(l.id, kg); this.money += out.sold; this.earned += out.sold; }
+      out.pearls = V.pearlsFor(l);
+      this.pearls += out.pearls;
+    }
+    this.crewNews.push(out);
   }
 
   // ---------- the Exotic Market ----------
@@ -854,6 +976,8 @@ export class Game {
     if (this.flagshipRest > 0) this.flagshipRest = Math.max(0, this.flagshipRest - dt);
     this.tickHands(dt);
     this.tickChum(dt);
+    this.tickPub(dt);
+    this.tickCrew(dt);
     this.lines.forEach((line, i) => {
       if (line.type === 'idle') return;
       line.t += dt;
@@ -1338,6 +1462,8 @@ export class Game {
     const before = this.money;
     const total = Math.min(seconds, this.offlineHours * 3600);
     for (let t = 0; t < total; t += 0.5) this.tick(0.5);
+    // A crew at sea comes home however long you were away (the warehouse only limits the boats).
+    if (this.crewTrip && seconds > total) this.tickCrew(seconds - total);
     this.fleetNews = [];
     this.sellerNews = 0;
     return Math.round(this.money - before);
@@ -1546,6 +1672,7 @@ export class Game {
       exoticHold: this.exoticHold, listings: this.listings, wanted: this.wanted, nextExoticId: this.nextExoticId,
       equipped: this.equipped, gearBag: this.gearBag, nextGearId: this.nextGearId, net: this.net, chum: this.chum, icebox: this.icebox,
       flagship: this.flagship, flagshipRest: this.flagshipRest, voyage: this.voyage, landed: this.landed,
+      crew: this.crew, pubBoard: this.pubBoard, pubClock: this.pubClock, nextSailorId: this.nextSailorId, crewTrip: this.crewTrip,
       hands: this.hands.map((h) => ({ ...h, line: { type: 'idle' as const }, react: null })), crate: this.crate,
     };
   }

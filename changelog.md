@@ -4,6 +4,20 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-10  The Pub and crew voyages
+  WHAT: A Pub on the meadow (right edge, opens with the Flagship). RECRUITS:
+        4 sailors with a role and 1-5 stars, new faces every 30 min or $50k;
+        signing costs $20k per star and each takes 2% of hauls per star. CREW:
+        Captain (+10% haul/star), Navigator (-8% trip/star), Bosun (rough seas
+        40% -8%/star halve the haul), Harpooner (legend 20% +15%/star, max 95%).
+        At the lighthouse, with a Captain: YOU SAIL / SEND CREW; crews are gone
+        10/20/40 min by region, come home offline (past the warehouse limit),
+        bring 60% of a sailed haul x Captain, minus their cut, and sometimes
+        the legend (Exotic hold, Pearls, counts as landed). No rest after.
+  WHY:  The user wanted automated voyages with teammates hired at a pub;
+        chose roles with stars, a haul cut over a big fee, real-time offline
+        trips, no injuries, and the near bank.
+
 2026-10-10  Tackle shop: Autofisher V-VIII, Landing Net, Chum Bucket, Ice Box
   WHAT: Autofisher V-VIII ($150k-$3M): faster recast and reactions; VII casts
         your best bait itself, VIII never lets a bite escape. Landing Net I-V:

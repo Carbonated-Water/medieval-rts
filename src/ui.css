@@ -358,3 +358,9 @@ body.fighting .banner, body.fighting #notes { visibility: hidden; }
 .banner div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .banner small { font: 16px/1 'Kenney Mini'; color: var(--red-dark); letter-spacing: 1px; }
 .banner b { font: 32px/0.8 'Kenney Pixel'; font-weight: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* The Pub. */
+#sheet .stars { display: inline-flex; gap: 1px; margin-right: 6px; vertical-align: middle; }
+#sheet .stars img { width: 10px; height: 10px; image-rendering: pixelated; }
+#sheet .stars img.off { opacity: 0.2; filter: grayscale(1); }
+#sheet b.none { color: var(--ink-soft); }
