@@ -16,7 +16,7 @@ export type Panel = 'gearshop' | 'character' | 'gearitem' | 'market' | 'tackle' 
 export type Action =
   | 'cast' | 'reel' | 'close' | 'back' | 'reset' | 'toggleDev' | Panel
   | `gsMode:${'buy' | 'sell'}` | `gsSlot:${GearSlot}` | `gsTier:${GearTier}` | `gbuy:${string}` | `gsel:${'bag' | 'eq'}:${string}`
-  | `gequip:${number}` | `gunequip:${GearSlot}` | `gsell:${number}` | 'gsellall' | `fight:${string}` | 'fightDone' | `lhRegion:${'coast' | 'ocean' | 'abyss'}`
+  | `gequip:${number}` | `gunequip:${GearSlot}` | `gsell:${number}` | 'gsellall' | `charTab:${'gear' | 'bag'}` | `fight:${string}` | 'fightDone' | `lhRegion:${'coast' | 'ocean' | 'abyss'}`
   | 'buyFlagship' | `sail:${string}` | `vsail:${number}` | `vchoose:${number}` | 'vlegend' | 'vfight' | 'vhome'
   | `exTab:${'hold' | 'listed' | 'wanted'}` | `exList:${number}` | `exUnlist:${number}` | `exOpen:${number}` | `exSell:${number}:${number}` | `exGive:${number}` | 'exDev' | 'boatPrev' | 'boatNext' | `coTab:${'harbor' | 'ledger' | 'harborup'}`
   | `achTab:${'base' | 'tree'}` | `treeTier:${number}` | `treeSel:${string}` | `unlock:${string}` | 'doRetire' | `journalTier:${number}`
@@ -85,6 +85,8 @@ export class UI {
   gsTier: GearTier = 'bronze';
   gsel: { where: 'bag' | 'eq'; key: string } = { where: 'eq', key: 'rod' };
   gearFrom: 'character' | 'gearshop' = 'character';
+  /** Character screen: what you wear, or the bag. */
+  charTab: 'gear' | 'bag' = 'gear';
   /** Lighthouse: which region's legends are shown. */
   lhRegion: 'coast' | 'ocean' | 'abyss' = 'coast';
   /** Exotic Market: which tab, and which listing is open. */
@@ -729,16 +731,28 @@ export class UI {
 
   /** Your fisher in what you wear, the five slots, your total stats, and the bag. */
   private characterHtml(game: Game): string {
+    const tabs = `<div class="tiers two"><button class="tab${this.charTab === 'gear' ? ' on' : ''}" style="--c:#7a5a3a" data-act="charTab:gear">EQUIPPED</button><button class="tab${this.charTab === 'bag' ? ' on' : ''}" style="--c:#7a5a3a" data-act="charTab:bag">BAG ${game.gearBag.length}/${GEAR_BAG}</button></div>`;
+    if (this.charTab === 'bag') return tabs + this.bagHtml(game, 'character');
+    // A paper doll: you on the left; head, torso, legs, feet top to bottom, then the rod in your hand.
     const o = game.look();
-    const fisher = fisherIcon({ shirt: o.shirt, trousers: o.trousers, boots: o.boots, hat: o.hat ? { ...o.hat, style: o.hat.style as HatStyle } : { style: 'straw', color: '#f4cca1', trim: '#f4cca1' } });
-    const slots = GEAR_SLOTS.map((s) => {
-      const it = game.equipped[s];
-      return it ? this.gearTile(game.gearDef(it), it, `gsel:eq:${s}`) : `<button class="gtile empty" data-act="gsel:eq:${s}"><img src="${pixelIcon(SLOT_ICON[s], 2)}" alt="${s}" class="ghost"></button>`;
+    const fisher = fisherIcon({ shirt: o.shirt, trousers: o.trousers, boots: o.boots, hat: o.hat ? { ...o.hat, style: o.hat.style as HatStyle } : { style: 'straw', color: '#f4cca1', trim: '#f4cca1' } }, 5);
+    const order: [GearSlot, string][] = [['hat', 'HEAD'], ['shirt', 'TORSO'], ['pants', 'LEGS'], ['boots', 'FEET'], ['rod', 'ROD']];
+    this.gearFrom = 'character';
+    const slots = order.map(([s, label]) => {
+      const it = game.equipped[s], def = it ? game.gearDef(it) : null;
+      const tile = def ? this.gearTile(def, it, `gsel:eq:${s}`) : `<button class="gtile empty" data-act="gsel:eq:${s}"><img src="${pixelIcon(SLOT_ICON[s], 2)}" alt="${s}" class="ghost"></button>`;
+      const text = def ? `<b>${def.name}</b><small>${this.statLine(it!.stats)}</small>` : '<b class="none">Empty</b><small>Tap to pick from your bag</small>';
+      return `<div class="dollrow" data-act="gsel:eq:${s}"><span class="dollslot">${label}</span>${tile}<div class="dolltext">${text}</div></div>`;
     }).join('');
     const totals: Partial<Record<StatId, number>> = {};
     for (const s of STAT_ORDER) { const v = game.gearStat(s); if (v) totals[s] = v; }
-    return `<div class="charhead"><img class="fisher" src="${fisher}" alt="you"><div class="gslots">${slots}</div></div>
-      <div class="chips">${this.statChips(totals) || '<span class="chip">No bonuses</span>'}</div>${this.bagHtml(game, 'character')}`;
+    return tabs + `<div class="doll"><img class="fisher" src="${fisher}" alt="you"><div class="dollslots">${slots}</div></div>
+      <div class="totals"><span>TOTAL</span>${this.statLine(totals) || 'No bonuses yet'}</div>`;
+  }
+
+  /** Stats as one short line: "Luck 20% · Reflex 15%". */
+  private statLine(stats: Partial<Record<StatId, number>>): string {
+    return STAT_ORDER.filter((s) => stats[s]).map((s) => `${STATS[s].name} ${stats[s]}%`).join(' · ');
   }
 
   /** The piece you tapped (in the bag, or worn in a slot). */
@@ -755,20 +769,42 @@ export class UI {
   /** A piece close up: tier, stats against what you wear in that slot, a Legendary's effect; EQUIP / TAKE OFF / SELL. */
   private gearItemHtml(game: Game): string {
     const { item, def, worn } = this.gearSelected(game);
-    if (!item || !def) return `<p class="empty">Nothing worn here. Equip something from your bag or buy at the Gear Shop.</p>`;
-    const vs = worn ? undefined : game.equipped[def.slot]?.stats;
-    const keys = STAT_ORDER.filter((s) => item.stats[s] || vs?.[s]);
-    const rows = keys.map((s) => {
-      const v = item.stats[s] ?? 0, o = vs?.[s] ?? 0, d = v - o;
-      return `<div class="statrow"><span>${STATS[s].name}</span><b>+${v}%</b>${vs ? `<i class="${d > 0 ? 'up' : d < 0 ? 'down' : ''}">${d > 0 ? '+' : ''}${d}</i>` : ''}</div>`;
-    }).join('');
-    const head = `<div class="row">${this.gearTile(def, item, 'close')}<div class="meta"><b style="color:${GEAR_TIERS[def.tier].color}">${GEAR_TIERS[def.tier].name} ${def.slot}</b>
-      <div class="sub"><small>${item.drop ? (item.fine ? 'Fine find: stronger, extra bonuses' : 'Found fishing: stronger, with bonus stats') : 'Shop piece'}</small></div></div></div>`;
+    if (!item || !def) {
+      // An empty slot: what in your bag fits it.
+      const slot = this.gsel.key as GearSlot, fits = game.gearBag.filter((g) => game.gearDef(g).slot === slot);
+      return fits.length ? `<p class="note">Pieces in your bag that fit:</p><div class="gbag">${fits.map((g) => this.gearTile(game.gearDef(g), g, `gsel:bag:${g.id}`)).join('')}</div>`
+        : '<p class="empty">Nothing here. Buy one at the Gear Shop, or find one fishing.</p>';
+    }
+    const kind = item.drop ? (item.fine ? 'Fine find' : 'Found fishing') : 'Shop piece';
+    const tag = (d: GearDef, it: GearItem | null, label: string) => `<div class="cmpcol"><small>${label}</small>${d ? this.gearTile(d, it, 'none') : '<span class="gtile empty"></span>'}
+      <b style="color:${d ? GEAR_TIERS[d.tier].color : 'var(--ink-soft)'}">${d ? GEAR_TIERS[d.tier].name : ''}</b><span class="cmpname">${d ? d.name : 'Nothing'}</span></div>`;
+    const wornItem = worn ? null : game.equipped[def.slot], wornDef = wornItem ? game.gearDef(wornItem) : null;
+    let body: string;
+    if (worn) {
+      // Just this piece: its stats.
+      const rows = STAT_ORDER.filter((s) => item.stats[s]).map((s) => `<div class="cmprow one"><span>${STATS[s].name}</span><b>${item.stats[s]}%</b></div>`).join('');
+      body = `<div class="cmphead">${tag(def, item, `WEARING · ${kind}`)}</div><div class="cmptable">${rows || '<p class="note">No stats.</p>'}</div>`;
+    } else {
+      // Side by side: what you wear, and this one; one row per stat with both values and the difference.
+      const a = wornItem?.stats ?? {}, b = item.stats;
+      const keys = STAT_ORDER.filter((s) => a[s] || b[s]);
+      const better: string[] = [], worse: string[] = [];
+      const rows = keys.map((s) => {
+        const va = a[s] ?? 0, vb = b[s] ?? 0, d = vb - va;
+        if (d > 0) better.push(STATS[s].name); else if (d < 0) worse.push(STATS[s].name);
+        return `<div class="cmprow"><span>${STATS[s].name}</span><b>${va ? `${va}%` : '-'}</b><b>${vb ? `${vb}%` : '-'}</b>
+          <i class="${d > 0 ? 'up' : d < 0 ? 'down' : ''}">${d > 0 ? `+${d}` : d < 0 ? `${d}` : '='}</i></div>`;
+      }).join('');
+      const verdict = !better.length && !worse.length ? 'The same as what you wear.'
+        : `${better.length ? `Better ${better.join(', ')}` : ''}${better.length && worse.length ? '. ' : ''}${worse.length ? `Worse ${worse.join(', ')}` : ''}.`;
+      body = `<div class="cmphead">${tag(wornDef!, wornItem, 'WEARING')}<span class="cmpvs">vs</span>${tag(def, item, `THIS ONE · ${kind}`)}</div>
+        <div class="cmptable"><div class="cmprow hd"><span></span><b>WEARING</b><b>THIS</b><i></i></div>${rows}</div><p class="cmpverdict">${verdict}</p>`;
+    }
     const effect = def.effect ? `<p class="note legend">${def.blurb}</p>` : '';
     const buttons = worn
       ? (def.slot === 'rod' ? '<p class="note">You always fish with a rod: equip another to swap.</p>' : `<button class="btn wide plain" data-act="gunequip:${def.slot}" ${game.gearBag.length >= GEAR_BAG ? 'disabled' : ''}>TAKE OFF</button>`)
       : `<div class="vchoices"><button class="btn" data-act="gequip:${item.id}">EQUIP</button><button class="btn red" data-act="gsell:${item.id}">SELL ${cash(game.gearValue(item))}</button></div>`;
-    return head + `<div class="statlist">${rows}${vs ? '<small class="vs">vs what you wear</small>' : ''}</div>` + effect + buttons;
+    return body + effect + buttons;
   }
 
   // ---------- the Exotic Market ----------

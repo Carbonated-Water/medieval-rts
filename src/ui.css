@@ -117,7 +117,32 @@ body.fighting .banner, body.fighting #notes { visibility: hidden; }
 #sheet .chip { font: 16px/1 'Kenney Mini'; padding: 2px 4px; background: var(--parch-light); color: var(--ink); box-shadow: 0 0 0 1px var(--parch-dark); }
 #sheet .chip.up { background: #c8f0c0; color: #2a6a2a; } #sheet .chip.down { background: #f8d0c8; color: #8a2a20; }
 #sheet .gbag { display: grid; grid-template-columns: repeat(6, 44px); grid-auto-rows: 44px; align-content: start; justify-content: space-between; gap: 6px 0; padding: 4px; }
-#sheet .charhead { display: flex; align-items: center; gap: 6px; }
+/* The paper doll. */
+#sheet .doll { display: flex; gap: 8px; align-items: center; }
+#sheet .doll .fisher { width: 75px; height: 120px; flex: none; image-rendering: pixelated; }
+#sheet .dollslots { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+#sheet .dollrow { display: flex; align-items: center; gap: 6px; padding: 3px 6px 3px 3px; background: var(--parch); box-shadow: inset 0 0 0 2px var(--parch-dark); cursor: pointer; }
+#sheet .dollslot { width: 46px; flex: none; font: 16px/1 'Kenney Mini'; color: var(--ink-soft); }
+#sheet .dolltext { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+#sheet .dolltext b { font: 32px/0.8 'Kenney Pixel'; font-weight: normal; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#sheet .dolltext b.none { color: var(--ink-soft); }
+#sheet .totals { display: flex; flex-wrap: wrap; gap: 4px 8px; padding: 6px; font: 16px/1.3 'Kenney Mini'; color: var(--cream); text-shadow: 1px 1px 0 var(--shade); }
+#sheet .totals span { color: var(--gold); }
+/* The compare card. */
+#sheet .cmphead { display: flex; align-items: flex-start; justify-content: center; gap: 8px; }
+#sheet .cmpcol { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
+#sheet .cmpcol small { color: var(--cream); text-shadow: 1px 1px 0 var(--shade); }
+#sheet .cmpcol b { font: 16px/1 'Kenney Mini'; font-weight: normal; text-shadow: 1px 1px 0 var(--shade); }
+#sheet .cmpname { font: 32px/0.8 'Kenney Pixel'; color: var(--cream); text-shadow: 2px 2px 0 var(--shade); }
+#sheet .cmpvs { align-self: center; font: 32px/1 'Kenney Pixel'; color: var(--ink-soft); }
+#sheet .cmptable { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; background: var(--parch); box-shadow: inset 0 0 0 2px var(--parch-dark); }
+#sheet .cmprow { display: grid; grid-template-columns: 1fr 64px 64px 44px; align-items: center; font: 16px/1 'Kenney Mini'; color: var(--ink); }
+#sheet .cmprow.one { grid-template-columns: 1fr auto; }
+#sheet .cmprow b { font-weight: normal; text-align: center; }
+#sheet .cmprow.hd { color: var(--ink-soft); }
+#sheet .cmprow i { font-style: normal; text-align: right; color: var(--ink-soft); }
+#sheet .cmprow i.up { color: #2a8a2a; } #sheet .cmprow i.down { color: #a02a20; }
+#sheet .cmpverdict { margin: 0; font: 16px/1.3 'Kenney Mini'; color: var(--cream); text-shadow: 1px 1px 0 var(--shade); }
 #sheet .charhead .fisher { width: 45px; height: 72px; flex: none; image-rendering: pixelated; }
 #sheet .gslots { display: flex; gap: 4px; flex: 1; min-width: 0; justify-content: space-between; padding: 3px; }
 #sheet .statlist { display: flex; flex-direction: column; gap: 4px; padding: 6px; background: var(--parch); box-shadow: inset 0 0 0 2px var(--parch-dark); }

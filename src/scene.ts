@@ -377,6 +377,12 @@ export class Scene {
     return Math.max(20, Math.round(this.V.w * 0.1));
   }
 
+  /** Your fisher (tap to open the Character screen). */
+  hitPlayer(cx: number, cy: number): boolean {
+    const x = cx / this.scale, y = cy / this.scale, f = this.feet();
+    return Math.abs(x - f.x) < 9 && y > f.y - 26 && y < f.y + 2;
+  }
+
   hitGearShop(cx: number, cy: number): boolean {
     const x = cx / this.scale, y = cy / this.scale, V = this.V;
     return y > V.path + 10 && y < V.path + 46 && Math.abs(x - this.gearShopX()) < 20;

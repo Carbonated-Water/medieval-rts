@@ -74,6 +74,7 @@ canvas.addEventListener('click', (e) => {
   if (scene.hitBobber(e.clientX, e.clientY) >= 0) { game.reel(scene.hitBobber(e.clientX, e.clientY)); return; }
   if (scene.hitJetty(e.clientX, e.clientY)) { ui.open = 'exotic'; return; }
   if (scene.hitGearShop(e.clientX, e.clientY)) { ui.open = 'gearshop'; return; }
+  if (scene.hitPlayer(e.clientX, e.clientY)) { ui.charTab = 'gear'; ui.open = 'character'; return; }
   if (scene.hitLighthouse(e.clientX, e.clientY)) { ui.open = game.voyage ? 'voyage' : 'lighthouse'; return; }
   if (scene.hitHarbor(e.clientX, e.clientY)) { ui.open = 'harbor'; return; }
   // Hired fishermen and the crate on the wide pier.
@@ -182,6 +183,7 @@ function onAction(a: Action): void {
   }
   else if (a === 'close') ui.open = null;
   else if (a.startsWith('gsMode:')) ui.gsMode = a.slice(7) as 'buy' | 'sell';
+  else if (a.startsWith('charTab:')) ui.charTab = a.slice(8) as 'gear' | 'bag';
   else if (a.startsWith('gsSlot:')) ui.gsSlot = a.slice(7) as GearSlot;
   else if (a.startsWith('gsTier:')) ui.gsTier = a.slice(7) as GearTier;
   else if (a.startsWith('gbuy:')) {

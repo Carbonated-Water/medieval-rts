@@ -4,6 +4,17 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-10  Character screen as a paper doll; clear gear comparison
+  WHAT: Tap your fisher to open Character. EQUIPPED tab: you on the left,
+        HEAD / TORSO / LEGS / FEET / ROD boxes top to bottom with each piece's
+        name and stats, totals below; BAG tab: the grid and SELL ALL. Tapping a
+        bag piece compares it side by side with what you wear: both icons and
+        names, one row per stat (both values, - when missing, green/red
+        difference) and a verdict line. An empty slot lists bag pieces that fit.
+  WHY:  The user found the comparison unclear ("+0%, -40") and wanted a
+        character equipment window like other games, opened by tapping the
+        character.
+
 2026-10-10  Gear: slots, tiers, stats, the Gear Shop and the Character screen
   WHAT: Five slots (rod, hat, shirt, pants, boots), tiers Bronze..Diamond
         (+ Legendary, voyages only), seven % stats (Size, Luck, Patience,
