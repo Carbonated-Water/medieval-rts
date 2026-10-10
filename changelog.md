@@ -4,6 +4,11 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-09  Fish Tree costs 15 to 150 Pearls
+  WHAT: Costs follow one curve from 15 (tier I root) to 150 (tier V tips),
+        ~18% a step; tiers 190 / 310 / 480 / 810 / 1320 Pearls (3110 total).
+  WHY:  The user set the range: lowest 15, highest 150.
+
 2026-10-09  Fish Tree: pricier and richer
   WHAT: Tree fish worth x2.5, tree Pearl costs x3 (630 for the whole tree).
   WHY:  The user wanted the tree more expensive but more rewarding.

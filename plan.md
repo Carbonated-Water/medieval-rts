@@ -163,7 +163,8 @@ arrows walk, Space casts / reels, E opens the building you stand at.
   them; the user found two pulls on one page confusing). 50 fish, 5 tier
   tabs, each a constellation: river side (you and your fishermen) and sea
   side (a boat type, from a ground and deeper). Root, two branches, two tips;
-  costs 3 x (tier + 0/1/2) Pearls (630 total). Any fish of a tier opens the next.
+  costs rise from 15 (tier I root) to 150 (tier V tips), about 18% a step
+  (tiers 190 / 310 / 480 / 810 / 1320, 3110 total). Any fish of a tier opens the next.
 - New fish share their tier's bites with the old ones (tier weight scaled
   by original rarity / current rarity), so unlocks never crowd out rarer
   tiers; they're worth more than the originals, so each tier speeds up its
