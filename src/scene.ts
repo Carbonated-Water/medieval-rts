@@ -1,7 +1,7 @@
 import { Application, Container, Graphics, Sprite, Texture, TextureStyle, TilingSprite } from 'pixi.js';
 import bgUrl from './assets/kenney/backgrounds.png';
 import tilesUrl from './assets/kenney/tiles.png';
-import { BOOTS, CLOTHES, HAND_OUTFITS, RODS, TIERS, VARIANTS, type FishDef, type Variant } from './data';
+import { SHADOW_LINES, BOOTS, CLOTHES, HAND_OUTFITS, RODS, TIERS, VARIANTS, type FishDef, type Variant } from './data';
 import type { Game, Line } from './game';
 import {
   HAND, PAL, alertCanvas, baitShopCanvas, boatCanvas, bobberCanvas, craneCanvas, harborCanvas, gearShopCanvas, pubCanvas, jettyCanvas, type HatStyle, lighthouseCanvas, warehouseCanvas, fishCanvas, fisherCanvas, holderCanvas, plankCanvas, schoolCanvas, stallCanvas, type Pose,
@@ -671,12 +671,13 @@ export class Scene {
     if (this.clouds) this.clouds.tilePosition.x = Math.round(this.time * 3);
     if (this.waterTop) this.waterTop.tilePosition.x = Math.round(Math.sin(this.time * 0.8) * 4);
     g.clear();
-    // Fish shadows under the surface.
+    // Fish shadows under the surface (fainter while the fish that will bite is shown coming).
+    const ambient = this.game.lines.length < SHADOW_LINES ? 0.22 : 0.45;
     for (const s of this.shadows) {
       const x = Math.round(s.x * V.w), y = Math.round(V.riverTop + 10 + s.y * (V.riverBottom - V.riverTop - 20));
       const w = Math.round(5 + s.size * 5), dir = Math.sign(s.speed);
-      g.ellipse(x, y, w, Math.max(2, Math.round(w / 3))).fill({ color: PAL.waterDeeper, alpha: 0.45 });
-      g.poly([x - dir * w, y, x - dir * (w + 4), y - 2, x - dir * (w + 4), y + 2]).fill({ color: PAL.waterDeeper, alpha: 0.45 });
+      g.ellipse(x, y, w, Math.max(2, Math.round(w / 3))).fill({ color: PAL.waterDeeper, alpha: ambient });
+      g.poly([x - dir * w, y, x - dir * (w + 4), y - 2, x - dir * (w + 4), y + 2]).fill({ color: PAL.waterDeeper, alpha: ambient });
     }
     // A few twinkling glints.
     for (let i = 0; i < 6; i++) {
@@ -688,11 +689,57 @@ export class Scene {
       const rx = Math.round(3 + k * (r.big ? 14 : 8));
       g.ellipse(r.x, r.y + 1, rx, Math.max(1, Math.round(rx / 3))).stroke({ color: PAL.white, width: 1, alpha: 1 - k });
     }
+    this.drawBiteShadows(g);
     this.drawWorms();
     this.drawHarbor(g);
     this.drawLines(g);
     this.drawPlayer();
     this.drawFlyingFish(g);
+  }
+
+  /**
+   * With only a line or two out, the fish that will bite shows: its shadow
+   * (bigger for rarer fish) swims in to the bobber and nibbles, thrashes
+   * under it on the bite, and the catch throws up a splash.
+   */
+  private drawBiteShadows(g: Graphics): void {
+    const lines = this.game.lines;
+    if (lines.length >= SHADOW_LINES) return;
+    const shade = PAL.waterDeeper;
+    lines.forEach((line, slot) => {
+      const home = this.homeOf(slot);
+      const fishShape = (x: number, y: number, w: number, dir: number, alpha: number) => {
+        g.ellipse(x, y, w, Math.max(2, Math.round(w / 3))).fill({ color: shade, alpha });
+        g.poly([x - dir * w, y, x - dir * (w + 4), y - 2 - Math.round(w / 6), x - dir * (w + 4), y + 2 + Math.round(w / 6)]).fill({ color: shade, alpha });
+      };
+      if (line.type === 'waiting' && line.fish) {
+        const come = Math.min(2.4, line.biteAt * 0.85), k = (line.t - (line.biteAt - come)) / come;
+        if (k <= 0) return;
+        const side = Math.floor(line.biteAt * 97) % 2 ? 1 : -1, ease = 1 - (1 - k) * (1 - k);
+        const sx = home.x + side * 46, sy = home.y + (slot % 2 ? -6 : 6) + 3;
+        const x = Math.round(sx + (home.x - sx) * ease + Math.sin(this.time * 9) * (1 - k) * 2), y = Math.round(sy + (home.y + 3 - sy) * ease);
+        const w = this.shadowSize(line.fish.tier);
+        fishShape(x, y, w, -side, 0.35 + 0.4 * k);
+        // A little surface wake trailing it.
+        for (let d = 0; d < 3; d++) if (Math.sin(this.time * 12 + d * 2) > -0.3) g.rect(x + side * (w + 5 + d * 4), y - 2 + (d % 2 ? 1 : -1) * d, 2, 1).fill({ color: PAL.white, alpha: 0.7 - d * 0.2 });
+      } else if (line.type === 'bite') {
+        const w = this.shadowSize(line.fish.tier) + 1, x = Math.round(home.x + Math.sin(this.time * 14) * 3), dir = Math.sin(this.time * 7) > 0 ? 1 : -1;
+        fishShape(x, home.y + 3, w, dir, 0.7);
+        if (Math.floor(this.time * 3) !== Math.floor((this.time - 1 / 60) * 3)) this.ripples.push({ x: home.x, y: home.y, t: 0, big: true });
+      } else if (line.type === 'result' && line.outcome === 'caught' && line.t < 0.6) {
+        // A splash: drops thrown up and falling back.
+        const k = line.t / 0.6;
+        for (let d = 0; d < 7; d++) {
+          const vx = (d - 3) * 4, x = Math.round(home.x + vx * k), y = Math.round(home.y - (18 - Math.abs(d - 3) * 3) * Math.sin(k * Math.PI));
+          g.rect(x, y, d % 2 ? 1 : 2, d % 2 ? 1 : 2).fill({ color: PAL.white, alpha: 1 - k * 0.6 });
+        }
+      }
+    });
+  }
+
+  /** Shadow half-length for a fish of this tier. */
+  private shadowSize(tier: number): number {
+    return 6 + tier * 2;
   }
 
   /** The harbor office (by state), the mystery ship before the company, and the company's boats. */
@@ -791,6 +838,7 @@ export class Scene {
         by = tip.y + (home.y - tip.y) * k - Math.sin(k * Math.PI) * V.h * 0.12;
       } else if (line.type === 'waiting') {
         by += Math.round(Math.sin(this.time * 3 + slot));
+        if (lines.length < SHADOW_LINES && line.fish && line.t > line.biteAt - 0.6 && slot < lines.length) by += Math.sin(this.time * 40) > 0.3 ? 1 : 0; // nibbles
       } else if (line.type === 'bite') {
         by += 2 + Math.round(Math.sin(this.time * 25));
       } else if (line.type === 'result') {

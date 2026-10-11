@@ -142,7 +142,7 @@ const RESULT_SECONDS = 2.2;
 export type Line =
   | { type: 'idle' }
   | { type: 'casting'; t: number; bait: BaitId }
-  | { type: 'waiting'; t: number; biteAt: number; bait: BaitId }
+  | { type: 'waiting'; t: number; biteAt: number; bait: BaitId; fish?: FishDef; tooStrong?: boolean }
   | { type: 'bite'; t: number; window: number; fish: FishDef; tooStrong: boolean; bait?: BaitId }
   | { type: 'result'; t: number; outcome: 'caught' | 'escaped' | 'snapped' | 'scared'; fish?: FishDef; caught?: Catch; strong?: boolean };
 
@@ -982,9 +982,10 @@ export class Game {
       if (line.type === 'idle') return;
       line.t += dt;
       if (line.type === 'casting' && line.t >= CAST_SECONDS) {
-        this.lines[i] = { type: 'waiting', t: 0, biteAt: this.biteWait(line.bait), bait: line.bait };
+        const biteAt = this.biteWait(line.bait);
+        this.lines[i] = { type: 'waiting', t: 0, biteAt, bait: line.bait, ...this.rollFish(line.bait) };
       } else if (line.type === 'waiting' && line.t >= line.biteAt) {
-        const { fish, tooStrong } = this.rollFish(line.bait);
+        const { fish, tooStrong } = line.fish ? { fish: line.fish, tooStrong: !!line.tooStrong } : this.rollFish(line.bait);
         this.lines[i] = { type: 'bite', t: 0, window: this.reelWindow(), fish, tooStrong, bait: line.bait };
       } else if (line.type === 'bite' && line.t >= line.window) {
         this.lines[i] = { type: 'result', t: 0, outcome: 'escaped', fish: line.fish };

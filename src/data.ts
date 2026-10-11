@@ -161,6 +161,8 @@ export const CHUMS = [
   { name: 'Chum Bucket V', price: 600000, blurb: 'Frenzy 2 min', every: 120, lasts: 30 },
 ];
 export const FRENZY_SPEED = 3;
+/** Fewer lines than this: the fish that will bite is shown coming (its shadow swims to the bobber). */
+export const SHADOW_LINES = 3;
 /** Ice Box: fish you sell at the Market are worth this much more. */
 export const ICEBOXES = [
   { name: 'No Ice Box', price: 0, blurb: 'Fish as they come', bonus: 0 },

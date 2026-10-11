@@ -1146,3 +1146,18 @@ describe('the Pub and crew voyages', () => {
     expect(g.crewNews).toHaveLength(1);
   });
 });
+
+describe('the fish you see coming', () => {
+  it('is picked when the line settles, and it is the one that bites', () => {
+    const g = new Game({ baits: { worm: 100 } }, rng(11));
+    g.cast();
+    for (let i = 0; i < 200 && g.lines[0]!.type !== 'waiting'; i++) g.tick(0.02);
+    const w = g.lines[0]!;
+    expect(w.type).toBe('waiting');
+    const coming = w.type === 'waiting' ? w.fish : undefined;
+    expect(coming).toBeDefined();
+    for (let i = 0; i < 4000 && g.lines[0]!.type !== 'bite'; i++) g.tick(0.02);
+    const b = g.lines[0]!;
+    expect(b.type === 'bite' && b.fish).toBe(coming);
+  });
+});

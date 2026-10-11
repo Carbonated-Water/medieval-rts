@@ -4,6 +4,16 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-11  The fish you see is the fish that bites
+  WHAT: The fish is now picked when a line settles (not at the bite). With
+        fewer than 3 lines (SHADOW_LINES) its shadow, sized by tier, darker
+        than the rest and trailing a little wake, swims in to the bobber over
+        the last ~2 s; the bobber nibbles; on the bite the shadow thrashes with
+        ripples; a catch throws up a splash. Ambient shadows go fainter then.
+        From 3 lines on, nothing changes (too hectic to follow).
+  WHY:  Playtesters noticed the water shadows had nothing to do with bites;
+        early fishing needed more hype.
+
 2026-10-11  Playtest fixes: pier upgrading, overlaps, dead taps, quieter catches, dearer rods
   WHAT: Fishermen: x1/x5/MAX on training and a TRAIN ALL row on the pier
         (lowest level first). The Manager with a budget now spends every 2 s,
