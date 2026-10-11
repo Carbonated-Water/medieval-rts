@@ -71,6 +71,11 @@ export class Notices {
     for (const l of this.lines.slice(0, -LOG_LINES)) l.until = Math.min(l.until, now);
   }
 
+  /** Into the Log only: nothing shows on screen. */
+  quiet(icon: string, html: string, tone: Tone = 'plain'): void {
+    this.remember({ icon, html, tone, at: performance.now(), count: 1 });
+  }
+
   /** A plaque under the top bar for special moments; queued one at a time. */
   banner(icon: string, label: string, title: string, tone: Tone = 'good'): void {
     this.remember({ icon, html: `<b>${label}</b> ${title}`, tone, at: performance.now(), count: 1 });

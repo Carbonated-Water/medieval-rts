@@ -4,6 +4,21 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-11  Playtest fixes: pier upgrading, overlaps, dead taps, quieter catches, dearer rods
+  WHAT: Fishermen: x1/x5/MAX on training and a TRAIN ALL row on the pier
+        (lowest level first). The Manager with a budget now spends every 2 s,
+        several buys at a time, and also hires into free spots and buys pier
+        sections. Layout reserves the bottom bar so the meadow buildings sit
+        above it on short phones. Tapping a shop you stand at opens it (your
+        fisher no longer steals the tap); the Market opens with an empty bag.
+        Banners only for a first-ever species or a Shiny; Golden, Giant and
+        snaps go quietly to the Log; banners sit below the rates board. Player
+        rods in the Gear Shop cost x10 (Mythril $250k, Kingfisher $600k).
+  WHY:  From a fresh playthrough: pier upgrades were tedious, the bottom bar
+        covered School/Bait, Market taps were dead (the fisher hit first),
+        catch banners covered the money rate and buttons, and buying the best
+        rod early made the game easy.
+
 2026-10-10  The Pub and crew voyages
   WHAT: A Pub on the meadow (right edge, opens with the Flagship). RECRUITS:
         4 sailors with a role and 1-5 stars, new faces every 30 min or $50k;

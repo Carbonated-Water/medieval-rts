@@ -879,6 +879,21 @@ describe('pier staff', () => {
     expect(g.sellerNews).toBeGreaterThan(0);
   });
 
+  it('x1 / x5 / MAX training, and TRAIN ALL lowest first', () => {
+    const g = pier({ money: 1e7 });
+    g.hireHand(); g.hireHand();
+    g.hands[1]!.skill = 6;
+    expect(g.trainHandN(0, 5)).toBe(5);
+    expect(g.hands[0]!.skill).toBe(6);
+    const c = g.trainCostN(0, 5), money = g.money;
+    expect(g.trainHandN(0, 5)).toBe(c.levels);
+    expect(money - g.money).toBe(c.cost);
+    expect(g.trainAll(1)).toBe(2); // one level each
+    g.money = 1e12;
+    g.trainAll(Infinity);
+    expect(g.hands.every((h) => g.handTrainCost(g.hands.indexOf(h)) === null)).toBe(true);
+  });
+
   it('the Manager gives each fisherman the best bait they can use and spends within budget', () => {
     const g = pier({ baits: { worm: 1e6, shiner: 1e6, glow: 1e6 } });
     g.hireHand(); g.hireHand();
@@ -887,8 +902,9 @@ describe('pier staff', () => {
     g.setManagerBudget(3);
     tick(g, 31);
     expect(g.hands[0]!.bait).toBe('glow');
-    expect(g.hands[1]!.bait).toBe('worm'); // a rookie only profits on worms
+    expect(g.bestBait({ ...g.hands[1]!, rod: 0, skill: 1 })).toBe('worm'); // a rookie only profits on worms
     expect(g.hands[1]!.skill + g.hands[1]!.rod).toBeGreaterThan(1); // spent on the crew
+    expect(g.hands.length).toBeGreaterThan(2); // and hired into the free spots
     g.setManagerBudget(0);
     const before = JSON.stringify(g.hands.map((h) => [h.rod, h.skill]));
     tick(g, 30);

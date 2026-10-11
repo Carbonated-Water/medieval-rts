@@ -347,7 +347,7 @@ body.fighting .banner, body.fighting #notes { visibility: hidden; }
 @keyframes slide-in { from { transform: translateX(-24px); opacity: 0; } }
 @keyframes bump { 50% { transform: translateX(4px); } }
 .banner {
-  position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 70px); transform: translate(-50%, -12px); opacity: 0;
+  position: fixed; left: 50%; top: var(--banner-top, calc(env(safe-area-inset-top, 0px) + 70px)); transform: translate(-50%, -12px); opacity: 0;
   display: flex; align-items: center; gap: 10px; padding: 6px 14px 6px 8px; z-index: 30; max-width: calc(100% - 20px); pointer-events: none;
   background: var(--parch); box-shadow: inset 0 0 0 2px var(--parch-dark), 0 0 0 2px var(--outline), 0 4px 0 2px rgba(46, 31, 18, 0.45);
   transition: opacity 0.15s steps(3), transform 0.15s steps(3);
@@ -364,3 +364,8 @@ body.fighting .banner, body.fighting #notes { visibility: hidden; }
 #sheet .stars img { width: 10px; height: 10px; image-rendering: pixelated; }
 #sheet .stars img.off { opacity: 0.2; filter: grayscale(1); }
 #sheet b.none { color: var(--ink-soft); }
+
+/* x1 / x5 / MAX under a train button. */
+#sheet .tiers.buyn { margin: -2px 0 6px; }
+#sheet .tiers.buyn .tab { padding: 4px 0; }
+#sheet .btn > small { color: #fff; font: 16px/1 'Kenney Mini'; margin-right: 2px; }

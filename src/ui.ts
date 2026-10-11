@@ -16,7 +16,7 @@ export type Panel = 'pub' | 'gearshop' | 'character' | 'gearitem' | 'market' | '
 export type Action =
   | 'cast' | 'reel' | 'close' | 'back' | 'reset' | 'toggleDev' | Panel
   | `gsMode:${'buy' | 'sell'}` | `gsSlot:${GearSlot}` | `gsTier:${GearTier}` | `gbuy:${string}` | `gsel:${'bag' | 'eq'}:${string}`
-  | `gequip:${number}` | `gunequip:${GearSlot}` | `gsell:${number}` | 'gsellall' | `charTab:${'gear' | 'bag'}` | `pubTab:${'board' | 'crew'}` | `sign:${number}` | 'pubRefresh' | `crewSail:${string}` | `lhWho:${'you' | 'crew'}` | `fight:${string}` | 'fightDone' | `lhRegion:${'coast' | 'ocean' | 'abyss'}`
+  | `gequip:${number}` | `gunequip:${GearSlot}` | `gsell:${number}` | 'gsellall' | `charTab:${'gear' | 'bag'}` | `buyN:${'1' | '5' | 'max'}` | 'trainAll' | `pubTab:${'board' | 'crew'}` | `sign:${number}` | 'pubRefresh' | `crewSail:${string}` | `lhWho:${'you' | 'crew'}` | `fight:${string}` | 'fightDone' | `lhRegion:${'coast' | 'ocean' | 'abyss'}`
   | 'buyFlagship' | `sail:${string}` | `vsail:${number}` | `vchoose:${number}` | 'vlegend' | 'vfight' | 'vhome'
   | `exTab:${'hold' | 'listed' | 'wanted'}` | `exList:${number}` | `exUnlist:${number}` | `exOpen:${number}` | `exSell:${number}:${number}` | `exGive:${number}` | 'exDev' | 'boatPrev' | 'boatNext' | `coTab:${'harbor' | 'ledger' | 'harborup'}`
   | `achTab:${'base' | 'tree'}` | `treeTier:${number}` | `treeSel:${string}` | `unlock:${string}` | 'doRetire' | `journalTier:${number}`
@@ -95,6 +95,8 @@ export class UI {
   /** Lighthouse: who sails, you or your crew. Pub: the board or your crew. */
   lhWho: 'you' | 'crew' = 'you';
   pubTab: 'board' | 'crew' = 'board';
+  /** Buy this many levels at once (0 = as many as you can afford). */
+  buyN: 0 | 1 | 5 = 1;
   /** Exotic Market: which tab, and which listing is open. */
   exTab: 'hold' | 'listed' | 'wanted' = 'hold';
   exSel = 0;
@@ -482,7 +484,12 @@ export class UI {
         <i class="n">${h.skill}</i></button><span class="small">${HAND_NAMES[i]}</span></div>`;
     }).join('');
     const staff = PIER_STAFF.filter((k) => game.harbor[k]).length;
-    return crate + `<div class="grid hands">${tiles}</div>`
+    // Train everyone at once.
+    const n = this.buyN || Infinity, all = game.hands.reduce((s, _, i) => { const c = game.trainCostN(i, n); return { levels: s.levels + c.levels, cost: s.cost + c.cost }; }, { levels: 0, cost: 0 });
+    const cheapest = Math.min(...game.hands.map((_, i) => game.handTrainCost(i) ?? Infinity));
+    const trainAll = game.hands.length ? `<div class="row"><div class="slot">${icon('hook')}</div><div class="meta"><b>Train all</b><div class="sub"><small>${all.levels ? `${all.levels} level${all.levels === 1 ? '' : 's'}, lowest first` : cheapest === Infinity ? 'Everyone is maxed' : 'Not enough money'}</small></div></div>
+      ${cheapest === Infinity ? '<span class="maxed">MAX</span>' : this.trainBtn('trainAll', all, game.money, cheapest)}</div>` + (cheapest === Infinity ? '' : this.buyNTabs()) : '';
+    return crate + `<div class="grid hands">${tiles}</div>` + trainAll
       + `<div class="row"><button class="slot" data-act="pierstaff" aria-label="staff">${icon('captain')}</button><div class="meta"><b>Staff</b>
         <div class="sub"><small>${staff}/${PIER_STAFF.length} hired · ${game.pierSpots}/${HANDS_MAX} spots</small></div></div><button class="btn plain" data-act="pierstaff">OPEN</button></div>`;
   }
@@ -521,8 +528,20 @@ export class UI {
     return row('rod', RODS[h.rod]!.name, `${level(h.rod + 1, RODS.length)}<small>${TIERS[tier].name} ${pct(top)}</small>`,
         rod ? `<button class="btn" data-act="handRod:${i}" ${game.money < rod.price ? 'disabled' : ''}>${coin(rod.price)}</button>` : '<span class="maxed">MAX</span>')
       + row('hook', `Fishing LV ${h.skill}`, `${level(h.skill, HAND_SKILL_MAX)}<small>Quicker hands</small>`,
-        train === null ? '<span class="maxed">MAX</span>' : `<button class="btn" data-act="handTrain:${i}" ${game.money < train ? 'disabled' : ''}>${coin(train)}</button>`)
+        train === null ? '<span class="maxed">MAX</span>' : this.trainBtn(`handTrain:${i}`, game.trainCostN(i, this.buyN || Infinity), game.money, train))
+      + (train === null ? '' : this.buyNTabs())
       + `<div class="grid three">${baits}</div><p class="note">${game.harbor.manager ? 'Your manager picks the best bait for them.' : 'Tap a bait: they take it from your pouch, one per cast.'}</p>`;
+  }
+
+  /** x1 / x5 / MAX: how many levels a train button buys. */
+  private buyNTabs(): string {
+    return `<div class="tiers three buyn">${([[1, 'x1'], [5, 'x5'], [0, 'MAX']] as const).map(([k, label]) => `<button class="tab${this.buyN === k ? ' on' : ''}" style="--c:#2a7a3a" data-act="buyN:${k || 'max'}">${label}</button>`).join('')}</div>`;
+  }
+
+  /** A train button for `levels` at `cost` (MAX shows what you can afford now, or the next level's price greyed out). */
+  private trainBtn(act: string, c: { levels: number; cost: number }, money: number, next: number): string {
+    if (!c.levels) return `<button class="btn" data-act="${act}" disabled>${coin(next)}</button>`;
+    return `<button class="btn" data-act="${act}" ${money < c.cost ? 'disabled' : ''}>${c.levels > 1 ? `<small>x${c.levels}</small> ` : ''}${coin(c.cost)}</button>`;
   }
 
   /** Raises the fisher's skills, nothing else. */

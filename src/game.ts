@@ -1437,17 +1437,22 @@ export class Game {
         for (const h of this.hands) h.bait = this.bestBait(h);
       }
       const share = MANAGER_BUDGETS[this.managerBudget]!;
-      if (share > 0 && (this.trainClock += dt) >= 10) {
+      if (share > 0 && (this.trainClock += dt) >= 2) {
         this.trainClock = 0;
-        // The cheapest useful upgrade across the crew, if it fits the budget.
+        // The cheapest useful upgrade (hire into a free spot, a new pier section, a rod, a level), a few at a time while they fit the budget.
+        for (let k = 0; k < 8; k++) {
         let pick: { cost: number; buy: () => boolean } | null = null;
+        const hire = this.nextHandCost(), section = this.nextPierSection();
+        if (hire !== null) pick = { cost: hire, buy: () => this.hireHand() };
+        else if (section !== null) pick = { cost: section, buy: () => this.buyPierSection() };
         this.hands.forEach((_, i) => {
           const rod = this.handNextRod(i), train = this.handTrainCost(i);
           if (rod && (!pick || rod.price < pick.cost)) pick = { cost: rod.price, buy: () => this.upgradeHandRod(i) };
           if (train !== null && (!pick || train < pick.cost)) pick = { cost: train, buy: () => this.trainHand(i) };
         });
         const chosen = pick as { cost: number; buy: () => boolean } | null;
-        if (chosen && chosen.cost <= this.money * share) chosen.buy();
+        if (!chosen || chosen.cost > this.money * share || !chosen.buy()) break;
+        }
       }
     }
   }
@@ -1555,6 +1560,38 @@ export class Game {
     this.money -= cost;
     this.hands[i]!.skill++;
     return true;
+  }
+
+  /** Up to `n` levels for one fisherman (Infinity: as many as you can afford). Returns levels bought. */
+  trainHandN(i: number, n: number): number {
+    let k = 0;
+    while (k < n && this.trainHand(i)) k++;
+    return k;
+  }
+
+  /** What `n` levels would cost (stopping at the max, or at what you can afford when n is Infinity). */
+  trainCostN(i: number, n: number): { levels: number; cost: number } {
+    const h = this.hands[i];
+    let levels = 0, cost = 0;
+    if (!h) return { levels, cost };
+    for (let s = h.skill; s < HAND_SKILL_MAX && levels < n; s++) {
+      const c = handSkillCost(s);
+      if (n === Infinity && cost + c > this.money) break;
+      cost += c; levels++;
+    }
+    return { levels, cost };
+  }
+
+  /** Train the whole pier: lowest level first, one level at a time, up to `n` levels each. */
+  trainAll(n: number): number {
+    const done = this.hands.map(() => 0);
+    let total = 0;
+    for (;;) {
+      const order = this.hands.map((h, i) => i).filter((i) => done[i]! < n && this.handTrainCost(i) !== null).sort((a, b) => this.hands[a]!.skill - this.hands[b]!.skill);
+      const i = order.find((j) => this.money >= this.handTrainCost(j)!);
+      if (i === undefined || !this.trainHand(i)) return total;
+      done[i]!++; total++;
+    }
   }
 
   setHandBait(i: number, bait: BaitId): void {

@@ -11,6 +11,8 @@ export type Place = 'market' | 'school' | 'bait' | 'tackle' | 'dock';
 
 /** Where each place sits along the path, as a fraction of the screen width. */
 const PLACE_X: Record<Place, number> = { market: 0.17, school: 0.335, dock: 0.5, bait: 0.665, tackle: 0.84 };
+/** Height of the bottom bar (bait, the big button, the bag count) in css px. */
+const HUD_BOTTOM = 144;
 /** Worm holes in the dirt bank, between the stalls and the dock (index = Game worm spot). */
 export const WORM_SPOT_X = [0.34, 0.39, 0.44, 0.56, 0.61, 0.66];
 
@@ -158,13 +160,15 @@ export class Scene {
     this.scale = company ? Math.max(2, base - 1) : base;
     const vw = Math.ceil(w / this.scale), vh = Math.ceil(h / this.scale);
     const F = company ? { sky: 0.14, top: 0.22, bottom: 0.68, path: 0.775 } : { sky: 0.24, top: 0.36, bottom: 0.66, path: 0.76 };
-    const riverTop = Math.round(vh * F.top), riverBottom = Math.round(vh * F.bottom);
+    // The bottom bar takes about HUD_BOTTOM css px; the meadow buildings (about 46 px under the path) must sit above it.
+    const shift = Math.max(0, Math.round(vh * F.path) - (vh - Math.ceil(HUD_BOTTOM / this.scale) - 46));
+    const riverTop = Math.round(vh * F.top - shift / 2), riverBottom = Math.round(vh * F.bottom) - shift;
     const dockX = Math.round(vw * PLACE_X.dock);
     this.V = {
       w: vw, h: vh,
-      skyBottom: Math.round(vh * F.sky),
+      skyBottom: Math.round(vh * F.sky - shift / 2),
       riverTop, riverBottom,
-      path: Math.round(vh * F.path),
+      path: Math.round(vh * F.path) - shift,
       marketX: Math.round(vw * PLACE_X.market),
       tackleX: Math.round(vw * PLACE_X.tackle),
       schoolX: Math.round(vw * PLACE_X.school),

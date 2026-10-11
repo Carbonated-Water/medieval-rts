@@ -62,7 +62,7 @@ addEventListener('pagehide', save);
 
 // Arriving at a shop opens it: the market only if there's something to sell.
 scene.onArrive = (p) => {
-  if (p === 'market' && game.bag.length) ui.open = 'market';
+  if (p === 'market') ui.open = 'market';
   if (p === 'tackle') ui.open = 'tackle';
   if (p === 'school') ui.open = 'training';
   if (p === 'bait') ui.open = 'baitshop';
@@ -75,7 +75,9 @@ canvas.addEventListener('click', (e) => {
   if (scene.hitJetty(e.clientX, e.clientY)) { ui.open = 'exotic'; return; }
   if (scene.hitGearShop(e.clientX, e.clientY)) { ui.open = 'gearshop'; return; }
   if (scene.hitPub(e.clientX, e.clientY)) { ui.open = 'pub'; return; }
-  if (scene.hitPlayer(e.clientX, e.clientY)) { ui.charTab = 'gear'; ui.open = 'character'; return; }
+  // Your fisher opens the Character screen, unless you're tapping the shop you stand in front of.
+  const shopTap = ['market', 'tackle', 'school', 'bait'].includes(scene.hit(e.clientX, e.clientY));
+  if (!shopTap && scene.hitPlayer(e.clientX, e.clientY)) { ui.charTab = 'gear'; ui.open = 'character'; return; }
   if (scene.hitLighthouse(e.clientX, e.clientY)) { ui.open = game.voyage ? 'voyage' : 'lighthouse'; return; }
   if (scene.hitHarbor(e.clientX, e.clientY)) { ui.open = 'harbor'; return; }
   // Hired fishermen and the crate on the wide pier.
@@ -90,6 +92,7 @@ canvas.addEventListener('click', (e) => {
   if (slot >= 0) { game.reel(slot); return; }
   const target = scene.hit(e.clientX, e.clientY);
   if (target === 'dock' && scene.place === 'dock') return; // already there; don't put the lines away
+  if (target !== 'dock' && target === scene.place && !scene.walking) { scene.onArrive(target); return; } // already standing here: open it
   scene.walkTo(target, e.clientX);
 });
 
@@ -143,7 +146,7 @@ function onAction(a: Action): void {
     if (next && game.upgradeHandRod(i)) note.banner(pixelIcon('rod'), HAND_NAMES[i]!.toUpperCase(), next.name);
   } else if (a.startsWith('handTrain:')) {
     const i = Number(a.slice(10));
-    if (game.trainHand(i)) note.banner(pixelIcon('hook'), HAND_NAMES[i]!.toUpperCase(), `Fishing ${game.hands[i]!.skill}`);
+    if (game.trainHandN(i, ui.buyN || Infinity)) note.banner(pixelIcon('hook'), HAND_NAMES[i]!.toUpperCase(), `Fishing ${game.hands[i]!.skill}`);
   } else if (a.startsWith('handBait:')) {
     const [, i, bait] = a.split(':') as [string, string, BaitId];
     game.setHandBait(Number(i), bait);
@@ -184,6 +187,8 @@ function onAction(a: Action): void {
   }
   else if (a === 'close') ui.open = null;
   else if (a.startsWith('gsMode:')) ui.gsMode = a.slice(7) as 'buy' | 'sell';
+  else if (a.startsWith('buyN:')) ui.buyN = a.slice(5) === 'max' ? 0 : Number(a.slice(5)) as 1 | 5;
+  else if (a === 'trainAll') { const k = game.trainAll(ui.buyN || Infinity); if (k) note.banner(pixelIcon('hook'), 'TRAINED', `${k} level${k === 1 ? '' : 's'}`, 'plain'); }
   else if (a.startsWith('pubTab:')) ui.pubTab = a.slice(7) as 'board' | 'crew';
   else if (a.startsWith('lhWho:')) ui.lhWho = a.slice(6) as 'you' | 'crew';
   else if (a.startsWith('sign:')) { const s = game.pubBoard.find((x) => x.id === Number(a.slice(5))); if (s && game.signSailor(s.id)) note.banner(pixelIcon('crew'), 'SIGNED', `${s.name}, ${s.role}`, 'plain'); }
@@ -314,12 +319,13 @@ function announceLine(line: Extract<Line, { type: 'result' }>, slot: number): vo
     const pic = fishIcon(f, false, 48, 28, v);
     note.float(`+$${game.priceOf(c).toLocaleString()}`, x, at.y, v ? 'rare' : 'good');
     if (game.journal[f.id]!.count === 1) note.banner(pic, 'NEW FISH', f.name, 'rare');
-    else if (v) note.banner(pic, VARIANTS[v].name.toUpperCase(), f.name, 'rare');
+    else if (v === 'shiny') note.banner(pic, 'SHINY', f.name, 'rare');
+    else if (v) note.quiet(pic, `<b>${VARIANTS[v].name}</b> ${f.name}`, 'rare');
     if (line.strong) note.float('HELD!', x, at.y - 40, 'plain');
   } else if (line.outcome === 'snapped' && f) {
     const need = RODS.find((r) => r.tier >= f.tier)!;
     note.float('SNAP!', x, at.y, 'bad');
-    note.log('snap', fishIcon(f, true, 48, 28), `Snapped: needs ${need.name}`, 'bad');
+    note.quiet(fishIcon(f, true, 48, 28), `Snapped: needs ${need.name}`, 'bad');
   } else if (!game.auto && line.outcome === 'escaped') {
     note.float('TOO SLOW', x, at.y, 'plain');
   } else if (!game.auto && line.outcome === 'scared') {
@@ -397,6 +403,14 @@ function digWorms(): void {
 }
 
 let last = performance.now();
+/** Keep banners just below the top bar (and its rates board). */
+let bannerTop = -1;
+function placeBanner(): void {
+  const top = document.getElementById('top');
+  const y = top ? Math.round(top.getBoundingClientRect().bottom + 8) : 70;
+  if (y !== bannerTop) { bannerTop = y; document.documentElement.style.setProperty('--banner-top', `${y}px`); }
+}
+
 /** Tackle news: a frenzy starts (Chum Bucket), the Landing Net brings in a second fish. */
 function tackleNews(): void {
   if (game.frenzyNews) { game.frenzyNews = false; note.banner(pixelIcon('bait'), 'FRENZY!', 'Bites come fast', 'rare'); }
@@ -419,6 +433,7 @@ function frame(now: number): void {
   announceHands();
   announce();
   tackleNews();
+  placeBanner();
   announceAchievements();
   scene.update(dt);
   sampleRates(now);
