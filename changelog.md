@@ -4,6 +4,14 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-11  Buzz on bite
+  WHAT: Settings: BUZZ ON BITE ON/OFF (on by default, kept per device in
+        riverside-buzz, survives Start Over and Retire). A short double pulse
+        when one of your lines gets a bite; not with the Autofisher on, with a
+        panel open, or away from the dock. Phones without the Vibration API
+        (iPhone Safari) see a note instead of the toggle.
+  WHY:  The user wanted a tactile cue to reel in on mobile.
+
 2026-10-11  The Pub is boarded up until the Flagship
   WHAT: Locked look like the old Fish Co.: grey walls and roof, boarded dark
         windows, crossed planks and a padlock on the door, a "?" sign. It

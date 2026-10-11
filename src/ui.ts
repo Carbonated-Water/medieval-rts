@@ -16,7 +16,7 @@ export type Panel = 'pub' | 'gearshop' | 'character' | 'gearitem' | 'market' | '
 export type Action =
   | 'cast' | 'reel' | 'close' | 'back' | 'reset' | 'toggleDev' | Panel
   | `gsMode:${'buy' | 'sell'}` | `gsSlot:${GearSlot}` | `gsTier:${GearTier}` | `gbuy:${string}` | `gsel:${'bag' | 'eq'}:${string}`
-  | `gequip:${number}` | `gunequip:${GearSlot}` | `gsell:${number}` | 'gsellall' | `charTab:${'gear' | 'bag'}` | `buyN:${'1' | '5' | 'max'}` | 'trainAll' | `pubTab:${'board' | 'crew'}` | `sign:${number}` | 'pubRefresh' | `crewSail:${string}` | `lhWho:${'you' | 'crew'}` | `fight:${string}` | 'fightDone' | `lhRegion:${'coast' | 'ocean' | 'abyss'}`
+  | `gequip:${number}` | `gunequip:${GearSlot}` | `gsell:${number}` | 'gsellall' | `charTab:${'gear' | 'bag'}` | `buyN:${'1' | '5' | 'max'}` | 'trainAll' | 'toggleBuzz' | `pubTab:${'board' | 'crew'}` | `sign:${number}` | 'pubRefresh' | `crewSail:${string}` | `lhWho:${'you' | 'crew'}` | `fight:${string}` | 'fightDone' | `lhRegion:${'coast' | 'ocean' | 'abyss'}`
   | 'buyFlagship' | `sail:${string}` | `vsail:${number}` | `vchoose:${number}` | 'vlegend' | 'vfight' | 'vhome'
   | `exTab:${'hold' | 'listed' | 'wanted'}` | `exList:${number}` | `exUnlist:${number}` | `exOpen:${number}` | `exSell:${number}:${number}` | `exGive:${number}` | 'exDev' | 'boatPrev' | 'boatNext' | `coTab:${'harbor' | 'ledger' | 'harborup'}`
   | `achTab:${'base' | 'tree'}` | `treeTier:${number}` | `treeSel:${string}` | `unlock:${string}` | 'doRetire' | `journalTier:${number}`
@@ -97,6 +97,9 @@ export class UI {
   pubTab: 'board' | 'crew' = 'board';
   /** Buy this many levels at once (0 = as many as you can afford). */
   buyN: 0 | 1 | 5 = 1;
+  /** Buzz the phone when a fish bites your line (a setting kept on this device). */
+  buzz = false;
+  readonly canBuzz = typeof navigator !== 'undefined' && 'vibrate' in navigator;
   /** Exotic Market: which tab, and which listing is open. */
   exTab: 'hold' | 'listed' | 'wanted' = 'hold';
   exSel = 0;
@@ -938,6 +941,7 @@ export class UI {
     return `<div class="row"><div class="slot">${icon('coin')}</div><div class="meta"><b>This run</b></div>${coin(game.earned, 3)}</div>
       <div class="row"><div class="slot">${icon('pearl')}</div><div class="meta"><b>${game.pearls} Pearls</b><div class="sub"><small>${game.fishTree.length}/${TREE_FISH.length} tree fish · retired ${game.retirements}x</small></div></div>
         <button class="btn plain" data-act="tree">TREE</button><button class="btn" data-act="retire">RETIRE</button></div>
+      ${this.canBuzz ? `<button class="btn wide plain" data-act="toggleBuzz">BUZZ ON BITE: ${this.buzz ? 'ON' : 'OFF'}</button>` : '<p class="note">Buzz on bite: not available on this phone.</p>'}
       <button class="btn wide ${game.dev ? 'red' : 'plain'}" data-act="toggleDev">DEV MODE ${game.dev ? 'ON' : 'OFF'} (x${DEV_MULTIPLIER} PRICES)</button>
       <button class="btn wide red" data-act="reset">START OVER</button>`;
   }

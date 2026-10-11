@@ -262,6 +262,10 @@ function onAction(a: Action): void {
   } else if (a.startsWith('train:')) {
     const id = a.slice(6) as SkillId;
     if (game.train(id)) note.banner(pixelIcon(SKILL_ICON[id]), 'TRAINED', `${SKILLS[id].name} ${game.level(id)}`);
+  } else if (a === 'toggleBuzz') {
+    ui.buzz = !ui.buzz;
+    try { localStorage.setItem(BUZZ_KEY, ui.buzz ? '1' : '0'); } catch { /* blocked: just for this visit */ }
+    if (ui.buzz) navigator.vibrate?.(BUZZ);
   } else if (a === 'toggleDev') {
     game.dev = !game.dev;
     note.banner(pixelIcon('coin'), 'DEV MODE', game.dev ? `On, prices x${DEV_MULTIPLIER}` : 'Off', 'plain');
@@ -403,6 +407,16 @@ function digWorms(): void {
 }
 
 let last = performance.now();
+/** Buzz on bite: a short double pulse when one of your lines gets a bite (not when the Autofisher reels for you, or a panel is open). */
+const BUZZ_KEY = 'riverside-buzz', BUZZ = [60, 50, 60];
+try { ui.buzz = ui.canBuzz && localStorage.getItem(BUZZ_KEY) !== '0'; } catch { ui.buzz = ui.canBuzz; }
+let bitesBefore = 0;
+function buzzOnBite(): void {
+  const bites = game.lines.filter((l) => l.type === 'bite').length;
+  if (bites > bitesBefore && ui.buzz && !game.auto && !ui.open && scene.place === 'dock') navigator.vibrate?.(BUZZ);
+  bitesBefore = bites;
+}
+
 /** Keep banners just below the top bar (and its rates board). */
 let bannerTop = -1;
 function placeBanner(): void {
@@ -434,6 +448,7 @@ function frame(now: number): void {
   announce();
   tackleNews();
   placeBanner();
+  buzzOnBite();
   announceAchievements();
   scene.update(dt);
   sampleRates(now);
