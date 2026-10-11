@@ -95,6 +95,8 @@ export class Scene {
   private walkPhase = 0;
   private stepping = 0;
   private shadows: Shadow[] = [];
+  /** The Pub (boarded up until the Flagship is bought). */
+  private pub: Sprite | null = null;
   private ripples: Ripple[] = [];
   private flying: { fish: FishDef; variant?: Variant; t: number; slot: number; sprite: Sprite }[] = [];
   private lastLines: string[] = [];
@@ -307,13 +309,14 @@ export class Scene {
       const s = add(new Sprite(this.cached(key, make)));
       s.anchor.set(0.5, ay);
       s.position.set(Math.round(x), Math.round(y));
+      return s;
     };
     shop('market', () => stallCanvas('MARKET', [PAL.red, PAL.white], PAL.redDark, 'fish'), V.marketX, V.path - 2, 1);
     shop('tackle', () => stallCanvas('TACKLE', [PAL.waterDeep, PAL.sky], PAL.waterDeeper, 'tackle'), V.tackleX, V.path - 2, 1);
     shop('school', schoolCanvas, V.schoolX, V.path + 12, 0);
     shop('baitshop', baitShopCanvas, V.baitX, V.path + 12, 0);
     shop('gearshop', gearShopCanvas, this.gearShopX(), V.path + 12, 0);
-    shop('pub', pubCanvas, this.pubX(), V.path + 12, 0);
+    this.pub = shop('pub', pubCanvas, this.pubX(), V.path + 12, 0);
     // Worms poke out of the dirt bank (redrawn every frame).
     this.wormFx = add(new Graphics());
     this.world.addChild(layer);
@@ -749,6 +752,7 @@ export class Scene {
     this.harbor.texture = this.cached(`harbor:${state}`, () => harborCanvas(state));
     this.lighthouse.texture = this.cached(`lighthouse:${game.company}`, () => lighthouseCanvas(game.company));
     this.jetty.visible = game.company;
+    if (this.pub) this.pub.texture = this.cached(`pub:${game.flagship}`, () => pubCanvas(game.flagship));
     if (game.company) {
       // A beam sweeping slowly out over the water.
       const p = this.lighthouseSpot(), lx = p.x, ly = p.y - 48, a = Math.sin(this.time * 0.6) * 0.9;

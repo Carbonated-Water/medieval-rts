@@ -569,19 +569,28 @@ export function gearShopCanvas(): HTMLCanvasElement {
   }));
 }
 
-/** The Pub: a timber tavern with warm windows and a hanging sign. */
-export function pubCanvas(): HTMLCanvasElement {
+/** The Pub: a timber tavern with warm windows and a hanging sign; grey and boarded up until it opens (with the Flagship). */
+export function pubCanvas(open = true): HTMLCanvasElement {
   const W = 36, H = 32;
   return outline(makeCanvas(W, H, (ctx) => {
-    rect(ctx, 2, 10, W - 4, H - 11, PAL.dirtDark);
-    for (let x = 4; x < W - 3; x += 6) rect(ctx, x, 10, 1, H - 11, PAL.dirtDeep); // timbers
-    rect(ctx, 2, 18, W - 4, 1, PAL.dirtDeep);
-    for (let y = 5; y < 11; y++) rect(ctx, 1 + (10 - y), y, W - 2 - (10 - y) * 2, 1, y % 2 ? PAL.redDark : PAL.red); // roof
-    rect(ctx, 5, 13, 8, 6, PAL.outline); rect(ctx, 6, 14, 6, 4, PAL.goldLight); px(ctx, 9, 14, PAL.gold); // window
-    rect(ctx, 23, 13, 8, 6, PAL.outline); rect(ctx, 24, 14, 6, 4, PAL.goldLight); px(ctx, 27, 14, PAL.gold);
-    rect(ctx, 14, 20, 8, 11, PAL.outline); rect(ctx, 15, 21, 6, 10, PAL.dirtDeep); px(ctx, 19, 26, PAL.gold); // door
-    rect(ctx, 6, 22, 3, 4, PAL.sand); rect(ctx, 6, 22, 3, 1, PAL.white); // a mug by the door
-    sign(ctx, W / 2, 0, 'PUB');
+    rect(ctx, 2, 10, W - 4, H - 11, open ? PAL.dirtDark : PAL.greyDark);
+    for (let x = 4; x < W - 3; x += 6) rect(ctx, x, 10, 1, H - 11, open ? PAL.dirtDeep : '#5f6578'); // timbers
+    rect(ctx, 2, 18, W - 4, 1, open ? PAL.dirtDeep : '#5f6578');
+    for (let y = 5; y < 11; y++) rect(ctx, 1 + (10 - y), y, W - 2 - (10 - y) * 2, 1, open ? (y % 2 ? PAL.redDark : PAL.red) : y % 2 ? PAL.greyDark : PAL.greyMid); // roof
+    for (const wx of [5, 23]) {
+      rect(ctx, wx, 13, 8, 6, PAL.outline);
+      rect(ctx, wx + 1, 14, 6, 4, open ? PAL.goldLight : '#30343e');
+      if (open) px(ctx, wx + 4, 14, PAL.gold); else rect(ctx, wx - 1, 15, 10, 2, PAL.sand); // boarded
+    }
+    rect(ctx, 14, 20, 8, 11, PAL.outline); rect(ctx, 15, 21, 6, 10, PAL.dirtDeep); // door
+    if (open) {
+      px(ctx, 19, 26, PAL.gold);
+      rect(ctx, 6, 22, 3, 4, PAL.sand); rect(ctx, 6, 22, 3, 1, PAL.white); // a mug by the door
+    } else {
+      for (let k = 0; k < 6; k++) { px(ctx, 15 + k, 22 + k, PAL.sand); px(ctx, 20 - k, 22 + k, PAL.sand); } // planks crossed
+      rect(ctx, 16, 27, 4, 3, PAL.gold); px(ctx, 17, 26, PAL.greyMid); px(ctx, 18, 26, PAL.greyMid); // padlock
+    }
+    sign(ctx, W / 2, 0, open ? 'PUB' : '?');
   }));
 }
 

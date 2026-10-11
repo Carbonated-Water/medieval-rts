@@ -4,6 +4,12 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-11  The Pub is boarded up until the Flagship
+  WHAT: Locked look like the old Fish Co.: grey walls and roof, boarded dark
+        windows, crossed planks and a padlock on the door, a "?" sign. It
+        turns into the warm tavern once you buy the Flagship.
+  WHY:  The user wanted locked buildings to read as locked.
+
 2026-10-11  The fish you see is the fish that bites
   WHAT: The fish is now picked when a line settles (not at the bite). With
         fewer than 3 lines (SHADOW_LINES) its shadow, sized by tier, darker
