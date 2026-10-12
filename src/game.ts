@@ -7,8 +7,8 @@ import {
   MIN_BITE_WAIT, REEL_WINDOW, PERFECT_ZONE, PERFECT_PER_LEVEL, PERFECT_VALUE, AUTO_PERFECT_REF, AUTO_PERFECT_MAX, STRENGTH_FIGHT, REFLEX_PER_LEVEL, RODS, HAND_RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, START_WORMS, STRENGTH_PER_LEVEL, TIERS,
   TOO_STRONG_WEIGHT, VARIANTS, VARIANT_ORDER, WORMS_PER_PICK, WORM_SPAWN_SECONDS, WORM_SPOTS, baitById,
   type AchStat, type AchievementDef, type BaitId, type FishDef, type GearKind, type SkillId, type Tier, type Variant,
-  CHUMS, FRENZY_SPEED, ICEBOXES, NETS, GEAR_BAG, GEAR_SELL, DROP_SELL, PUB, CREW_ROLE_ORDER, SAILOR_NAMES, type CrewRole, QUIRKS, QUIRK_ORDER, type QuirkId, MATE, MATE_JOB_ORDER, type MateJob, FLAGSHIP_UP_ORDER, FLAGSHIP_UPS, FLAGSHIP_UP_MAX, flagshipUpCost, type FlagshipUpId, GEAR_SLOTS, GEAR_TIERS, LEGACY_GEAR, STARTER_GEAR, gearById, rodReach, type GearDef, type GearSlot, type StatId, type GearTier,
-  GEAR_ITEMS, SETS, SET_ORDER, SET_SLOTS, SET_TIERS, SET_BONUS_SCALE, setPieceId, DROP_CHANCE, KEEN_EYE, VOYAGE_PIECE, LEGENDARY_FIND, DROP_ROLL, FINE_ROLL, LUCK_SCALE, FORTUNE_SCALE, STAT_CAP, STAT_ORDER, type SetId, type SetEffect, type SetSlot,
+  CHUMS, FRENZY_SPEED, ICEBOXES, NETS, GEAR_BAG, GEAR_SELL, DROP_SELL, PUB, CREW_ROLE_ORDER, SAILOR_NAMES, type CrewRole, QUIRKS, QUIRK_ORDER, type QuirkId, MATE, MATE_JOB_ORDER, type MateJob, FLAGSHIP_UP_ORDER, FLAGSHIP_UPS, FLAGSHIP_UP_MAX, SAILS_REST, SAILS_TRIP, flagshipUpCost, type FlagshipUpId, GEAR_SLOTS, GEAR_TIERS, LEGACY_GEAR, STARTER_GEAR, gearById, rodReach, type GearDef, type GearSlot, type StatId, type GearTier,
+  GEAR_ITEMS, SETS, SET_ORDER, SET_SLOTS, SET_TIERS, SET_BONUS_SCALE, setPieceId, DROP_CHANCE, KEEN_EYE, VOYAGE_PIECE, LEGENDARY_FIND, REFORGE, MASTERWORK, DROP_ROLL, FINE_ROLL, LUCK_SCALE, FORTUNE_SCALE, STAT_CAP, STAT_ORDER, type SetId, type SetEffect, type SetSlot,
   BILLFISH, SEA_FISH, SHELLFISH, TREE_FISH, pearlsFor, HEAD_STARTS, HEAD_START_CASH, type HeadStartId, TRAITS, TRAIT_ORDER, HEIR_NAMES, type TraitId, treeFishById, type TreeFish, COLLECTORS, EXOTIC, LEGENDS, VOYAGE, type LegendDef, type Region,
 } from './data';
 import * as V from './voyage';
@@ -189,7 +189,8 @@ export interface Heir { name: string; trait: TraitId | null }
 /** One generation in the family record. */
 export interface FamilyEntry { name: string; trait: TraitId | null; pearls: number; best?: string; bestKg?: number }
 
-export interface GearItem { id: number; def: string; stats: Partial<Record<StatId, number>>; drop?: boolean; fine?: boolean }
+/** `reforged`: times reforged; `mw`: Masterwork level (Legendaries). */
+export interface GearItem { id: number; def: string; stats: Partial<Record<StatId, number>>; drop?: boolean; fine?: boolean; reforged?: number; mw?: number }
 
 /** An expedition fish in the exotic hold: which legend, how heavy, what it's worth. */
 export interface Exotic { id: number; fish: string; kg: number; value: number }
@@ -531,6 +532,61 @@ export class Game {
     return this.findPiece(set, slotOf(set), p.tier, false);
   }
 
+  // ---------- money sinks: Reforge and Masterwork ----------
+
+  /** A piece you own, by id (worn or in the bag). */
+  private ownedGear(id: number): GearItem | null {
+    return [...GEAR_SLOTS.map((s) => this.equipped[s]), ...this.gearBag].find((g) => g?.id === id) ?? null;
+  }
+
+  /** Swap in a changed copy of a piece (a new object, so the stats cache sees the change). */
+  private replaceGear(old: GearItem, next: GearItem): void {
+    for (const s of GEAR_SLOTS) if (this.equipped[s] === old) this.equipped[s] = next;
+    this.gearBag = this.gearBag.map((g) => (g === old ? next : g));
+  }
+
+  /** How good a found piece rolled, as a share of the shop piece (0.8 to 1.25). */
+  gearQuality(item: GearItem): number {
+    const sum = (o: Partial<Record<StatId, number>>) => Object.values(o).reduce((a, b) => a + (b ?? 0), 0);
+    return sum(item.stats) / (sum(this.gearDef(item).stats) || 1);
+  }
+
+  /** Found pieces (fishing or voyages) can be reforged; null if this one can't. */
+  reforgeCost(item: GearItem): number | null {
+    const def = this.gearDef(item);
+    if (!item.drop || def.tier === 'legendary') return null;
+    return Math.round((REFORGE.base[def.tier] * Math.pow(REFORGE.step, item.reforged ?? 0)) / 1000) * 1000;
+  }
+
+  /** Roll a found piece's stats again; keep the better roll. Returns whether it improved, or null if it couldn't. */
+  reforge(id: number): boolean | null {
+    const item = this.ownedGear(id), cost = item ? this.reforgeCost(item) : null;
+    if (!item || cost === null || this.money < cost) return null;
+    this.money -= cost;
+    const def = this.gearDef(item), roll = DROP_ROLL[0] + this.rng() * (DROP_ROLL[1] - DROP_ROLL[0]);
+    const stats = Object.fromEntries(Object.entries(def.stats).map(([s, v]) => [s, Math.max(1, Math.round(v! * roll))]));
+    const better = Object.values(stats).reduce((a, b) => a + b, 0) > Object.values(item.stats).reduce((a, b) => a + (b ?? 0), 0);
+    this.replaceGear(item, { ...item, ...(better ? { stats, fine: roll >= FINE_ROLL || undefined } : {}), reforged: (item.reforged ?? 0) + 1 });
+    return better;
+  }
+
+  /** The next Masterwork level's price for a Legendary piece, or null (not Legendary, or maxed). */
+  masterworkCost(item: GearItem): number | null {
+    const n = item.mw ?? 0;
+    if (this.gearDef(item).tier !== 'legendary' || n >= MASTERWORK.max) return null;
+    return Math.round((MASTERWORK.base * Math.pow(MASTERWORK.step, n)) / 1e6) * 1e6;
+  }
+
+  masterwork(id: number): boolean {
+    const item = this.ownedGear(id), cost = item ? this.masterworkCost(item) : null;
+    if (!item || cost === null || this.money < cost) return false;
+    this.money -= cost;
+    const mw = (item.mw ?? 0) + 1, def = this.gearDef(item);
+    const stats = Object.fromEntries(Object.entries(def.stats).map(([s, v]) => [s, Math.round(v! * (1 + MASTERWORK.per * mw))]));
+    this.replaceGear(item, { ...item, stats, mw });
+    return true;
+  }
+
   /** Kept by SELL ALL: Legendaries and voyage pieces. */
   keepOnSellAll(g: GearItem): boolean {
     const d = this.gearDef(g);
@@ -700,7 +756,7 @@ export class Game {
 
   /** How long the Flagship rests after you sail: shorter with Swift Sails and a Cook. */
   flagshipRestTime(): number {
-    return Math.round(VOYAGE.rest * (1 - 0.12 * this.flagshipUp('sails')) * (1 - PUB.cookPerStar * (this.crewStars().cook ?? 0)));
+    return Math.round(VOYAGE.rest * SAILS_REST ** this.flagshipUp('sails') * (1 - PUB.cookPerStar * (this.crewStars().cook ?? 0)));
   }
 
   /** A region opens once you've landed a legend of the one before (Coast is always open). */
@@ -863,7 +919,7 @@ export class Game {
       cut: shares * PUB.cutPerStar * (1 - s('quartermaster') * PUB.qmPerStar),
       rough: Math.min(0.9, Math.max(0, PUB.roughBase - s('bosun') * PUB.bosunPerStar - 0.05 * up('hull') - 0.05 * q('salty') + 0.1 * q('seasick'))),
       legend: s('harpooner') ? Math.min(0.95, PUB.legendBase + s('harpooner') * PUB.harpoonPerStar + 0.05 * q('lucky') + 0.03 * up('stores') + 0.04 * up('harpoon')) : 0,
-      time: Math.max(0.2, (1 - s('navigator') * PUB.navPerStar - 0.05 * q('swift')) * (1 - 0.06 * up('sails'))),
+      time: Math.max(0.2, (1 - s('navigator') * PUB.navPerStar - 0.05 * q('swift')) * SAILS_TRIP ** up('sails')),
     };
   }
 

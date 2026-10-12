@@ -205,6 +205,10 @@ function onAction(a: Action): void {
   else if (a.startsWith('sign:')) { const s = game.pubBoard.find((x) => x.id === Number(a.slice(5))); if (s && game.signSailor(s.id)) note.banner(pixelIcon('crew'), 'SIGNED', `${s.name}, ${s.role}`, 'plain'); }
   else if (a === 'pubRefresh') game.refreshBoard();
   else if (a === 'flagship') ui.open = 'flagship';
+  else if (a.startsWith('reforge:')) {
+    const better = game.reforge(Number(a.slice(8)));
+    if (better !== null) note.float(better ? 'BETTER ROLL!' : 'NO LUCK', innerWidth / 2, innerHeight / 2, better ? 'rare' : 'plain');
+  } else if (a.startsWith('masterwork:')) { if (game.masterwork(Number(a.slice(11)))) note.float('MASTERWORK!', innerWidth / 2, innerHeight / 2, 'rare'); }
   else if (a.startsWith('flagshipUp:')) { if (game.buyFlagshipUp(a.slice(11) as FlagshipUpId)) note.banner(pixelIcon('boat'), 'FLAGSHIP', FLAGSHIP_UPS[a.slice(11) as FlagshipUpId].name, 'plain'); }
   else if (a.startsWith('crewSail:')) { if (game.sendCrew(a.slice(9))) { note.banner(pixelIcon('boat'), 'CREW SAILED', LEGENDS.find((l) => l.id === a.slice(9))!.spot, 'plain'); ui.open = null; } }
   else if (a.startsWith('charTab:')) ui.charTab = a.slice(8) as 'gear' | 'bag';

@@ -430,6 +430,13 @@ export const VOYAGE_PIECE: Record<'coast' | 'ocean' | 'abyss', { chance: number;
  * don't own yet; The Old One's voyages find them more often. A Lookout helps.
  */
 export const LEGENDARY_FIND = { abyss: 0.06, old: 0.15 };
+/** Reforge (a found piece): roll its stats again and keep the better; each reforge of the same piece costs STEP times more. */
+export const REFORGE = {
+  base: { bronze: 2_000, silver: 20_000, gold: 250_000, platinum: 4_000_000, diamond: 40_000_000, legendary: 0 } as Record<GearTier, number>,
+  step: 1.6,
+};
+/** Masterwork (a Legendary piece): +10% to its stats a level, ten levels, each STEP times dearer. */
+export const MASTERWORK = { max: 10, per: 0.1, base: 500_000_000, step: 2.2 };
 /** Drops roll their stats between these (x the shop piece); "fine" at or above FINE_ROLL. */
 export const DROP_ROLL: [number, number] = [0.8, 1.25];
 export const FINE_ROLL = 1.12;
@@ -875,13 +882,16 @@ export const VOYAGE = {
  */
 export type FlagshipUpId = 'hold' | 'hull' | 'stores' | 'sails' | 'harpoon';
 export const FLAGSHIP_UP_ORDER: FlagshipUpId[] = ['hold', 'hull', 'stores', 'sails', 'harpoon'];
-export const FLAGSHIP_UP_MAX = 5;
+export const FLAGSHIP_UP_MAX = 10;
+/** Swift Sails: each level multiplies the rest and crew trip times by these. */
+export const SAILS_REST = 0.88;
+export const SAILS_TRIP = 0.94;
 export const FLAGSHIP_UP_STEP = 3;
 export const FLAGSHIP_UPS: Record<FlagshipUpId, { name: string; price: number; does: (n: number) => string }> = {
   hold: { name: 'Bigger Hold', price: 8_000_000, does: (n) => `+${n * 20}% voyage haul` },
   hull: { name: 'Iron Hull', price: 10_000_000, does: (n) => `+${n} hull · -${n * 5}% rough seas` },
   stores: { name: 'Galley Stores', price: 8_000_000, does: (n) => `+${n} ${n === 1 ? 'supply' : 'supplies'} · +${n * 3}% legend` },
-  sails: { name: 'Swift Sails', price: 6_000_000, does: (n) => `-${n * 12}% rest · -${n * 6}% crew trips` },
+  sails: { name: 'Swift Sails', price: 6_000_000, does: (n) => `-${Math.round((1 - SAILS_REST ** n) * 100)}% rest · -${Math.round((1 - SAILS_TRIP ** n) * 100)}% crew trips` },
   harpoon: { name: 'Harpoon Gun', price: 15_000_000, does: (n) => `+${n * 15}% fight pull · +${n * 4}% legend` },
 };
 export const flagshipUpCost = (id: FlagshipUpId, n: number) => Math.round((FLAGSHIP_UPS[id].price * Math.pow(FLAGSHIP_UP_STEP, n)) / 100_000) * 100_000;

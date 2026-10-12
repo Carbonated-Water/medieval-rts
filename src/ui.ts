@@ -2,7 +2,7 @@ import { rodReach, HEAD_STARTS, type HeadStartId, TRAITS, HARBOR_STAFF,
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_ORDER, COMPANY_PRICE, COMPANY_UNLOCK_EARNED, DEV_MULTIPLIER, GROUNDS, HARBOR_UPGRADES,
   MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, PIER_STAFF, HANDS_MAX,
   TRACKS, TRACK_MAX, TRACK_ORDER, WAREHOUSE, type HarborUpgradeId, type TrackId, HAND_NAMES, HAND_SKILL_MAX, LETTERS, RODS, HAND_RODS, FISH, GEAR, PERFECT_PER_LEVEL, SKILLS, STRENGTH_PER_LEVEL, HAGGLE_PER_LEVEL,
-  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, TREE_FISH, type TreeFish, PUB, CREW_ROLES, CREW_ROLE_ORDER, QUIRKS, MATE, MATE_JOB_ORDER, type MateJob, FLAGSHIP_UPS, FLAGSHIP_UP_ORDER, FLAGSHIP_UP_MAX, type FlagshipUpId, LEGENDS, EXOTIC, REGIONS, VOYAGE, GEAR_BAG, GEAR_ITEMS, GEAR_SLOTS, GEAR_TIERS, STATS, STAT_ORDER, SETS, SET_SLOTS, KEEN_EYE, FORTUNE_SCALE, LUCK_SCALE, SKILL_TIER_BONUS, NETS, setPieceId, gearById, type SetId, type GearDef, type GearSlot, type GearTier, type StatId,
+  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, TREE_FISH, type TreeFish, PUB, CREW_ROLES, CREW_ROLE_ORDER, QUIRKS, MATE, MATE_JOB_ORDER, type MateJob, FLAGSHIP_UPS, FLAGSHIP_UP_ORDER, FLAGSHIP_UP_MAX, type FlagshipUpId, LEGENDS, EXOTIC, REGIONS, VOYAGE, GEAR_BAG, GEAR_ITEMS, GEAR_SLOTS, GEAR_TIERS, STATS, STAT_ORDER, SETS, SET_SLOTS, KEEN_EYE, MASTERWORK, FORTUNE_SCALE, LUCK_SCALE, SKILL_TIER_BONUS, NETS, setPieceId, gearById, type SetId, type GearDef, type GearSlot, type GearTier, type StatId,
 } from './data';
 import { type Boat, type Exotic, type Game, type GearItem, type Sailor, fishById } from './game';
 import * as V from './voyage';
@@ -20,7 +20,7 @@ export type Action =
   | 'buyFlagship' | 'flagship' | `flagshipUp:${FlagshipUpId}` | `sail:${string}` | `vsail:${number}` | `vchoose:${number}` | 'vlegend' | 'vfight' | 'vhome'
   | `exTab:${'hold' | 'listed' | 'wanted'}` | `exList:${number}` | `exUnlist:${number}` | `exOpen:${number}` | `exSell:${number}:${number}` | `exGive:${number}` | 'exDev' | 'boatPrev' | 'boatNext' | `coTab:${'harbor' | 'ledger' | 'harborup'}`
   | `achTab:${'base' | 'tree'}` | `treeTier:${number}` | `treeSel:${string}` | `unlock:${string}` | `retireTab:${'retire' | 'family'}` | `heir:${number}` | 'heirloom' | `perk:${HeadStartId}` | 'doRetire' | `journalTier:${number}`
-  | 'sellAll' | `sellFish:${string}` | `buy:${GearKind}` | `train:${SkillId}` | `skillTip:${SkillId}` | 'claimAll' | `trophy:${string}`
+  | `reforge:${number}` | `masterwork:${number}` | 'sellAll' | `sellFish:${string}` | `buy:${GearKind}` | `train:${SkillId}` | `skillTip:${SkillId}` | 'claimAll' | `trophy:${string}`
   | `bait:${BaitId}` | `buyBait:${BaitId}:${number}`
   | 'buyCompany' | `buyBoat:${BoatType}` | `boat:${number}` | `send:${number}` | `collect:${number}` | `crew:${number}` | `net:${number}`
   | 'sendAll' | 'collectAll' | `ground:${number}:${string}` | `track:${TrackId}` | `upgrade:${number}:${TrackId}`
@@ -1034,10 +1034,17 @@ export class UI {
       changes = `<div class="rpgtotal"><small>${other ? `Instead of your ${game.gearDef(other).name}, your totals change:` : 'Nothing worn there now. Your totals change:'}</small>${rows || '<small>No change.</small>'}</div>`;
     }
     const effect = def.effect ? `<p class="note legend">${def.blurb}</p>` : '';
+    // Money sinks: reforge a found piece, masterwork a Legendary.
+    const rf = game.reforgeCost(item), mwc = game.masterworkCost(item);
+    const sink = rf !== null
+      ? `<div class="row tight sink"><div class="meta"><b>Reforge <span class="small">${Math.round(game.gearQuality(item) * 100)}%</span></b><div class="sub"><small class="fx wrap">Rolls 80-125%, keeps the better</small></div></div><button class="btn plain" data-act="reforge:${item.id}" ${game.money < rf ? 'disabled' : ''}>${cash(rf)}</button></div>`
+      : def.tier === 'legendary'
+        ? `<div class="row tight sink"><div class="meta"><b>Masterwork <span class="small">${item.mw ?? 0}/${MASTERWORK.max}</span></b><div class="sub"><small class="fx wrap">${mwc === null ? `Stats +${(item.mw ?? 0) * 10}%. Complete.` : `Stats +${(item.mw ?? 0) * 10}%, next +${((item.mw ?? 0) + 1) * 10}%`}</small></div></div>${mwc === null ? '<span class="maxed">MAX</span>' : `<button class="btn plain" data-act="masterwork:${item.id}" ${game.money < mwc ? 'disabled' : ''}>${cash(mwc)}</button>`}</div>`
+        : '';
     const buttons = worn
       ? (def.slot === 'rod' ? '<p class="note">You always fish with a rod: equip another to swap.</p>' : `<button class="btn wide plain" data-act="gunequip:${def.slot}" ${game.gearBag.length >= GEAR_BAG ? 'disabled' : ''}>TAKE OFF</button>`)
       : `<div class="vchoices"><button class="btn" data-act="gequip:${item.id}">EQUIP</button><button class="btn red" data-act="gsell:${item.id}">SELL ${cash(game.gearValue(item))}</button></div>`;
-    return `<div class="rpgcard">${head}<div class="rpgstats">${lines}</div>${changes}</div>` + effect + buttons;
+    return `<div class="rpgcard">${head}<div class="rpgstats">${lines}</div>${changes}</div>` + effect + sink + buttons;
   }
 
   // ---------- the Exotic Market ----------

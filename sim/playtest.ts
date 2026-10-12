@@ -16,7 +16,7 @@ import {
   AUTO, BAITS, BERTHS, BITE_WAIT, BOATS, BOAT_ORDER, COMPANY_PRICE, GEAR_ITEMS, GEAR_SLOTS, GEAR_TIERS, HARBOR_UPGRADES, HOLDERS,
   LEGENDS, CREW_ROLE_ORDER, FLAGSHIP_UP_ORDER, MATE, PIER_STAFF, SKILLS, TREE_FISH, VOYAGE, rodReach, HEAD_STARTS, type GearDef, type GearKind, type HarborUpgradeId, type SkillId,
 } from '../src/data';
-import { Game } from '../src/game';
+import { Game, type GearItem } from '../src/game';
 import { Fight } from '../src/fight';
 import * as V from '../src/voyage';
 
@@ -47,7 +47,7 @@ export interface Report {
   milestones: { t: number; run: number; what: string }[];
   snapshots: { t: number; run: number; money: number; earned: number; perMin: number; you: number; hands: number; boats: number; sea: number; taps: number }[];
   /** The late game at the end: crew, Flagship, legends, Pearls. */
-  late?: { seats: number; stars: number; fives: number; ups: number; mate: boolean; legends: number; crewTrips: number; pearls: number; legendaries: number };
+  late?: { seats: number; stars: number; fives: number; ups: number; mate: boolean; legends: number; crewTrips: number; pearls: number; legendaries: number; masterwork: number; reforge: number };
   taps: Record<TapKind, number>;
   fights: { legend: string; won: boolean; secs: number }[];
   voyages: { t: number; legend: string; result: string; haul: number }[];
@@ -183,7 +183,18 @@ class Bot {
       const def = g.gearDef(d.item), cur = g.equipped[def.slot];
       if (!d.sold && points(d.item.stats) > (cur ? points(cur.stats) : -1) && g.equipGear(d.item.id)) this.tap('other', 2);
     }
+    this.wearFinds();
     for (const [set, w] of Object.entries(g.setsWorn())) for (const n of [2, 3, 4, 5]) if (w!.n >= n && !this.setsSeen.has(`${set}${n}`)) { this.setsSeen.add(`${set}${n}`); this.mark(`set ${set} ${n}`); }
+  }
+
+  /** Voyage finds waiting to be looked at: wear one if it has more stat points than what is in its slot. */
+  finds: GearItem[] = [];
+  wearFinds() {
+    const g = this.g;
+    for (const item of this.finds.splice(0)) {
+      const cur = g.equipped[g.gearDef(item).slot];
+      if (g.gearBag.includes(item) && points(item.stats) > (cur ? points(cur.stats) : -1) && g.equipGear(item.id)) this.tap('other', 2);
+    }
   }
 
   /** The next rod tier up from the one you hold, if any. */
@@ -339,15 +350,24 @@ class Bot {
       }
     }
     if (!g.mate && this.can(MATE.price, 0.3) && g.hireMate()) { this.tap('voyage', 2); this.mark('first mate'); }
-    this.crewTrips += g.crewNews.splice(0).length;
+    for (const r of g.crewNews.splice(0)) { this.crewTrips++; if (r.gear) this.finds.push(r.gear); }
     // The Flagship's upgrades: the cheapest next level.
     const up = FLAGSHIP_UP_ORDER.map((id) => ({ id, cost: g.flagshipUpCost(id) })).filter((u) => u.cost !== null).sort((a, b) => a.cost! - b.cost!)[0];
     if (up && this.can(up.cost!, 0.3) && g.buyFlagshipUp(up.id)) {
       this.tap('voyage', 2);
       const n = FLAGSHIP_UP_ORDER.reduce((s, id) => s + g.flagshipUp(id), 0);
-      if (n === 1 || n === 10 || n === 25) this.mark(`flagship ups ${n}`);
+      if (n === 1 || n === 10 || n === 25 || n === 50) this.mark(`flagship ups ${n}`);
     }
+    // Money sinks: masterwork a worn Legendary, reforge a worn found piece (the cheapest next step).
+    const worn = GEAR_SLOTS.map((s) => g.equipped[s]).filter((x): x is NonNullable<typeof x> => !!x);
+    const steps = worn.flatMap((x) => {
+      const mw = g.masterworkCost(x), rf = g.gearQuality(x) < 1.2 ? g.reforgeCost(x) : null;
+      return [...(mw !== null ? [{ cost: mw, go: () => g.masterwork(x.id), what: 'masterwork' }] : []), ...(rf !== null ? [{ cost: rf, go: () => g.reforge(x.id) !== null, what: 'reforge' }] : [])];
+    }).sort((a, b) => a.cost - b.cost);
+    const step = steps[0];
+    if (step && this.can(step.cost, 0.3) && step.go()) { this.tap('shop', 2); this.sinks[step.what as 'masterwork' | 'reforge'] += step.cost; this.mark(`first ${step.what}`); }
   }
+  sinks = { masterwork: 0, reforge: 0 };
 
   // ---------- voyages and fights ----------
 
@@ -405,6 +425,7 @@ class Bot {
     if (g.voyage?.stage === 'over') {
       const out = g.endVoyage();
       this.tap('voyage');
+      if (out?.gear) this.finds.push(out.gear);
       if (out) {
         this.rep.voyages.push({ t: this.t, legend: v.legend, result: out.result ?? '?', haul: out.haul });
         if (out.result === 'caught') this.mark(`legend ${V.legendOf(v).region}`);
@@ -496,6 +517,7 @@ class Bot {
       seats: seats.length, stars: seats.reduce((n, r) => n + g.crew[r]!.stars, 0), fives: seats.filter((r) => g.crew[r]!.stars >= 5).length,
       ups: FLAGSHIP_UP_ORDER.reduce((n, id) => n + g.flagshipUp(id), 0), mate: g.mate,
       legends: Object.values(g.landed).reduce((n, k) => n + k, 0), crewTrips: this.crewTrips, pearls: g.pearls,
+      masterwork: this.sinks.masterwork, reforge: this.sinks.reforge,
       legendaries: [...GEAR_SLOTS.map((s) => g.equipped[s]), ...g.gearBag].filter((x) => !!x && g.gearDef(x).tier === 'legendary').length,
     };
     return this.rep;
@@ -518,7 +540,7 @@ export function print(r: Report): string {
   }
   if (r.late) {
     const l = r.late;
-    out.push('', `LATE GAME: crew ${l.seats}/8 seats, ${l.stars} stars (${l.fives} at 5) · Flagship upgrades ${l.ups}/25 · First Mate ${l.mate ? 'yes' : 'no'} · legends landed ${l.legends} · crew trips ${l.crewTrips} · Pearls ${l.pearls} · legendary gear ${l.legendaries}/10`);
+    out.push('', `LATE GAME: crew ${l.seats}/8 seats, ${l.stars} stars (${l.fives} at 5) · Flagship upgrades ${l.ups}/50 · First Mate ${l.mate ? 'yes' : 'no'} · legends landed ${l.legends} · crew trips ${l.crewTrips} · Pearls ${l.pearls} · legendary gear ${l.legendaries}/10 · spent on masterwork ${kmb(l.masterwork)}, reforge ${kmb(l.reforge)}`);
   }
   if (r.lines.length) {
     out.push('', 'YOUR LINES (how bites ended)');

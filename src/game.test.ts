@@ -1486,12 +1486,12 @@ describe('Reflex: PERFECT reels', () => {
 
 describe('Flagship upgrades', () => {
   it('cost more each level, stop at the max, and need the Flagship', () => {
-    const g = new Game({ money: 1e10, company: true }, rng(1));
+    const g = new Game({ money: 1e12, company: true }, rng(1));
     expect(g.buyFlagshipUp('hold')).toBe(false);
     g.flagship = true;
     let spent = 0;
     for (let n = 0; n < FLAGSHIP_UP_MAX; n++) { spent += flagshipUpCost('hold', n); expect(g.buyFlagshipUp('hold')).toBe(true); }
-    expect(g.money).toBe(1e10 - spent);
+    expect(g.money).toBe(1e12 - spent);
     expect(flagshipUpCost('hold', 1)).toBeGreaterThan(flagshipUpCost('hold', 0) * 2);
     expect(g.flagshipUpCost('hold')).toBeNull();
     expect(g.buyFlagshipUp('hold')).toBe(false);
@@ -1506,7 +1506,7 @@ describe('Flagship upgrades', () => {
     expect(g.voyage!.supplies).toBe(VOYAGE.supplies + 3);
     expect(g.voyage!.haulX).toBe(2);
     expect(pull).toBeCloseTo(new Game({}, rng(2)).fightPower() * 1.3, 5);
-    expect(g.flagshipRestTime()).toBe(Math.round(VOYAGE.rest * 0.4));
+    expect(g.flagshipRestTime()).toBe(Math.round(VOYAGE.rest * 0.88 ** 5));
   });
 
   it('help the crew too: more haul, less rough sea, shorter trips', () => {
@@ -1603,5 +1603,34 @@ describe('Legendary gear', () => {
     for (let t = 0; t < 20; t += 0.1) { lit.update(0.1, false); expect(lit.lit).toBe(true); }
     const tired = (perks: string[]) => { const f = new Fight(LEGENDS[0]!, rng(5), undefined, 1, perks); f.surge = 5; f.update(1, false); return 1 - f.stamina; };
     expect(tired(['runTire'])).toBeCloseTo(tired([]) * 1.5, 5);
+  });
+});
+
+describe('Reforge and Masterwork', () => {
+  it('reforge rolls a found piece again, keeps the better, and costs more each time', () => {
+    const g = new Game({ money: 1e12 }, rng(3));
+    g.gearBag = [{ id: 50, def: 'monk-shirt-diamond', stats: { ...gearById('monk-shirt-diamond')!.stats }, drop: true }];
+    for (const k of Object.keys(g.gearBag[0]!.stats)) (g.gearBag[0]!.stats as Record<string, number>)[k] = Math.round((gearById('monk-shirt-diamond')!.stats as Record<string, number>)[k]! * 0.8);
+    const start = g.gearQuality(g.gearBag[0]!), c0 = g.reforgeCost(g.gearBag[0]!)!;
+    let last = start;
+    for (let k = 0; k < 12; k++) { g.reforge(50); const q = g.gearQuality(g.gearBag[0]!); expect(q).toBeGreaterThanOrEqual(last); last = q; }
+    expect(last).toBeGreaterThan(start);
+    expect(g.reforgeCost(g.gearBag[0]!)!).toBeGreaterThan(c0 * 100);
+    // Shop pieces and Legendaries can't be reforged.
+    expect(g.reforgeCost({ id: 51, def: 'monk-shirt-diamond', stats: {} })).toBeNull();
+    expect(g.reforgeCost({ id: 52, def: 'krakenhide', stats: {}, drop: true })).toBeNull();
+  });
+
+  it('masterwork raises a Legendary 10% a level up to 10, and the stats show in your totals', () => {
+    const g = new Game({ money: 1e15 }, rng(4));
+    const d = gearById('krakenhide')!;
+    g.equipped.shirt = { id: 60, def: 'krakenhide', stats: { ...d.stats } };
+    const before = g.statsFor().size;
+    expect(g.masterwork(60)).toBe(true);
+    expect(g.equipped.shirt!.stats.size).toBe(Math.round(d.stats.size! * 1.1));
+    expect(g.statsFor().size).toBeGreaterThan(before); // the stats cache sees the new piece
+    for (let k = 1; k < 10; k++) expect(g.masterwork(60)).toBe(true);
+    expect(g.equipped.shirt!.mw).toBe(10);
+    expect(g.masterwork(60)).toBe(false);
   });
 });
