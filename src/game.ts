@@ -4,7 +4,7 @@ import {
   SIGHTING_CHANCE, SONAR_STEP, STORM_LOSS, TRACKS, TRACK_GROWTH, TRACK_MAX, WAREHOUSE, crewCost,
   type GroundDef, type GroundId, type HarborUpgradeId, type TrackId,
   HANDS_MAX, PIER_STAFF, TRACK_ORDER, MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, SELLER_BAG, handCost, HAND_REACT, HAND_REACT_PER_LEVEL, HAND_REST, HAND_SKILL_MAX, LETTERS, handSkillCost, type BoatType, BITE_WAIT, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, GEAR, HAGGLE_PER_LEVEL, HOLDERS, MAX_GROUND_WORMS,
-  MIN_BITE_WAIT, REEL_WINDOW, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, START_WORMS, STRENGTH_PER_LEVEL, TIERS,
+  MIN_BITE_WAIT, REEL_WINDOW, REFLEX_PER_LEVEL, RODS, HAND_RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, START_WORMS, STRENGTH_PER_LEVEL, TIERS,
   TOO_STRONG_WEIGHT, VARIANTS, VARIANT_ORDER, WORMS_PER_PICK, WORM_SPAWN_SECONDS, WORM_SPOTS, baitById,
   type AchStat, type AchievementDef, type BaitId, type FishDef, type GearKind, type SkillId, type Tier, type Variant,
   CHUMS, FRENZY_SPEED, ICEBOXES, NETS, GEAR_BAG, GEAR_SELL, PUB, CREW_ROLE_ORDER, SAILOR_NAMES, type CrewRole, GEAR_SLOTS, GEAR_TIERS, LEGACY_GEAR, STARTER_GEAR, gearById, rodReach, type GearDef, type GearSlot, type StatId,
@@ -128,6 +128,8 @@ export interface SaveData {
   /** The Shipwright's spending limit (index into MANAGER_BUDGETS). */
   shipBudget?: number;
   hands: Hand[];
+  /** 2: hand rods are steps on HAND_RODS (13); before, levels on RODS (5). */
+  handRods?: number;
   /** Hired fishermen's catches, waiting to be sold. */
   crate: Catch[];
 }
@@ -295,7 +297,9 @@ export class Game {
     this.pierSections = clamp(this.pierSections, 1, PIER_SECTIONS.length);
     this.managerBudget = clamp(this.managerBudget, 0, MANAGER_BUDGETS.length - 1);
     this.shipBudget = clamp(this.shipBudget, 0, MANAGER_BUDGETS.length - 1);
-    for (const h of this.hands) { h.line = { type: 'idle' }; h.react = null; }
+    // Saves from the five-rod ladder: each old rod is the first of its tier on the new one.
+    if (save?.hands?.length && !save.handRods) for (const h of this.hands) h.rod *= 3;
+    for (const h of this.hands) { h.line = { type: 'idle' }; h.react = null; h.rod = clamp(h.rod, 0, HAND_RODS.length - 1); }
     // Saves already past the reveal skip the earlier letters and get just the last one.
     if (!this.company && this.earned >= COMPANY_UNLOCK_EARNED) this.letters = Math.max(this.letters, LETTERS.length - 1);
     this.rod = clamp(this.rod, 0, RODS.length - 1);
@@ -819,8 +823,8 @@ export class Game {
 
   /** Odds for a hired fisherman (their rod and level, their bait). */
   handOdds(h: Hand): { fish: FishDef; p: number; tooStrong: boolean }[] {
-    const tier = RODS[h.rod]!.tier;
-    const weights = this.biters(tier).map((f) => ({ fish: f, w: this.weight(f, h.skill, h.bait, tier, 0) }));
+    const tier = HAND_RODS[h.rod]!.tier;
+    const weights = this.biters(tier).map((f) => ({ fish: f, w: this.weight(f, h.skill, h.bait, tier, HAND_RODS[h.rod]!.reach) }));
     const total = weights.reduce((s, x) => s + x.w, 0);
     return weights.map(({ fish, w }) => ({ fish, p: w / total, tooStrong: fish.tier > tier }));
   }
@@ -1631,13 +1635,13 @@ export class Game {
    */
   bestBait(h: Hand): BaitId {
     let best: BaitId = 'worm', bestRate = -Infinity;
-    const tier = RODS[h.rod]!.tier;
+    const tier = HAND_RODS[h.rod]!.tier;
     for (const b of BAITS) {
       if (this.baitCount(b.id) <= 0 && !(this.harbor.supplier && b.price > 0)) continue;
       const odds = this.handOdds({ ...h, bait: b.id });
       const ev = odds.reduce((s, o) => s + (o.tooStrong ? 0 : o.p * o.fish.price), 0) * b.size;
       const cost = b.price * (this.harbor.supplier ? 1 + HARBOR_UPGRADES.supplier.fee : 1);
-      const secs = ((BITE_WAIT[0] + BITE_WAIT[1]) / 2) * b.wait * (1 - 0.06 * h.rod) + 4.5;
+      const secs = ((BITE_WAIT[0] + BITE_WAIT[1]) / 2) * b.wait * (1 - 0.06 * (HAND_RODS[h.rod]!.tier - 1)) + 4.5;
       const rate = (ev - cost) / secs;
       if (rate > bestRate && tier >= 1) { bestRate = rate; best = b.id; }
     }
@@ -1659,7 +1663,7 @@ export class Game {
 
   handNextRod(i: number): { level: number; name: string; price: number } | null {
     const h = this.hands[i];
-    const r = h ? RODS[h.rod + 1] : undefined;
+    const r = h ? HAND_RODS[h.rod + 1] : undefined;
     return h && r ? { level: h.rod + 1, name: r.name, price: r.price } : null;
   }
 
@@ -1744,7 +1748,7 @@ export class Game {
   private tickHands(dt: number): void {
     for (const h of this.hands) {
       const line = h.line;
-      const tier = RODS[h.rod]!.tier;
+      const tier = HAND_RODS[h.rod]!.tier;
       if (line.type === 'idle') {
         if (h.bait === 'worm' || this.baitCount(h.bait) > 0) {
           if (h.bait !== 'worm') this.baits[h.bait] = this.baitCount(h.bait) - 1;
@@ -1754,15 +1758,15 @@ export class Game {
       }
       line.t += dt;
       if (line.type === 'casting' && line.t >= CAST_SECONDS) {
-        h.line = { type: 'waiting', t: 0, biteAt: this.biteWait(line.bait, h.rod), bait: line.bait };
+        h.line = { type: 'waiting', t: 0, biteAt: this.biteWait(line.bait, tier - 1), bait: line.bait };
       } else if (line.type === 'waiting' && line.t >= line.biteAt) {
-        const { fish, tooStrong } = this.rollFish(line.bait, tier, h.skill, 0);
+        const { fish, tooStrong } = this.rollFish(line.bait, tier, h.skill, HAND_RODS[h.rod]!.reach);
         h.line = { type: 'bite', t: 0, window: REEL_WINDOW, fish, tooStrong, bait: line.bait };
         const slow = Math.max(HAND_REACT[0], HAND_REACT[1] - HAND_REACT_PER_LEVEL * (h.skill - 1));
         h.react = HAND_REACT[0] + this.rng() * (slow - HAND_REACT[0]);
       } else if (line.type === 'bite' && line.t >= (h.react ?? 0)) {
         if (h.react! > line.window) h.line = { type: 'result', t: 0, outcome: 'escaped', fish: line.fish };
-        else if (line.tooStrong) h.line = { type: 'result', t: 0, outcome: 'snapped', fish: line.fish };
+        else if (line.tooStrong && !(line.fish.tier === tier + 1 && this.rng() < HAND_RODS[h.rod]!.reach)) h.line = { type: 'result', t: 0, outcome: 'snapped', fish: line.fish };
         else h.line = { type: 'result', t: 0, outcome: 'caught', fish: line.fish, caught: this.land(line.fish, true, line.bait) };
         h.react = null;
       } else if (line.type === 'result' && line.t >= HAND_REST) {
@@ -1832,7 +1836,7 @@ export class Game {
       equipped: this.equipped, gearBag: this.gearBag, nextGearId: this.nextGearId, net: this.net, chum: this.chum, icebox: this.icebox,
       flagship: this.flagship, flagshipRest: this.flagshipRest, voyage: this.voyage, landed: this.landed,
       crew: this.crew, pubBoard: this.pubBoard, pubClock: this.pubClock, nextSailorId: this.nextSailorId, crewTrip: this.crewTrip,
-      hands: this.hands.map((h) => ({ ...h, line: { type: 'idle' as const }, react: null })), crate: this.crate,
+      hands: this.hands.map((h) => ({ ...h, line: { type: 'idle' as const }, react: null })), handRods: 2, crate: this.crate,
     };
   }
 }

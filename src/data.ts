@@ -323,6 +323,22 @@ export function rodReach(def: GearDef): number {
   const same = GEAR_ITEMS.filter((g) => g.slot === 'rod' && g.tier === def.tier).sort((a, b) => a.price - b.price);
   return Math.max(0, same.findIndex((g) => g.id === def.id)) / same.length;
 }
+
+/**
+ * A fisherman's rod ladder: the shop's rods, three per tier (Twig Rod to
+ * Mythril Rod) with the same reach into the next tier, priced in steps
+ * between the tier prices of RODS.
+ */
+export interface HandRodDef { name: string; tier: Tier; reach: number; price: number; color: string }
+export const HAND_RODS: HandRodDef[] = (() => {
+  const rods = GEAR_ITEMS.filter((g) => g.slot === 'rod' && g.tier !== 'legendary').sort((a, b) => GEAR_TIERS[a.tier].rank - GEAR_TIERS[b.tier].rank || a.price - b.price);
+  const ladder = rods.filter((g) => GEAR_TIERS[g.tier].fishTier < 5).concat(rods.find((g) => GEAR_TIERS[g.tier].fishTier === 5)!);
+  return ladder.map((g, i) => {
+    const tier = GEAR_TIERS[g.tier].fishTier, k = i % 3, lo = RODS[tier - 1]!.price, hi = RODS[tier]?.price ?? lo;
+    const price = tier === 5 ? lo : lo === 0 ? Math.round((hi * k) / 4) : Math.round((lo * Math.pow(hi / lo, k / 3)) / 10) * 10;
+    return { name: g.name, tier, reach: rodReach(g), price, color: g.colors[0] };
+  });
+})();
 /** The gear bag holds this many pieces you aren't wearing. */
 export const GEAR_BAG = 24;
 /** Selling pays this share of the shop price (more for better-rolled drops). */

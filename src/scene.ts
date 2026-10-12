@@ -1,7 +1,7 @@
 import { Application, Container, Graphics, Sprite, Texture, TextureStyle, TilingSprite } from 'pixi.js';
 import bgUrl from './assets/kenney/backgrounds.png';
 import tilesUrl from './assets/kenney/tiles.png';
-import { SHADOW_LINES, BOOTS, CLOTHES, HAND_OUTFITS, RODS, TIERS, VARIANTS, type FishDef, type Variant } from './data';
+import { SHADOW_LINES, BOOTS, CLOTHES, HAND_OUTFITS, RODS, HAND_RODS, TIERS, VARIANTS, type FishDef, type Variant } from './data';
 import type { Game, Line } from './game';
 import {
   HAND, PAL, alertCanvas, baitShopCanvas, boatCanvas, bobberCanvas, craneCanvas, harborCanvas, gearShopCanvas, pubCanvas, jettyCanvas, type HatStyle, lighthouseCanvas, warehouseCanvas, fishCanvas, fisherCanvas, holderCanvas, plankCanvas, schoolCanvas, stallCanvas, type Pose,
@@ -878,7 +878,7 @@ export class Scene {
       s.position.set(spot.x, spot.y);
       s.scale.x = spot.facing;
       const hx = spot.x + spot.facing * (HAND.idle.x - 7), hy = spot.y - 24 + HAND.idle.y, tip = this.rodTip(4 + i);
-      g.moveTo(hx, hy).lineTo(tip.x, tip.y).stroke({ color: RODS[h.rod]!.color, width: 1 });
+      g.moveTo(hx, hy).lineTo(tip.x, tip.y).stroke({ color: HAND_RODS[h.rod]!.color, width: 1 });
       if (this.game.handStarved(h)) {
         // A little red sign: out of the bait you gave them.
         const bx = spot.x - 3, by = spot.y - 36 + Math.round(Math.sin(this.time * 4 + i));

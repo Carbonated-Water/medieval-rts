@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_REPEAT, BOOTS, CAPTAIN_WAGE, COMPANY_PRICE, CREW_BASE, GROUNDS, HANDS_MAX, handCost, PIER_SPOTS, PIER_SECTIONS, SELLER_BAG, SHELLFISH,
   COMPANY_UNLOCK_EARNED, LETTERS, TRACK_GROWTH, TRACK_MAX, TRACK_ORDER, CLOTHES, DEV_MULTIPLIER, FISH, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_MAX, VARIANTS,
-  MAX_GROUND_WORMS, START_WORMS, STRENGTH_PER_LEVEL, WORM_SPAWN_SECONDS, skillCost, TREE_FISH, pearlsFor, gearById, LEGENDS, rodReach,
+  MAX_GROUND_WORMS, START_WORMS, STRENGTH_PER_LEVEL, WORM_SPAWN_SECONDS, skillCost, TREE_FISH, pearlsFor, gearById, LEGENDS, rodReach, HAND_RODS,
 } from './data';
 import { Game, fishById, type Line } from './game';
 
@@ -821,10 +821,10 @@ describe('hired fishermen', () => {
     const g = owner();
     g.buyBoat();
     g.hireHand();
-    expect(g.handNextRod(0)!.name).toBe('Bamboo Rod');
+    expect(g.handNextRod(0)!.name).toBe('Willow Switch');
     while (g.upgradeHandRod(0));
     while (g.trainHand(0));
-    expect(g.hands[0]!.rod).toBe(4);
+    expect(HAND_RODS[g.hands[0]!.rod]!.name).toBe('Mythril Rod');
     expect(g.hands[0]!.skill).toBe(25);
     const legend = g.handOdds(g.hands[0]!).filter((o) => o.fish.tier === 5).reduce((s, o) => s + o.p, 0);
     expect(legend).toBeGreaterThan(0.2);
@@ -927,8 +927,8 @@ describe('pier staff', () => {
     const g = pier();
     g.buyHarbor('supplier');
     g.hireHand(); g.hireHand();
-    Object.assign(g.hands[0]!, { rod: 4, skill: 25 });
-    Object.assign(g.hands[1]!, { rod: 1, skill: 5 });
+    Object.assign(g.hands[0]!, { rod: HAND_RODS.length - 1, skill: 25 });
+    Object.assign(g.hands[1]!, { rod: 3, skill: 5 });
     expect(g.bestBait(g.hands[0]!)).toBe('gold');
     expect(['worm', 'cricket']).toContain(g.bestBait(g.hands[1]!));
   });
@@ -1246,5 +1246,21 @@ describe('rods reach into the next tier', () => {
     const epic = FISH.find((f) => f.tier === 4)!;
     expect(g.landChance(epic)).toBeGreaterThanOrEqual(2 / 3);
     expect(g.landChance(FISH.find((f) => f.tier === 5)!)).toBeLessThan(0.5);
+  });
+});
+
+describe('fishermen rods', () => {
+  it('thirteen steps, Twig to Mythril, cheapest first, three per tier with reach', () => {
+    expect(HAND_RODS).toHaveLength(13);
+    expect(HAND_RODS[0]!.name).toBe('Twig Rod');
+    expect(HAND_RODS[12]!.name).toBe('Mythril Rod');
+    expect(HAND_RODS.map((r) => r.reach).slice(0, 3)).toEqual([0, 1 / 3, 2 / 3]);
+    for (let i = 1; i < HAND_RODS.length; i++) expect(HAND_RODS[i]!.price).toBeGreaterThan(HAND_RODS[i - 1]!.price);
+  });
+
+  it('old saves keep their rod: each becomes the first of its tier', () => {
+    const g = new Game({ company: true, boats: [{ type: 'net', crew: 0, trip: null, haul: null } as never], hands: [{ rod: 2, skill: 3, bait: 'worm' } as never, { rod: 4, skill: 9, bait: 'worm' } as never] });
+    expect(g.hands.map((h) => HAND_RODS[h.rod]!.name)).toEqual(['Fiberglass Rod', 'Mythril Rod']);
+    expect(new Game(g.save()).hands.map((h) => h.rod)).toEqual([6, 12]);
   });
 });

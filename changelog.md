@@ -4,6 +4,14 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-11  Fishermen get the same 13 rods (#2)
+  WHAT: HAND_RODS: a fisherman's rod ladder is the shop's rods, three per
+        tier (Twig Rod to Mythril Rod), with the same reach into the next
+        tier, priced in steps between the old five tier prices. Old saves:
+        each rod becomes the first of its tier (save flag handRods: 2).
+  WHY:  The pier had the same one-big-jump-per-tier problem as your rod.
+        Pier income now builds over ~20 min instead of all at once.
+
 2026-10-11  Rods reach into the next tier (#2)
   WHAT: The three rods of a tier (cheapest first) land 0, 1 in 3, 2 in 3 of
         the next tier's fish, and draw that tier part of the way to its full
