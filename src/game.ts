@@ -7,7 +7,7 @@ import {
   MIN_BITE_WAIT, REEL_WINDOW, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, START_WORMS, STRENGTH_PER_LEVEL, TIERS,
   TOO_STRONG_WEIGHT, VARIANTS, VARIANT_ORDER, WORMS_PER_PICK, WORM_SPAWN_SECONDS, WORM_SPOTS, baitById,
   type AchStat, type AchievementDef, type BaitId, type FishDef, type GearKind, type SkillId, type Tier, type Variant,
-  CHUMS, FRENZY_SPEED, ICEBOXES, NETS, GEAR_BAG, GEAR_SELL, PUB, CREW_ROLE_ORDER, SAILOR_NAMES, type CrewRole, GEAR_SLOTS, GEAR_TIERS, LEGACY_GEAR, STARTER_GEAR, gearById, type GearDef, type GearSlot, type StatId,
+  CHUMS, FRENZY_SPEED, ICEBOXES, NETS, GEAR_BAG, GEAR_SELL, PUB, CREW_ROLE_ORDER, SAILOR_NAMES, type CrewRole, GEAR_SLOTS, GEAR_TIERS, LEGACY_GEAR, STARTER_GEAR, gearById, rodReach, type GearDef, type GearSlot, type StatId,
   BILLFISH, SEA_FISH, SHELLFISH, TREE_FISH, pearlsFor, treeFishById, type TreeFish, COLLECTORS, EXOTIC, LEGENDS, VOYAGE, type LegendDef, type Region,
 } from './data';
 import * as V from './voyage';
@@ -320,6 +320,17 @@ export class Game {
   /** The rarest fish tier your rod lands. */
   get rodTier(): Tier {
     return GEAR_TIERS[this.gearOf('rod')!.tier].fishTier;
+  }
+
+  /** How much of the next tier your rod lands (and draws): 0, 1/3 or 2/3. */
+  get rodReach(): number {
+    return rodReach(this.gearOf('rod')!);
+  }
+
+  /** Chance to land a fish too strong for the rod: the rod's reach for the next tier, then Strength. */
+  landChance(f: FishDef): number {
+    const reach = f.tier === this.rodTier + 1 ? this.rodReach : 0;
+    return 1 - (1 - reach) * (1 - this.strengthChance());
   }
 
   // ---------- gear ----------
@@ -789,25 +800,27 @@ export class Game {
   }
 
   /** Bite weight: tier base × rarity × step^(tier-1); fishing level and bait both add to the step. */
-  private weight(f: FishDef, skill: number, bait: BaitId, rodTier: Tier = this.rodTier): number {
+  private weight(f: FishDef, skill: number, bait: BaitId, rodTier: Tier = this.rodTier, reach = rodTier === this.rodTier ? this.rodReach : 0): number {
     const step = 1 + SKILL_TIER_BONUS * (skill - 1) + baitById(bait).lure + this.gearStat('luck') / 100;
     // Too-strong fish bite at a steady share of the rod's top tier: levels and bait don't make snaps more common.
+    // A rod reaching into the next tier draws that tier part of the way to its full share (geometrically, so each rod is a similar step).
     const share = tierShare(FISH, this.riverFish(), f);
+    if (f.tier === rodTier + 1 && reach > 0) return TIERS[f.tier].weight * f.rarity * share * Math.pow(step, rodTier - 1) * TOO_STRONG_WEIGHT * Math.pow(step / TOO_STRONG_WEIGHT, reach);
     if (f.tier > rodTier) return TIERS[f.tier].weight * f.rarity * share * Math.pow(step, rodTier - 1) * TOO_STRONG_WEIGHT;
     return TIERS[f.tier].weight * f.rarity * share * Math.pow(step, f.tier - 1);
   }
 
   /** Which fish bites (bait as cast). */
-  rollFish(bait: BaitId = 'worm', rodTier: Tier = this.rodTier, skill = this.skill): { fish: FishDef; tooStrong: boolean } {
+  rollFish(bait: BaitId = 'worm', rodTier: Tier = this.rodTier, skill = this.skill, reach = this.rodReach): { fish: FishDef; tooStrong: boolean } {
     const list = this.biters(rodTier);
-    const fish = this.pick(list, (f) => this.weight(f, skill, bait, rodTier));
+    const fish = this.pick(list, (f) => this.weight(f, skill, bait, rodTier, reach));
     return { fish, tooStrong: fish.tier > rodTier };
   }
 
   /** Odds for a hired fisherman (their rod and level, their bait). */
   handOdds(h: Hand): { fish: FishDef; p: number; tooStrong: boolean }[] {
     const tier = RODS[h.rod]!.tier;
-    const weights = this.biters(tier).map((f) => ({ fish: f, w: this.weight(f, h.skill, h.bait, tier) }));
+    const weights = this.biters(tier).map((f) => ({ fish: f, w: this.weight(f, h.skill, h.bait, tier, 0) }));
     const total = weights.reduce((s, x) => s + x.w, 0);
     return weights.map(({ fish, w }) => ({ fish, p: w / total, tooStrong: fish.tier > tier }));
   }
@@ -953,7 +966,7 @@ export class Game {
     if (line.type === 'waiting' || line.type === 'casting') {
       this.lines[i] = { type: 'result', t: 0, outcome: 'scared' };
     } else if (line.type === 'bite') {
-      const strong = line.tooStrong && this.rng() < this.strengthChance();
+      const strong = line.tooStrong && this.rng() < this.landChance(line.fish);
       if (line.tooStrong && !strong) this.lines[i] = { type: 'result', t: 0, outcome: 'snapped', fish: line.fish };
       else {
         this.lines[i] = { type: 'result', t: 0, outcome: 'caught', fish: line.fish, caught: this.land(line.fish, false, line.bait), strong };
@@ -1743,7 +1756,7 @@ export class Game {
       if (line.type === 'casting' && line.t >= CAST_SECONDS) {
         h.line = { type: 'waiting', t: 0, biteAt: this.biteWait(line.bait, h.rod), bait: line.bait };
       } else if (line.type === 'waiting' && line.t >= line.biteAt) {
-        const { fish, tooStrong } = this.rollFish(line.bait, tier, h.skill);
+        const { fish, tooStrong } = this.rollFish(line.bait, tier, h.skill, 0);
         h.line = { type: 'bite', t: 0, window: REEL_WINDOW, fish, tooStrong, bait: line.bait };
         const slow = Math.max(HAND_REACT[0], HAND_REACT[1] - HAND_REACT_PER_LEVEL * (h.skill - 1));
         h.react = HAND_REACT[0] + this.rng() * (slow - HAND_REACT[0]);

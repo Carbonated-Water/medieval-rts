@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_REPEAT, BOOTS, CAPTAIN_WAGE, COMPANY_PRICE, CREW_BASE, GROUNDS, HANDS_MAX, handCost, PIER_SPOTS, PIER_SECTIONS, SELLER_BAG, SHELLFISH,
   COMPANY_UNLOCK_EARNED, LETTERS, TRACK_GROWTH, TRACK_MAX, TRACK_ORDER, CLOTHES, DEV_MULTIPLIER, FISH, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_MAX, VARIANTS,
-  MAX_GROUND_WORMS, START_WORMS, STRENGTH_PER_LEVEL, WORM_SPAWN_SECONDS, skillCost, TREE_FISH, pearlsFor, gearById, LEGENDS,
+  MAX_GROUND_WORMS, START_WORMS, STRENGTH_PER_LEVEL, WORM_SPAWN_SECONDS, skillCost, TREE_FISH, pearlsFor, gearById, LEGENDS, rodReach,
 } from './data';
 import { Game, fishById, type Line } from './game';
 
@@ -1225,5 +1225,26 @@ describe('streamlined fleet', () => {
     for (let t = 0; t < 10; t++) g.tick(0.5);
     expect(g.boats.every((b) => b.tracks.captain >= 1)).toBe(true);
     expect(g.boats.some((b) => b.tracks.hull + b.tracks.gear + b.crew > 0)).toBe(true);
+  });
+});
+
+describe('rods reach into the next tier', () => {
+  it('the rods of a tier land 0, 1 in 3, 2 in 3 of the next tier, and draw it more', () => {
+    expect([gearById('fiberglassrod')!, gearById('heronrod')!, gearById('tidewalkerrod')!].map(rodReach)).toEqual([0, 1 / 3, 2 / 3]);
+    expect(rodReach(gearById('mythrilrod')!)).toBe(0); // nothing above Legendary fish
+    const share = (rod: string) => {
+      const g = new Game({ skill: 15, money: 1e9 }, rng());
+      g.buyGearPiece(rod);
+      return g.odds(15, 'leech').filter((o) => o.fish.tier === 4).reduce((s, o) => s + o.p, 0);
+    };
+    const [a, b, c, d] = ['fiberglassrod', 'heronrod', 'tidewalkerrod', 'carbonrod'].map(share);
+    expect(a!).toBeLessThan(b!);
+    expect(b!).toBeLessThan(c!);
+    expect(c!).toBeLessThan(d!);
+    const g = new Game({ money: 1e9 }, rng());
+    g.buyGearPiece('tidewalkerrod');
+    const epic = FISH.find((f) => f.tier === 4)!;
+    expect(g.landChance(epic)).toBeGreaterThanOrEqual(2 / 3);
+    expect(g.landChance(FISH.find((f) => f.tier === 5)!)).toBeLessThan(0.5);
   });
 });

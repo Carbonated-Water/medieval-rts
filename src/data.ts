@@ -313,6 +313,16 @@ export const GEAR_ITEMS: GearDef[] = [
   { id: 'ghosttreads', slot: 'boots', tier: 'legendary', name: "Ghost Treads", stats: { stride: 120, fortune: 50 }, price: 2000000, style: 'shoes', colors: ['#e0e8f0', '#7ad8ff'], effect: 'waves', blurb: "The ocean’s green band is wider" },
 ];
 export const gearById = (id: string) => GEAR_ITEMS.find((g) => g.id === id);
+/**
+ * How far a rod reaches into the next fish tier: the rods of a tier, cheapest
+ * first, land 0, 1/3, 2/3 of the next tier's fish (and those bite more often),
+ * so each rod is a step instead of one big jump per tier. 0 at the top tier.
+ */
+export function rodReach(def: GearDef): number {
+  if (def.slot !== 'rod' || GEAR_TIERS[def.tier].fishTier >= 5) return 0;
+  const same = GEAR_ITEMS.filter((g) => g.slot === 'rod' && g.tier === def.tier).sort((a, b) => a.price - b.price);
+  return Math.max(0, same.findIndex((g) => g.id === def.id)) / same.length;
+}
 /** The gear bag holds this many pieces you aren't wearing. */
 export const GEAR_BAG = 24;
 /** Selling pays this share of the shop price (more for better-rolled drops). */

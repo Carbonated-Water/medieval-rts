@@ -4,6 +4,20 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-11  Rods reach into the next tier (#2)
+  WHAT: The three rods of a tier (cheapest first) land 0, 1 in 3, 2 in 3 of
+        the next tier's fish, and draw that tier part of the way to its full
+        share (geometric, so each rod is a similar step); Strength stacks on
+        top (Game.landChance). Diamond rods are the top tier: no reach. Shown
+        as a "2 in 3 Epic" chip in the Gear Shop and a "Lands" row on the rod
+        card. Gear Shop note trimmed (it promised drops that don't exist yet).
+        Bot values reach and saves for the next rod step; income table now
+        shows each source's share of the last 10 min.
+  WHY:  Each rod tier was one 10-20x income jump (the diamond rod was the
+        late spike). Now the opening climbs ~2x per rod. A steep stretch
+        is left around the diamond rod, from buys landing together and the
+        fishermen's own rod tiers.
+
 2026-10-11  Fishermen dig their own worms (#17)
   WHAT: A fisherman on worms no longer takes yours (and is never "starved");
         better bait still comes from your pouch. Manager $150k -> $60k, Bait

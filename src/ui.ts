@@ -1,4 +1,4 @@
-import { HARBOR_STAFF,
+import { rodReach, HARBOR_STAFF,
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_ORDER, COMPANY_PRICE, COMPANY_UNLOCK_EARNED, DEV_MULTIPLIER, GROUNDS, HARBOR_UPGRADES,
   MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, PIER_STAFF, HANDS_MAX,
   TRACKS, TRACK_MAX, TRACK_ORDER, WAREHOUSE, type HarborUpgradeId, type TrackId, HAND_NAMES, HAND_SKILL_MAX, LETTERS, RODS, FISH, GEAR, REFLEX_PER_LEVEL, SKILLS, STRENGTH_PER_LEVEL, HAGGLE_PER_LEVEL,
@@ -773,6 +773,12 @@ export class UI {
   }
 
   /** Stats as short chips; with `vs`, each is green or red against those numbers (what you wear in that slot). */
+  /** A rod's reach into the next tier, as "1 in 3 Epic" (empty when none). */
+  private reachLabel(def: GearDef): string {
+    const r = rodReach(def);
+    return r ? `${Math.round(r * 3)} in 3 ${TIERS[(GEAR_TIERS[def.tier].fishTier + 1) as Tier].name}` : '';
+  }
+
   private statChips(stats: Partial<Record<StatId, number>>, vs?: Partial<Record<StatId, number>>): string {
     return STAT_ORDER.filter((s) => stats[s]).map((s) => {
       const v = stats[s]!, o = vs?.[s] ?? 0, cls = !vs ? '' : v > o ? ' up' : v < o ? ' down' : '';
@@ -789,10 +795,10 @@ export class UI {
     const worn = game.equipped[this.gsSlot];
     const rows = GEAR_ITEMS.filter((d) => d.slot === this.gsSlot && d.tier === this.gsTier).map((d) => {
       const wearing = worn?.def === d.id && !worn.drop;
-      return `<div class="row gearrow">${this.gearTile(d, null, `gbuy:${d.id}`)}<div class="meta"><b>${d.name}</b><div class="chips">${this.statChips(d.stats, worn?.stats)}</div></div>
+      return `<div class="row gearrow">${this.gearTile(d, null, `gbuy:${d.id}`)}<div class="meta"><b>${d.name}</b><div class="chips">${this.reachLabel(d) ? `<span class="chip">${this.reachLabel(d)}</span>` : ''}${this.statChips(d.stats, worn?.stats)}</div></div>
         ${wearing ? '<span class="maxed">WORN</span>' : `<button class="btn" data-act="gbuy:${d.id}" ${game.money < d.price ? 'disabled' : ''}>${d.price ? cash(d.price) : 'FREE'}</button>`}</div>`;
     }).join('');
-    return mode + slots + tiers + rows + `<p class="note">Green beats what you wear. Pieces found fishing are stronger, with bonus stats.</p>`;
+    return mode + slots + tiers + rows + `<p class="note">Green beats what you wear.</p>`;
   }
 
   /** The bag: a grid of everything you aren't wearing; tap one to see it; SELL ALL (not Legendaries). */
@@ -868,7 +874,7 @@ export class UI {
       const v = item.stats[st]!, d = v - (mine[st] ?? 0);
       const arrow = worn ? '' : d > 0 ? `<i class="up">\u25b2 ${d}</i>` : d < 0 ? `<i class="down">\u25bc ${-d}</i>` : '<i>=</i>';
       return `<div class="rpgstat"><span>${STATS[st].name}</span><b>${v}%</b>${arrow}</div>`;
-    }).join('') || '<p class="note">No stats.</p>';
+    }).join('') + (this.reachLabel(def) ? `<div class="rpgstat"><span>Lands</span><b>${this.reachLabel(def)}</b><i></i></div>` : '') || '<p class="note">No stats.</p>';
     let changes = '';
     if (!worn) {
       // Totals over everything you wear, before and after swapping this in.

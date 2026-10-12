@@ -14,7 +14,7 @@
  */
 import {
   AUTO, BAITS, BERTHS, BITE_WAIT, BOATS, BOAT_ORDER, COMPANY_PRICE, GEAR_ITEMS, GEAR_SLOTS, GEAR_TIERS, HARBOR_UPGRADES, HOLDERS,
-  LEGENDS, PIER_STAFF, SKILLS, TREE_FISH, VOYAGE, type GearKind, type HarborUpgradeId, type SkillId,
+  LEGENDS, PIER_STAFF, SKILLS, TREE_FISH, VOYAGE, rodReach, type GearKind, type HarborUpgradeId, type SkillId,
 } from '../src/data';
 import { Game } from '../src/game';
 import { Fight } from '../src/fight';
@@ -145,8 +145,8 @@ class Bot {
 
   /** The next rod tier up from the one you hold, if any. */
   nextRod() {
-    const tiers = Object.keys(GEAR_TIERS), cur = tiers.indexOf(this.g.gearOf('rod')!.tier);
-    return GEAR_ITEMS.filter((d) => d.slot === 'rod' && d.tier !== 'legendary' && tiers.indexOf(d.tier) > cur).sort((a, b) => a.price - b.price)[0] ?? null;
+    const tiers = Object.keys(GEAR_TIERS), cur = this.g.gearOf('rod')!, rank = (d: typeof cur) => tiers.indexOf(d.tier) + rodReach(d);
+    return GEAR_ITEMS.filter((d) => d.slot === 'rod' && d.tier !== 'legendary' && rank(d) > rank(cur)).sort((a, b) => a.price - b.price)[0] ?? null;
   }
 
   /** One purchase by the rules, or false when nothing is worth it now. */
@@ -174,13 +174,13 @@ class Bot {
     // Gear Shop: a better rod (higher tier first), then better pieces.
     for (const slot of GEAR_SLOTS) {
       const cur = g.gearOf(slot);
-      const score = (d: typeof GEAR_ITEMS[number]) => (slot === 'rod' ? Object.keys(GEAR_TIERS).indexOf(d.tier) * 1000 : 0) + Object.values(d.stats).reduce((s, v) => s + (v ?? 0), 0);
+      const score = (d: typeof GEAR_ITEMS[number]) => (slot === 'rod' ? Object.keys(GEAR_TIERS).indexOf(d.tier) * 1000 + rodReach(d) * 900 : 0) + Object.values(d.stats).reduce((s, v) => s + (v ?? 0), 0);
       const have = cur ? score(cur) : -1;
       const pick = GEAR_ITEMS.filter((d) => d.slot === slot && d.tier !== 'legendary' && score(d) > have && this.can(d.price, slot === 'rod' ? 0.6 : 0.25))
         .sort((a, b) => score(b) - score(a))[0];
       if (pick && g.buyGearPiece(pick.id)) {
         this.tap('shop', 3); stop();
-        if (slot === 'rod') this.mark(`rod ${pick.tier}`);
+        if (slot === 'rod') { this.mark(`rod ${pick.tier}`); this.mark(pick.name); }
         return true;
       }
     }
@@ -386,14 +386,19 @@ class Bot {
     this.run++;
     this.runStart = this.t;
     this.lastEarned = 0;
+    this.made = { you: 0, hands: 0, boats: 0 };
   }
 
   snapshot() {
     const g = this.g, earnedNow = g.earned;
     const perMin = (earnedNow - this.lastEarned) / 10;
     this.lastEarned = earnedNow;
-    const m = g.made, tot = m.you + m.hands + m.boats || 1;
-    this.rep.snapshots.push({ t: this.t, run: this.run, money: g.money, earned: earnedNow, perMin, you: m.you / tot, hands: m.hands / tot, boats: m.boats / tot, taps: Object.values(this.taps).reduce((s, n) => s + n, 0) });
+    // Each source's share of the last 10 minutes (made is per session, so it resets with a retire).
+    const m = g.made, d = { you: m.you - this.made.you, hands: m.hands - this.made.hands, boats: m.boats - this.made.boats };
+    if (d.you < 0 || d.hands < 0 || d.boats < 0) Object.assign(d, m);
+    this.made = { ...m };
+    const tot = d.you + d.hands + d.boats || 1;
+    this.rep.snapshots.push({ t: this.t, run: this.run, money: g.money, earned: earnedNow, perMin, you: d.you / tot, hands: d.hands / tot, boats: d.boats / tot, taps: Object.values(this.taps).reduce((s, n) => s + n, 0) });
   }
 
   play() {
