@@ -138,6 +138,7 @@ function onAction(a: Action): void {
   } else if (a.startsWith('boat:')) { ui.boatSel = Number(a.slice(5)); ui.trackSel = 'hull'; ui.open = 'boat'; }
   else if (a === 'buyPierSection') { if (game.buyPierSection()) note.banner(pixelIcon('anchor'), 'PIER EXTENDED', `${game.pierSpots} spots`); }
   else if (a.startsWith('budget:')) game.setManagerBudget(Number(a.slice(7)));
+  else if (a.startsWith('shipBudget:')) game.setShipBudget(Number(a.slice(11)));
   else if (a === 'hire') { if (game.hireHand()) note.banner(pixelIcon('crew'), 'HIRED', HAND_NAMES[game.hands.length - 1]!); }
   else if (a === 'sellCrate') { const n = game.sellCrate(); if (n) note.banner(pixelIcon('fish'), 'CRATE SOLD', `$${n.toLocaleString()}`); }
   else if (a.startsWith('hand:')) { ui.handSel = Number(a.slice(5)); ui.open = 'hand'; }
@@ -159,7 +160,13 @@ function onAction(a: Action): void {
   else if (a.startsWith('track:')) ui.trackSel = a.slice(6) as TrackId;
   else if (a.startsWith('upgrade:')) {
     const [, i, id] = a.split(':') as [string, string, TrackId];
-    if (game.upgradeTrack(Number(i), id)) note.banner(pixelIcon('anchor'), game.boatName(Number(i)).toUpperCase(), `${TRACKS[id].name} ${game.boats[Number(i)]!.tracks[id]}`);
+    if (game.upgradeTrackN(Number(i), id, ui.buyN || Infinity)) note.banner(pixelIcon('anchor'), game.boatName(Number(i)).toUpperCase(), `${TRACKS[id].name} ${game.boats[Number(i)]!.tracks[id]}`);
+  } else if (a.startsWith('bestBuy:')) {
+    const i = Number(a.slice(8)), best = game.bestBuy(i);
+    if (best?.buy()) note.banner(pixelIcon('anchor'), game.boatName(i).toUpperCase(), best.name, 'plain');
+  } else if (a.startsWith('buyFitted:')) {
+    const type = a.slice(10) as BoatType;
+    if (game.buyFittedBoat(type)) { note.banner(pixelIcon('boat'), 'BOUGHT', `${game.boatName(game.boats.length - 1)}, fitted`); ui.open = 'harbor'; }
   } else if (a.startsWith('ground:')) {
     const [, i, id] = a.split(':') as [string, string, GroundId];
     game.setGround(Number(i), id);

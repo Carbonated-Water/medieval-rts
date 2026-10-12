@@ -4,6 +4,17 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-11  Fewer taps for the fleet
+  WHAT: Boat screen: x1/x5/MAX on the upgrade track, and a Best buy row that
+        buys whatever pays back fastest (captain first, then tracks or a
+        deckhand, counting a better ground it opens) and moves the boat to its
+        best ground. Shipyard: a Fitted copy of your most-invested boat of each
+        kind (full price, same levels and crew, puts to sea at once). Harbor
+        staff: the Shipwright ($300k) does Best buys across the fleet on his
+        own, within a budget (Off/5%/10%/25%, default 10%).
+  WHY:  Making and maxing boats took ~45 taps a boat; the user found it
+        tedious and asked for a streamlined flow.
+
 2026-10-11  Buzz on bite
   WHAT: Settings: BUZZ ON BITE ON/OFF (on by default, kept per device in
         riverside-buzz, survives Start Over and Retire). A short double pulse

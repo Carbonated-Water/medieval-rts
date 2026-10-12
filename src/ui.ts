@@ -1,4 +1,4 @@
-import {
+import { HARBOR_STAFF,
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_ORDER, COMPANY_PRICE, COMPANY_UNLOCK_EARNED, DEV_MULTIPLIER, GROUNDS, HARBOR_UPGRADES,
   MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, PIER_STAFF, HANDS_MAX,
   TRACKS, TRACK_MAX, TRACK_ORDER, WAREHOUSE, type HarborUpgradeId, type TrackId, HAND_NAMES, HAND_SKILL_MAX, LETTERS, RODS, FISH, GEAR, REFLEX_PER_LEVEL, SKILLS, STRENGTH_PER_LEVEL, HAGGLE_PER_LEVEL,
@@ -25,7 +25,7 @@ export type Action =
   | 'buyCompany' | `buyBoat:${BoatType}` | `boat:${number}` | `send:${number}` | `collect:${number}` | `crew:${number}` | `net:${number}`
   | 'sendAll' | 'collectAll' | `ground:${number}:${string}` | `track:${TrackId}` | `upgrade:${number}:${TrackId}`
   | `sellBoat:${number}` | 'buyBerth' | 'buyWarehouse' | `buyHarbor:${HarborUpgradeId}`
-  | 'buyPierSection' | `budget:${number}`
+  | 'buyPierSection' | `budget:${number}` | `shipBudget:${number}` | `bestBuy:${number}` | `buyFitted:${BoatType}`
   | 'hire' | 'sellCrate' | `hand:${number}` | `handRod:${number}` | `handTrain:${number}` | `handBait:${number}:${BaitId}`;
 
 /** The Tackle shop: rod holders and the Autofisher (rods and clothes are gear, at the Gear Shop). */
@@ -417,14 +417,18 @@ export class UI {
       : gain > 1 ? `<span class="up">+$${kmb(gain)}/min</span> · back in ${mins(cost / gain)}`
       : id === 'engine' || id === 'hull' || id === 'sonar' ? `${TRACKS[id].blurb}` : 'No gain here';
     const detail = `<div class="row detail"><div class="meta"><b>${name} <span class="small">LV ${b.tracks[id]}</span></b><div class="sub"><small>${preview}</small></div></div>
-      ${cost === null ? '<span class="maxed">MAX</span>' : `<button class="btn" data-act="upgrade:${i}:${id}" ${game.money < cost ? 'disabled' : ''}>${coin(cost)}</button>`}</div>`;
+      ${cost === null ? '<span class="maxed">MAX</span>' : this.trainBtn(`upgrade:${i}:${id}`, game.trackCostN(i, id, this.buyN || Infinity), game.money, cost)}</div>`;
     const crewCost = game.nextCrewCost(i);
     const crewGain = crewCost === null ? 0 : game.boatRate(b, { crew: true }) - rate;
     const crew = `<div class="row"><div class="slot">${icon('crew')}</div><div class="meta"><b>Crew ${b.crew}/${game.crewMax(b)}</b><div class="sub"><small>${crewCost === null ? `${game.haulSize(b)} a trip · Hull adds slots` : `<span class="up">+$${kmb(crewGain)}/min</span> · back in ${mins(crewCost / crewGain)}`}</small></div></div>
       ${crewCost === null ? '<span class="maxed">FULL</span>' : `<button class="btn" data-act="crew:${i}" ${game.money < crewCost ? 'disabled' : ''}>${coin(crewCost)}</button>`}</div>`;
     const sell = `<div class="row"><div class="meta"><b>Sell boat</b><div class="sub"><small>${b.trip ? 'At sea: this trip is lost' : 'Frees the berth'}</small></div></div>
       <button class="btn red" data-act="sellBoat:${i}">${coin(game.boatResale(i))}</button></div>`;
-    return status + haul + `<div class="grounds">${grounds}</div><div class="grid tracks">${tiles}</div>` + detail + crew + sell;
+    // The best buy: whatever pays for itself fastest (moving to a better ground if it opens one).
+    const best = game.bestBuy(i);
+    const bestRow = best ? `<div class="row"><div class="slot">${icon('anchor')}</div><div class="meta"><b>${best.name}</b><div class="sub"><small>Best buy · ${best.captain ? 'sails by itself' : best.gain > 1 ? `<span class="up">+$${kmb(best.gain)}/min</span>` : 'last levels'}</small></div></div>
+      <button class="btn" data-act="bestBuy:${i}" ${game.money < best.cost ? 'disabled' : ''}>${coin(best.cost)}</button></div>` : '';
+    return status + haul + `<div class="grounds">${grounds}</div><div class="grid tracks">${tiles}</div>` + detail + (cost === null ? '' : this.buyNTabs()) + bestRow + crew + sell;
   }
 
   /**
@@ -450,9 +454,14 @@ export class UI {
   private shipyardHtml(game: Game): string {
     const full = game.boats.length >= game.berthCount;
     return BOAT_ORDER.map((type) => {
-      const def = BOATS[type], price = game.boatPrice(type);
-      return `<div class="row"><div class="slot">${icon(type === 'lobster' ? 'trap' : type === 'sword' ? 'hook' : 'boat')}</div><div class="meta"><b>${def.name}</b>
-        <div class="sub"><small>${def.blurb}</small></div></div><button class="btn" data-act="buyBoat:${type}" ${full || game.money < price ? 'disabled' : ''}>${coin(price)}</button></div>`;
+      const def = BOATS[type], price = game.boatPrice(type), ic = icon(type === 'lobster' ? 'trap' : type === 'sword' ? 'hook' : 'boat');
+      // Fitted out like your best boat of this kind, in one go.
+      const model = game.fittedModel(type), fitted = game.fittedPrice(type);
+      const like = model ? `<div class="row"><div class="slot">${ic}</div><div class="meta"><b>Fitted copy</b>
+        <div class="sub"><small>Of ${game.boatName(game.boats.indexOf(model))}, sails now</small></div></div>
+        <button class="btn" data-act="buyFitted:${type}" ${full || game.money < fitted! ? 'disabled' : ''}>${cash(fitted!)}</button></div>` : '';
+      return `<div class="row"><div class="slot">${ic}</div><div class="meta"><b>${def.name}</b>
+        <div class="sub"><small>${def.blurb}</small></div></div><button class="btn" data-act="buyBoat:${type}" ${full || game.money < price ? 'disabled' : ''}>${coin(price)}</button></div>` + like;
     }).join('') + `<p class="note">${full ? 'All berths are taken: build more at the Harbor.' : 'Each extra boat of a kind costs 50% more.'}</p>`;
   }
 
@@ -462,10 +471,13 @@ export class UI {
       `<div class="row"><div class="slot">${icon(ic)}</div><div class="meta"><b>${name}</b><div class="sub"><small>${sub}</small></div></div>${right}</div>`;
     const buy = (act: string, price: number) => `<button class="btn" data-act="${act}" ${game.money < price ? 'disabled' : ''}>${coin(price)}</button>`;
     const berth = game.nextBerth(), wh = game.nextWarehouse();
-    const staff = (['master'] as HarborUpgradeId[]).map((k) => {
+    const staff = HARBOR_STAFF.map((k) => {
       const u = HARBOR_UPGRADES[k];
-      return row('captain', u.name, `${u.blurb} · ${pct(u.fee)} ${u.feeName}`, game.harbor[k] ? '<span class="maxed">HIRED</span>' : buy(`buyHarbor:${k}`, u.price));
-    }).join('');
+      return row(k === 'shipwright' ? 'anchor' : 'captain', u.name, u.fee ? `${u.blurb} · ${pct(u.fee)} ${u.feeName}` : u.blurb, game.harbor[k] ? '<span class="maxed">HIRED</span>' : buy(`buyHarbor:${k}`, u.price));
+    }).join('') + (game.harbor.shipwright
+      ? `<div class="row"><div class="meta"><b>Shipwright budget</b><div class="sub"><small>Spends up to this share of your money per upgrade</small></div></div></div>
+        <div class="budgets">${MANAGER_BUDGETS.map((v, i) => `<button class="ground ${game.shipBudget === i ? 'sel' : ''}" data-act="shipBudget:${i}">${v ? pct(v) : 'Off'}</button>`).join('')}</div>`
+      : '');
     return row('anchor', `Berths ${game.berthCount}/${BERTHS[BERTHS.length - 1]!.boats}`, 'Room for more boats', berth ? buy('buyBerth', berth.price) : '<span class="maxed">MAX</span>')
       + staff
       + row('trap', `Warehouse ${game.offlineHours}h`, 'Keeps earning while you are away', wh ? buy('buyWarehouse', wh.price) : '<span class="maxed">MAX</span>');

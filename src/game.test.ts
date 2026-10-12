@@ -1161,3 +1161,57 @@ describe('the fish you see coming', () => {
     expect(b.type === 'bite' && b.fish).toBe(coming);
   });
 });
+
+describe('streamlined fleet', () => {
+  it('buys several levels of a track at once, or as many as you can afford', () => {
+    const g = new Game({ company: true, money: 1e9 }, rng());
+    g.buyBoat('net');
+    expect(g.trackCostN(0, 'hull', 5).levels).toBe(5);
+    expect(g.upgradeTrackN(0, 'hull', 5)).toBe(5);
+    expect(g.boats[0]!.tracks.hull).toBe(5);
+    g.money = g.nextTrackCost(0, 'gear')! * 2.6;
+    expect(g.trackCostN(0, 'gear', Infinity).levels).toBe(1);
+  });
+
+  it('the best buy gets a captain first, then pays back fastest, and moves to the best ground', () => {
+    const g = new Game({ company: true, money: 1e9 }, rng());
+    g.buyBoat('net');
+    expect(g.bestBuy(0)!.name).toBe('Captain');
+    for (let k = 0; k < 60 && g.bestBuy(0); k++) g.bestBuy(0)!.buy();
+    const b = g.boats[0]!;
+    expect(g.bestBuy(0)).toBeNull();
+    expect(Object.values(b.tracks).every((l) => l === 5)).toBe(true);
+    expect(b.crew).toBe(g.crewMax(b));
+    const top = Math.max(...GROUNDS.map((x) => g.boatRate(b, { ground: x.id })));
+    expect(g.boatRate(b)).toBe(top);
+    expect(b.ground).not.toBe('coast');
+  });
+
+  it('a fitted-out boat copies your best one at full price and puts to sea', () => {
+    const g = new Game({ company: true, money: 1e9 }, rng());
+    expect(g.fittedPrice('net')).toBeNull();
+    g.buyBoat('net');
+    for (let k = 0; k < 10; k++) g.bestBuy(0)!.buy();
+    const model = g.boats[0]!, price = g.fittedPrice('net')!, before = g.money;
+    expect(g.buyFittedBoat('net')).toBe(true);
+    const copy = g.boats[1]!;
+    expect(copy.tracks).toEqual(model.tracks);
+    expect(copy.crew).toBe(model.crew);
+    expect(copy.trip).not.toBeNull();
+    expect(before - g.money).toBe(price);
+    expect(price).toBeGreaterThan(g.boatPrice('net'));
+  });
+
+  it('the Shipwright fits out boats within his budget', () => {
+    const g = new Game({ company: true, money: 5e6, harbor: { shipwright: true } }, rng());
+    g.buyBoat('net'); g.buyBoat('net');
+    g.setShipBudget(0);
+    for (let t = 0; t < 10; t++) g.tick(0.5);
+    expect(g.boats.every((b) => b.tracks.captain === 0)).toBe(true);
+    g.setShipBudget(3);
+    g.money = 5e6;
+    for (let t = 0; t < 10; t++) g.tick(0.5);
+    expect(g.boats.every((b) => b.tracks.captain >= 1)).toBe(true);
+    expect(g.boats.some((b) => b.tracks.hull + b.tracks.gear + b.crew > 0)).toBe(true);
+  });
+});

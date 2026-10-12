@@ -3,7 +3,7 @@ import {
   CREW_BASE, CREW_HAUL, CREW_SPEED, ENGINE_SPEED, GROUNDS, HARBOR_UPGRADES, HULL_HOLD, HULL_STORM, ICE_VALUE, SCHOOL_CHANCE,
   SIGHTING_CHANCE, SONAR_STEP, STORM_LOSS, TRACKS, TRACK_GROWTH, TRACK_MAX, WAREHOUSE, crewCost,
   type GroundDef, type GroundId, type HarborUpgradeId, type TrackId,
-  HANDS_MAX, MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, SELLER_BAG, handCost, HAND_REACT, HAND_REACT_PER_LEVEL, HAND_REST, HAND_SKILL_MAX, LETTERS, handSkillCost, type BoatType, BITE_WAIT, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, GEAR, HAGGLE_PER_LEVEL, HOLDERS, MAX_GROUND_WORMS,
+  HANDS_MAX, PIER_STAFF, TRACK_ORDER, MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, SELLER_BAG, handCost, HAND_REACT, HAND_REACT_PER_LEVEL, HAND_REST, HAND_SKILL_MAX, LETTERS, handSkillCost, type BoatType, BITE_WAIT, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, GEAR, HAGGLE_PER_LEVEL, HOLDERS, MAX_GROUND_WORMS,
   MIN_BITE_WAIT, REEL_WINDOW, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, START_WORMS, STRENGTH_PER_LEVEL, TIERS,
   TOO_STRONG_WEIGHT, VARIANTS, VARIANT_ORDER, WORMS_PER_PICK, WORM_SPAWN_SECONDS, WORM_SPOTS, baitById,
   type AchStat, type AchievementDef, type BaitId, type FishDef, type GearKind, type SkillId, type Tier, type Variant,
@@ -125,6 +125,8 @@ export interface SaveData {
   /** Pier sections bought (4 fishing spots each) and the Manager's spending limit (index into MANAGER_BUDGETS). */
   pierSections: number;
   managerBudget: number;
+  /** The Shipwright's spending limit (index into MANAGER_BUDGETS). */
+  shipBudget?: number;
   hands: Hand[];
   /** Hired fishermen's catches, waiting to be sold. */
   crate: Catch[];
@@ -257,6 +259,8 @@ export class Game {
   sellerNews = 0;
   pierSections = 1;
   managerBudget = 2;
+  shipBudget = 2;
+  private shipClock = 0;
   private buyerClock = 0;
   private supplierClock = 0;
   private managerClock = 0;
@@ -290,6 +294,7 @@ export class Game {
     if (oldHarbor.buyer) { this.harbor = { ...this.harbor, seller: true }; delete oldHarbor.buyer; }
     this.pierSections = clamp(this.pierSections, 1, PIER_SECTIONS.length);
     this.managerBudget = clamp(this.managerBudget, 0, MANAGER_BUDGETS.length - 1);
+    this.shipBudget = clamp(this.shipBudget, 0, MANAGER_BUDGETS.length - 1);
     for (const h of this.hands) { h.line = { type: 'idle' }; h.react = null; }
     // Saves already past the reveal skip the earlier letters and get just the last one.
     if (!this.company && this.earned >= COMPANY_UNLOCK_EARNED) this.letters = Math.max(this.letters, LETTERS.length - 1);
@@ -1196,6 +1201,97 @@ export class Game {
     return true;
   }
 
+  /** What `n` levels of a track would cost (stopping at the max, or at what you can afford when n is Infinity). */
+  trackCostN(i: number, id: TrackId, n: number): { levels: number; cost: number } {
+    const b = this.boats[i];
+    let levels = 0, cost = 0;
+    if (!b) return { levels, cost };
+    const def = BOATS[b.type];
+    for (let l = b.tracks[id]; l < TRACK_MAX && levels < n; l++) {
+      const c = Math.round((def.upgrade * TRACKS[id].cost * Math.pow(TRACK_GROWTH, l)) / 100) * 100;
+      if (n === Infinity && cost + c > this.money) break;
+      cost += c; levels++;
+    }
+    return { levels, cost };
+  }
+
+  /** Up to `n` levels of a track. Returns how many were bought. */
+  upgradeTrackN(i: number, id: TrackId, n: number): number {
+    let k = 0;
+    while (k < n && this.upgradeTrack(i, id)) k++;
+    return k;
+  }
+
+  /** The boat's best rate over the grounds it can reach (after `change`, if given), and where. */
+  private bestGround(b: Boat, change: { track?: TrackId; crew?: boolean } = {}): { ground: GroundId; rate: number } {
+    const x: Boat = { ...b, tracks: { ...b.tracks } };
+    if (change.track) x.tracks[change.track]++;
+    let best = { ground: b.ground, rate: this.boatRate(b, change) };
+    for (const g of GROUNDS) {
+      if (g.id === b.ground || !this.groundOpen(x, g)) continue;
+      const rate = this.boatRate(b, { ...change, ground: g.id });
+      if (rate > best.rate) best = { ground: g.id, rate };
+    }
+    return best;
+  }
+
+  /**
+   * The best next buy for a boat: the upgrade or deckhand that pays for itself
+   * fastest (counting a better ground it opens up), and the boat moves to its
+   * best ground after. A boat with no captain gets one first, so it sails by
+   * itself. Null when it's maxed.
+   */
+  bestBuy(i: number): { cost: number; name: string; gain: number; captain: boolean; buy: () => boolean } | null {
+    const b = this.boats[i];
+    if (!b) return null;
+    const now = this.bestGround(b).rate;
+    const after = (cost: number | null, name: string, change: { track?: TrackId; crew?: boolean }, buy: () => boolean) => {
+      if (cost === null) return null;
+      const to = this.bestGround(b, change);
+      return { cost, name, gain: to.rate - now, captain: change.track === 'captain' && b.tracks.captain === 0, buy: () => { if (!buy()) return false; this.setGround(i, this.bestGround(this.boats[i]!).ground); return true; } };
+    };
+    if (b.tracks.captain === 0) return after(this.nextTrackCost(i, 'captain'), 'Captain', { track: 'captain' }, () => this.upgradeTrack(i, 'captain'));
+    const picks = [
+      ...TRACK_ORDER.filter((id) => id !== 'captain').map((id) => after(this.nextTrackCost(i, id), id === 'gear' ? BOATS[b.type].gearNames[b.tracks.gear + 1] ?? 'Gear' : `${TRACKS[id].name} ${b.tracks[id] + 1}`, { track: id }, () => this.upgradeTrack(i, id))),
+      after(this.nextCrewCost(i), 'Deckhand', { crew: true }, () => this.hireCrew(i)),
+    ].filter((p): p is NonNullable<typeof p> => !!p);
+    const paying = picks.filter((p) => p.gain > 0).sort((p, q) => p.cost / p.gain - q.cost / q.gain);
+    // Nothing left that adds money: the captain's extra levels.
+    return paying[0] ?? after(this.nextTrackCost(i, 'captain'), `Captain ${b.tracks.captain + 1}`, { track: 'captain' }, () => this.upgradeTrack(i, 'captain'));
+  }
+
+  /** The boat of a kind with the most put into it, to copy for a fitted-out new one; null if none has upgrades. */
+  fittedModel(type: BoatType): Boat | null {
+    const own = this.boats.filter((b) => b.type === type && (b.crew > 0 || TRACK_ORDER.some((id) => b.tracks[id] > 0)));
+    return own.sort((p, q) => q.invested - p.invested)[0] ?? null;
+  }
+
+  /** A new boat fitted like the model: the boat's price plus every level and deckhand at their prices. */
+  fittedPrice(type: BoatType): number | null {
+    const m = this.fittedModel(type);
+    if (!m) return null;
+    const def = BOATS[type];
+    let cost = this.boatPrice(type);
+    for (const id of TRACK_ORDER) for (let l = 0; l < m.tracks[id]; l++) cost += Math.round((def.upgrade * TRACKS[id].cost * Math.pow(TRACK_GROWTH, l)) / 100) * 100;
+    for (let n = 0; n < m.crew; n++) cost += crewCost(def.upgrade, n);
+    return cost;
+  }
+
+  /** Buy a boat already fitted out like your best of that kind; it puts to sea at once. */
+  buyFittedBoat(type: BoatType): boolean {
+    const m = this.fittedModel(type), price = this.fittedPrice(type);
+    if (!m || price === null || !this.canBuyBoat(type) || this.money < price) return false;
+    this.money -= price;
+    this.boats.push({ type, tracks: { ...m.tracks }, crew: m.crew, ground: m.ground, trip: null, haul: null, event: null, invested: price, earned: 0, trips: 0 });
+    this.sendBoat(this.boats.length - 1);
+    return true;
+  }
+
+  /** Index into MANAGER_BUDGETS for the Shipwright. */
+  setShipBudget(i: number): void {
+    this.shipBudget = clamp(i, 0, MANAGER_BUDGETS.length - 1);
+  }
+
   /**
    * What a boat is expected to make per minute, worked out from its stats (not
    * luck): catches per trip x average value at its ground, storms and lucky
@@ -1382,7 +1478,7 @@ export class Game {
 
   buyHarbor(id: HarborUpgradeId): boolean {
     const u = HARBOR_UPGRADES[id];
-    const pierJob = id !== 'master';
+    const pierJob = PIER_STAFF.includes(id);
     if (!this.company || (pierJob && !this.pierOpen) || this.harbor[id] || this.money < u.price) return false;
     this.money -= u.price;
     this.harbor[id] = true;
@@ -1430,6 +1526,18 @@ export class Game {
         if (price <= 0 || this.baitCount(h.bait) >= 5 || this.money < price * 20) continue;
         this.money -= Math.round(price * 20);
         this.baits[h.bait] = this.baitCount(h.bait) + 20;
+      }
+    }
+    if (this.harbor.shipwright && MANAGER_BUDGETS[this.shipBudget]! > 0 && (this.shipClock += dt) >= 2) {
+      this.shipClock = 0;
+      // Every boat's best buy: captains first, then the fastest payback, a few at a time while they fit the budget.
+      const share = MANAGER_BUDGETS[this.shipBudget]!;
+      for (let k = 0; k < 8; k++) {
+        const cheapest = Math.min(...this.boats.map((_, i) => Math.min(this.nextCrewCost(i) ?? Infinity, ...TRACK_ORDER.map((id) => this.nextTrackCost(i, id) ?? Infinity))));
+        if (cheapest > this.money * share) break;
+        const picks = this.boats.map((_, i) => this.bestBuy(i)).filter((p): p is NonNullable<typeof p> => !!p && p.cost <= this.money * share);
+        const pick = picks.sort((p, q) => Number(q.captain) - Number(p.captain) || p.cost / Math.max(p.gain, 1e-9) - q.cost / Math.max(q.gain, 1e-9))[0];
+        if (!pick || !pick.buy()) break;
       }
     }
     if (this.harbor.manager) {
@@ -1705,7 +1813,7 @@ export class Game {
       bag: this.bag, journal: this.journal, nextId: this.nextId, earned: this.earned, claimed: this.claimed,
       company: this.company, letters: this.letters, boats: this.boats,
       berths: this.berths, harbor: { ...this.harbor }, warehouse: this.warehouse, savedAt: Date.now(),
-      pierSections: this.pierSections, managerBudget: this.managerBudget,
+      pierSections: this.pierSections, managerBudget: this.managerBudget, shipBudget: this.shipBudget,
       pearls: this.pearls, fishTree: this.fishTree, retirements: this.retirements, seaSeen: this.seaSeen,
       exoticHold: this.exoticHold, listings: this.listings, wanted: this.wanted, nextExoticId: this.nextExoticId,
       equipped: this.equipped, gearBag: this.gearBag, nextGearId: this.nextGearId, net: this.net, chum: this.chum, icebox: this.icebox,

@@ -707,14 +707,16 @@ export const BERTHS: { boats: number; price: number }[] = [
   { boats: 3, price: 0 }, { boats: 4, price: 150000 }, { boats: 5, price: 400000 }, { boats: 6, price: 1000000 }, { boats: 8, price: 2500000 },
 ];
 /** Staff you hire. The Harbor Master works the boats; the rest work the pier. */
-export type HarborUpgradeId = 'master' | 'manager' | 'supplier' | 'seller';
+export type HarborUpgradeId = 'master' | 'shipwright' | 'manager' | 'supplier' | 'seller';
 export const HARBOR_UPGRADES: Record<HarborUpgradeId, { name: string; price: number; blurb: string; fee: number; feeName: string }> = {
   master: { name: 'Harbor Master', price: 200000, blurb: 'Sells hauls as boats come in', fee: 0.05, feeName: 'fee' },
+  shipwright: { name: 'Shipwright', price: 300000, blurb: 'Upgrades every boat', fee: 0, feeName: '' },
   manager: { name: 'Manager', price: 150000, blurb: 'Best bait for each, trains them', fee: 0.03, feeName: 'of crate' },
   supplier: { name: 'Bait Supplier', price: 120000, blurb: 'Keeps every fisherman in bait', fee: 0.25, feeName: 'markup' },
   seller: { name: 'Fish Seller', price: 80000, blurb: 'Sells your bag and the crate', fee: 0.05, feeName: 'fee' },
 };
 export const PIER_STAFF: HarborUpgradeId[] = ['manager', 'supplier', 'seller'];
+export const HARBOR_STAFF: HarborUpgradeId[] = ['master', 'shipwright'];
 /** The Fish Seller sells your bag once it holds this many fish. */
 export const SELLER_BAG = 20;
 /** How much of your money the Manager may spend on one upgrade (choices in the pier staff panel). */
