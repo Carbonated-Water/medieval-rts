@@ -4,6 +4,16 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-11  Playtest harness
+  WHAT: `npm run playtest` (sim/playtest.ts via sim/run.mjs, Vite SSR): a bot
+        plays from a fresh save on the real Game (reaction-time reeling, an
+        errand every N s, rule-based buying, voyages, rule-based fights,
+        retiring) and prints milestone times, income per 10 min with the
+        you/fishermen/boats split, taps by kind and 10+ min stalls; --runs
+        gives median milestone times across seeds. 14 h x 3 seeds in ~30 s.
+  WHY:  The user wanted a harness for full playtests, to check pacing and
+        balance after changes without playing for hours.
+
 2026-10-11  Fewer taps for the fleet
   WHAT: Boat screen: x1/x5/MAX on the upgrade track, and a Best buy row that
         buys whatever pays back fastest (captain first, then tracks or a

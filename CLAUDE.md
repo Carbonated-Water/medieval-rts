@@ -53,6 +53,10 @@ changing anything.** Earlier games are git tags `rts-v1` and `hex-v1`.
 
 - `npm install`, then `npm run dev`: http://localhost:5175
 - `npm test` (Vitest), `npm run typecheck`, `npm run build` (into `dist/`)
+- `npm run playtest -- --hours 8 --seed 1 [--runs 3] [--errand 60] [--json f]`:
+  a bot plays a fresh save on the real game logic and prints milestone
+  times, income per 10 min (you / fishermen / boats), taps and stalls
+  (`sim/playtest.ts`). Rerun after balance changes.
 - Pushing to `main` deploys to https://carbonated-water.github.io/medieval-rts/
   via GitHub Actions (typecheck + tests + build). Never commit build output.
 
