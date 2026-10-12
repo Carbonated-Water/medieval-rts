@@ -8,7 +8,7 @@ import {
   TOO_STRONG_WEIGHT, VARIANTS, VARIANT_ORDER, WORMS_PER_PICK, WORM_SPAWN_SECONDS, WORM_SPOTS, baitById,
   type AchStat, type AchievementDef, type BaitId, type FishDef, type GearKind, type SkillId, type Tier, type Variant,
   CHUMS, FRENZY_SPEED, ICEBOXES, NETS, GEAR_BAG, GEAR_SELL, PUB, CREW_ROLE_ORDER, SAILOR_NAMES, type CrewRole, GEAR_SLOTS, GEAR_TIERS, LEGACY_GEAR, STARTER_GEAR, gearById, rodReach, type GearDef, type GearSlot, type StatId,
-  BILLFISH, SEA_FISH, SHELLFISH, TREE_FISH, pearlsFor, HEAD_STARTS, HEAD_START_CASH, type HeadStartId, treeFishById, type TreeFish, COLLECTORS, EXOTIC, LEGENDS, VOYAGE, type LegendDef, type Region,
+  BILLFISH, SEA_FISH, SHELLFISH, TREE_FISH, pearlsFor, HEAD_STARTS, HEAD_START_CASH, type HeadStartId, TRAITS, TRAIT_ORDER, HEIR_NAMES, type TraitId, treeFishById, type TreeFish, COLLECTORS, EXOTIC, LEGENDS, VOYAGE, type LegendDef, type Region,
 } from './data';
 import * as V from './voyage';
 
@@ -62,6 +62,11 @@ export interface SaveData {
   pearls?: number;
   fishTree?: string[];
   retirements?: number;
+  /** Who fishes this generation, the family so far, the heirs on offer at the Retire screen, this run's best catch. */
+  heir?: Heir;
+  family?: FamilyEntry[];
+  heirChoices?: Heir[];
+  runBest?: { fish: string; kg: number; value: number } | null;
   /** Head starts bought with Pearls (kept on retiring). */
   perks?: HeadStartId[];
   /** Set by retire(): apply the head starts when this save is loaded. Not saved. */
@@ -168,6 +173,11 @@ export interface CrewTrip { legend: string; t: number; dur: number; crew: Partia
 /** A crew home: haul paid (after their cut), rough seas, the legend or not. */
 export interface CrewResult { legend: string; haul: number; cut: number; rough: boolean; caught: boolean; pearls: number; sold: number }
 
+/** A fisher of the family: a name and the trait they were born with (none for the first). */
+export interface Heir { name: string; trait: TraitId | null }
+/** One generation in the family record. */
+export interface FamilyEntry { name: string; trait: TraitId | null; pearls: number; best?: string; bestKg?: number }
+
 export interface GearItem { id: number; def: string; stats: Partial<Record<StatId, number>>; drop?: boolean; fine?: boolean }
 
 /** An expedition fish in the exotic hold: which legend, how heavy, what it's worth. */
@@ -221,6 +231,10 @@ export class Game {
   fishTree: string[] = [];
   retirements = 0;
   perks: HeadStartId[] = [];
+  heir: Heir = { name: 'You', trait: null };
+  family: FamilyEntry[] = [];
+  heirChoices: Heir[] = [];
+  runBest: { fish: string; kg: number; value: number } | null = null;
   seaSeen: string[] = [];
   net = 0;
   chum = 0;
@@ -306,6 +320,7 @@ export class Game {
     if (save?.hands?.length && !save.handRods) for (const h of this.hands) h.rod *= 3;
     for (const h of this.hands) { h.line = { type: 'idle' }; h.react = null; h.rod = clamp(h.rod, 0, HAND_RODS.length - 1); }
     this.perks = (this.perks ?? []).filter((id) => HEAD_STARTS.some((p) => p.id === id));
+    if (this.heir.trait && !TRAITS[this.heir.trait]) this.heir = { ...this.heir, trait: null };
     // Saves already past the reveal skip the earlier letters and get just the last one.
     if (!this.company && this.earned >= COMPANY_UNLOCK_EARNED) this.letters = Math.max(this.letters, LETTERS.length - 1);
     this.rod = clamp(this.rod, 0, RODS.length - 1);
@@ -373,7 +388,7 @@ export class Game {
 
   /** A stat summed over everything you're wearing (percent). */
   gearStat(s: StatId): number {
-    return GEAR_SLOTS.reduce((n, slot) => n + (this.equipped[slot]?.stats[s] ?? 0), 0);
+    return GEAR_SLOTS.reduce((n, slot) => n + (this.equipped[slot]?.stats[s] ?? 0), 0) + (this.heir.trait ? TRAITS[this.heir.trait].stats?.[s] ?? 0 : 0);
   }
 
   /** What a piece sells for: a share of its shop price, more for a better roll (at least $5). */
@@ -807,13 +822,37 @@ export class Game {
    * the journal and claimed achievements carry over; everything else starts
    * fresh. Returns null if this run hasn't earned a Pearl yet.
    */
-  retire(): Partial<SaveData> | null {
+  retire(heir = 0, heirloom?: number): Partial<SaveData> | null {
     const gain = this.pearlsOnRetire();
     if (gain < 1) return null;
+    const next = this.offerHeirs()[heir] ?? this.offerHeirs()[0]!;
+    const family = [...this.family, { name: this.heir.name, trait: this.heir.trait, pearls: gain, ...(this.runBest ? { best: this.runBest.fish, bestKg: this.runBest.kg } : {}) }];
+    // The heir starts in the starter clothes, with the heirloom on (any piece but a rod: the rods are climbed again each generation).
+    const found = heirloom === undefined ? null : [...GEAR_SLOTS.map((s) => this.equipped[s]), ...this.gearBag].find((g) => g?.id === heirloom) ?? null;
+    const kept = found && this.gearDef(found).slot !== 'rod' ? found : null;
+    let id = 1;
+    const equipped: Partial<Record<GearSlot, GearItem | null>> = {};
+    for (const slot of GEAR_SLOTS) { const def = STARTER_GEAR[slot]; equipped[slot] = def ? { id: id++, def, stats: { ...gearById(def)!.stats } } : null; }
+    if (kept) equipped[this.gearDef(kept).slot] = { ...kept, id: id++ };
     return {
       pearls: this.pearls + gain, fishTree: [...this.fishTree], retirements: this.retirements + 1, seaSeen: [...this.seaSeen], landed: { ...this.landed },
       journal: this.journal, claimed: [...this.claimed], dev: this.dev, perks: [...this.perks], newRun: true,
+      heir: next, family, equipped, nextGearId: id,
     };
+  }
+
+  /** The three heirs on offer (rolled once per run, so reopening the screen doesn't reroll). */
+  offerHeirs(): Heir[] {
+    if (this.heirChoices.length) return this.heirChoices;
+    const traits = [...TRAIT_ORDER].sort(() => this.rng() - 0.5).slice(0, 3);
+    const names = HEIR_NAMES.filter((n) => n !== this.heir.name && !this.family.some((f) => f.name === n)).sort(() => this.rng() - 0.5);
+    this.heirChoices = traits.map((trait, i) => ({ name: names[i] ?? HEIR_NAMES[i]!, trait }));
+    return this.heirChoices;
+  }
+
+  /** This generation's number (the first fisher is 1). */
+  get generation(): number {
+    return this.family.length + 1;
   }
 
   /**
@@ -922,7 +961,7 @@ export class Game {
   private spawnWorms(dt: number): void {
     if (this.groundWorms.length >= MAX_GROUND_WORMS) { this.wormClock = 0; return; }
     this.wormClock += dt;
-    if (this.wormClock < WORM_SPAWN_SECONDS) return;
+    if (this.wormClock < WORM_SPAWN_SECONDS / (this.heir.trait === 'greenthumb' ? 2 : 1)) return;
     this.wormClock = 0;
     const free = Array.from({ length: WORM_SPOTS }, (_, i) => i).filter((s) => !this.groundWorms.some((w) => w.spot === s));
     const spot = free[Math.floor(this.rng() * free.length)];
@@ -1099,6 +1138,7 @@ export class Game {
     const variants = { ...j.variants };
     if (variant) variants[variant] = (variants[variant] ?? 0) + 1;
     this.journal[fish.id] = { count: j.count + 1, bestKg: Math.max(j.bestKg, kg), ...(Object.keys(variants).length ? { variants } : {}) };
+    if (!byHand && (!this.runBest || value > this.runBest.value)) this.runBest = { fish: fish.id, kg, value };
     return c;
   }
 
@@ -1425,7 +1465,7 @@ export class Game {
   }
 
   tripSeconds(b: Boat, ground: GroundId = b.ground): number {
-    return this.groundOf(ground).trip * BOATS[b.type].tripFactor * (1 - ENGINE_SPEED * b.tracks.engine) * (1 - CREW_SPEED * b.crew);
+    return this.groundOf(ground).trip * BOATS[b.type].tripFactor * (1 - ENGINE_SPEED * b.tracks.engine) * (1 - CREW_SPEED * b.crew) * (this.heir.trait === 'oldsalt' ? 0.8 : 1);
   }
 
   haulSize(b: Boat): number {
@@ -1861,7 +1901,7 @@ export class Game {
       company: this.company, letters: this.letters, boats: this.boats,
       berths: this.berths, harbor: { ...this.harbor }, warehouse: this.warehouse, savedAt: Date.now(),
       pierSections: this.pierSections, managerBudget: this.managerBudget, shipBudget: this.shipBudget,
-      pearls: this.pearls, fishTree: this.fishTree, retirements: this.retirements, seaSeen: this.seaSeen, perks: this.perks,
+      pearls: this.pearls, fishTree: this.fishTree, retirements: this.retirements, seaSeen: this.seaSeen, perks: this.perks, heir: this.heir, family: this.family, heirChoices: this.heirChoices, runBest: this.runBest,
       exoticHold: this.exoticHold, listings: this.listings, wanted: this.wanted, nextExoticId: this.nextExoticId,
       equipped: this.equipped, gearBag: this.gearBag, nextGearId: this.nextGearId, net: this.net, chum: this.chum, icebox: this.icebox,
       flagship: this.flagship, flagshipRest: this.flagshipRest, voyage: this.voyage, landed: this.landed,

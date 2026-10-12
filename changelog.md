@@ -4,6 +4,23 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-11  Generations: retiring hands the rod to an heir
+  WHAT: Retire screen: RETIRE / FAMILY tabs. RETIRE: the Pearls this run pays,
+        three heirs to pick from (rolled once per run, saved, so no
+        rerolling), each with one trait for their generation (TRAITS: seven
+        that add fisher stats, Patient/Strong/Quick/Lucky/Keen/Swift/Big
+        Catcher, and two specials, Green Thumb worms 2x, Old Salt boats 20%
+        faster; none change prices), and one heirloom: any piece but a rod
+        (the rod ladder is climbed again each generation), the heir starts
+        wearing it in starter clothes otherwise. FAMILY: the generations,
+        newest first (name, trait, best catch, Pearls). Character screen
+        title shows "Name · Gen N" and the trait by the totals. The run's best
+        catch (runBest) is tracked for the record.
+  WHY:  The user wanted a much better prestige system and picked a fishing
+        family (Rogue Legacy style) from three mocked directions. Handing
+        down rods was tried: a Mythril heirloom put the company 14 min into
+        run 2, so rods were left out (user's call).
+
 2026-10-11  Head starts; Retire pays more, voyages pay fewer Pearls (#1, #18)
   WHAT: Fish Tree gets a first tab (star): four head starts bought once with
         Pearls that apply at once and at the start of every run after

@@ -1284,3 +1284,41 @@ describe('fishermen rods', () => {
     expect(new Game(g.save()).hands.map((h) => h.rod)).toEqual([6, 12]);
   });
 });
+
+describe('generations', () => {
+  it('retiring hands the rod to one of three heirs, with a trait, an heirloom and a family record', () => {
+    const g = new Game({ money: 1e6, earned: 4e8 }, rng(5));
+    g.buyGearPiece('tidewalkerrod');
+    const heirs = g.offerHeirs();
+    expect(heirs).toHaveLength(3);
+    expect(new Set(heirs.map((h) => h.trait)).size).toBe(3);
+    expect(g.offerHeirs()).toBe(heirs); // reopening doesn't reroll
+    g.buyGearPiece('strawhat');
+    const hat = g.equipped.hat!, rod = g.equipped.rod!;
+    expect(g.retire(0, rod.id)!.equipped!.rod!.def).toBe('twigrod'); // rods aren't heirlooms
+    const next = new Game(g.retire(1, hat.id)!, rng(6));
+    expect(next.heir).toEqual(heirs[1]);
+    expect(next.generation).toBe(2);
+    expect(next.family).toEqual([expect.objectContaining({ name: 'You', trait: null, pearls: pearlsFor(4e8) })]);
+    expect(next.gearOf('hat')!.id).toBe('strawhat'); // the heirloom
+    expect(next.gearOf('rod')!.id).toBe('twigrod');
+    expect(next.equipped.shirt).not.toBeNull(); // starter clothes
+    expect(next.offerHeirs().every((h) => h.name !== heirs[1]!.name)).toBe(true);
+  });
+
+  it('traits add to your stats, or do something small of their own', () => {
+    const plain = new Game({ heir: { name: 'Mara', trait: null } });
+    const patient = new Game({ heir: { name: 'Mara', trait: 'patient' } });
+    expect(patient.gearStat('patience') - plain.gearStat('patience')).toBe(25);
+    const salt = new Game({ company: true, heir: { name: 'Tam', trait: 'oldsalt' }, boats: [{ type: 'net', crew: 0, trip: null, haul: null } as never] });
+    const land = new Game({ company: true, boats: [{ type: 'net', crew: 0, trip: null, haul: null } as never] });
+    expect(salt.tripSeconds(salt.boats[0]!)).toBeCloseTo(land.tripSeconds(land.boats[0]!) * 0.8);
+  });
+
+  it('the run remembers its best catch for the family record', () => {
+    const g = new Game({ rod: 2 }, rng(7));
+    for (let k = 0; k < 20; k++) { waitForBite(g); g.reel(); }
+    expect(g.runBest).not.toBeNull();
+    expect(g.runBest!.value).toBe(Math.max(...g.bag.map((c) => c.value)));
+  });
+});

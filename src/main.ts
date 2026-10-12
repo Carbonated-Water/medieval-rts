@@ -286,10 +286,17 @@ function onAction(a: Action): void {
   else if (a.startsWith('unlock:')) {
     const id = a.slice(7), f = fishById(id);
     if (game.unlockFish(id)) note.banner(fishIcon(f, false, 48, 28), 'UNLOCKED', f.name, 'rare');
+  } else if (a.startsWith('retireTab:')) ui.retireTab = a.slice(10) as 'retire' | 'family';
+  else if (a.startsWith('heir:')) ui.heirSel = Number(a.slice(5));
+  else if (a === 'heirloom') {
+    // Cycle through what you could hand down.
+    const items = ui.heirloomItems(game), at = items.findIndex((g) => g.id === ui.heirloom);
+    if (items.length) ui.heirloom = items[(Math.max(0, at) + 1) % items.length]!.id;
   } else if (a === 'doRetire') {
-    const gain = game.pearlsOnRetire();
-    if (gain >= 1 && confirm(`Retire and start a new run with +${gain} Pearls? Your money, gear, skills, boats and pier reset. You keep Pearls, the Fish Tree and head starts, your journal and achievements.`)) {
-      const next = game.retire();
+    const gain = game.pearlsOnRetire(), heir = game.offerHeirs()[ui.heirSel]!;
+    const items = ui.heirloomItems(game), item = items.find((g) => g.id === ui.heirloom) ?? items[0];
+    if (gain >= 1 && confirm(`Hand the rod to ${heir.name} with +${gain} Pearls${item ? ` and your ${game.gearDef(item).name}` : ''}? Money, gear, skills, boats and pier start over. Pearls, the Fish Tree, head starts, journal and achievements stay in the family.`)) {
+      const next = game.retire(ui.heirSel, item?.id);
       if (next) {
         wiping = true; // nothing may save the old run over the new one
         localStorage.setItem(SAVE_KEY, JSON.stringify(next));

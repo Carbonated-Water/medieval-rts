@@ -525,6 +525,27 @@ export const HEAD_STARTS: { id: HeadStartId; name: string; cost: number }[] = [
   { id: 'cash', name: '$25,000', cost: 15 },
 ];
 export const HEAD_START_CASH = 25000;
+
+/**
+ * Generations: retiring hands the rod to an heir. Three are offered, each
+ * with one trait that lasts their generation. Traits are fisher stats (added
+ * to your gear's) or a small special; none change prices.
+ */
+export type TraitId = 'patient' | 'strong' | 'quick' | 'lucky' | 'keen' | 'swift' | 'bigcatch' | 'greenthumb' | 'oldsalt';
+export const TRAITS: Record<TraitId, { name: string; blurb: string; stats?: Partial<Record<StatId, number>> }> = {
+  patient: { name: 'Patient', blurb: 'Bites come sooner', stats: { patience: 25 } },
+  strong: { name: 'Strong', blurb: 'Holds big fish', stats: { strength: 30 } },
+  quick: { name: 'Quick', blurb: 'More time to reel', stats: { reflex: 30 } },
+  lucky: { name: 'Lucky', blurb: 'Rare finds x2', stats: { fortune: 100 } },
+  keen: { name: 'Keen', blurb: 'Rarer fish bite', stats: { luck: 25 } },
+  swift: { name: 'Swift', blurb: 'Walks faster', stats: { stride: 40 } },
+  bigcatch: { name: 'Big Catcher', blurb: 'Bigger fish', stats: { size: 25 } },
+  greenthumb: { name: 'Green Thumb', blurb: 'Worms 2x faster' },
+  oldsalt: { name: 'Old Salt', blurb: 'Boats 20% faster' },
+};
+export const TRAIT_ORDER = Object.keys(TRAITS) as TraitId[];
+export const HEIR_NAMES = ['Mara', 'Tobin', 'Wren', 'Ash', 'Robin', 'Sage', 'Rowan', 'Jo', 'Ellis', 'Briar', 'Quinn', 'Fern', 'Arlo', 'Nell', 'Pip', 'Remy',
+  'Hollis', 'Juniper', 'Cass', 'Lake', 'Marlow', 'Oak', 'Tam', 'Skye'];
 export const pearlsFor = (earned: number) => Math.floor(Math.sqrt(Math.max(0, earned) / PEARL_UNIT));
 
 /**

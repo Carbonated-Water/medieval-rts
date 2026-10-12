@@ -370,3 +370,11 @@ body.fighting .banner, body.fighting #notes { visibility: hidden; }
 #sheet .tiers.buyn { margin: -2px 0 6px; }
 #sheet .tiers.buyn .tab { padding: 4px 0; }
 #sheet .btn > small { color: #fff; font: 16px/1 'Kenney Mini'; margin-right: 2px; }
+
+/* Retire: the three heirs on offer. */
+#sheet .heirs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 8px; padding: 3px; }
+#sheet .heir { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px; min-width: 0; overflow: hidden; background: var(--parch); border: 0; box-shadow: inset 0 -3px 0 var(--parch-dark), 0 0 0 2px var(--outline); color: var(--ink); }
+#sheet .heir.sel { background: #f4d68a; box-shadow: inset 0 -3px 0 #c8962a, 0 0 0 3px #2a7a3a; }
+#sheet .heir b { font: 28px/0.8 'Kenney Pixel'; font-weight: normal; }
+#sheet .heir i { font: 16px/1 'Kenney Mini'; font-style: normal; color: #2a7a3a; }
+#sheet .heir small { font: 12px/1.1 'Kenney Mini'; color: var(--ink-soft); text-align: center; white-space: normal; }

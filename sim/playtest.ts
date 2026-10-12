@@ -381,7 +381,14 @@ class Bot {
     if (runFor < 1800 || g.voyage || gain < Math.max(5, owned * 1.5)) return;
     // Not before trying a voyage, unless the run has gone on a long time.
     if (!this.rep.voyages.some((v) => v.t > this.runStart) && runFor < 8 * 3600) return;
-    const save = g.retire();
+    // The heir with the most useful trait; the rod as the heirloom.
+    const like = ['keen', 'patient', 'lucky', 'quick', 'strong', 'bigcatch', 'oldsalt', 'greenthumb', 'swift'];
+    const heirs = g.offerHeirs(), pick = heirs.map((h, i) => ({ i, rank: like.indexOf(h.trait!) })).sort((p, q) => p.rank - q.rank)[0]!.i;
+    this.mark(`heir ${heirs[pick]!.name} (${heirs[pick]!.trait})`);
+    // The heirloom: the piece (not a rod) with the most stat points.
+    const pieces = [...GEAR_SLOTS.map((s) => g.equipped[s]), ...g.gearBag].filter((x) => !!x && g.gearDef(x).slot !== 'rod');
+    const points = (x: (typeof pieces)[number]) => Object.values(x!.stats).reduce((n, v) => n + (v ?? 0), 0);
+    const save = g.retire(pick, pieces.sort((p, q) => points(q) - points(p))[0]?.id);
     if (!save) return;
     this.rep.retires.push({ t: this.t, pearls: gain, earned: g.earned });
     this.mark(`retire (+${gain} Pearls)`);

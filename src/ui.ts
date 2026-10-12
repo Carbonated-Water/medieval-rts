@@ -1,4 +1,4 @@
-import { rodReach, HEAD_STARTS, type HeadStartId, HARBOR_STAFF,
+import { rodReach, HEAD_STARTS, type HeadStartId, TRAITS, HARBOR_STAFF,
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_ORDER, COMPANY_PRICE, COMPANY_UNLOCK_EARNED, DEV_MULTIPLIER, GROUNDS, HARBOR_UPGRADES,
   MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, PIER_STAFF, HANDS_MAX,
   TRACKS, TRACK_MAX, TRACK_ORDER, WAREHOUSE, type HarborUpgradeId, type TrackId, HAND_NAMES, HAND_SKILL_MAX, LETTERS, RODS, HAND_RODS, FISH, GEAR, REFLEX_PER_LEVEL, SKILLS, STRENGTH_PER_LEVEL, HAGGLE_PER_LEVEL,
@@ -19,7 +19,7 @@ export type Action =
   | `gequip:${number}` | `gunequip:${GearSlot}` | `gsell:${number}` | 'gsellall' | `charTab:${'gear' | 'bag'}` | `buyN:${'1' | '5' | 'max'}` | 'trainAll' | 'toggleBuzz' | `pubTab:${'board' | 'crew'}` | `sign:${number}` | 'pubRefresh' | `crewSail:${string}` | `lhWho:${'you' | 'crew'}` | `fight:${string}` | 'fightDone' | `lhRegion:${'coast' | 'ocean' | 'abyss'}`
   | 'buyFlagship' | `sail:${string}` | `vsail:${number}` | `vchoose:${number}` | 'vlegend' | 'vfight' | 'vhome'
   | `exTab:${'hold' | 'listed' | 'wanted'}` | `exList:${number}` | `exUnlist:${number}` | `exOpen:${number}` | `exSell:${number}:${number}` | `exGive:${number}` | 'exDev' | 'boatPrev' | 'boatNext' | `coTab:${'harbor' | 'ledger' | 'harborup'}`
-  | `achTab:${'base' | 'tree'}` | `treeTier:${number}` | `treeSel:${string}` | `unlock:${string}` | `perk:${HeadStartId}` | 'doRetire' | `journalTier:${number}`
+  | `achTab:${'base' | 'tree'}` | `treeTier:${number}` | `treeSel:${string}` | `unlock:${string}` | `retireTab:${'retire' | 'family'}` | `heir:${number}` | 'heirloom' | `perk:${HeadStartId}` | 'doRetire' | `journalTier:${number}`
   | 'sellAll' | `sellFish:${string}` | `buy:${GearKind}` | `train:${SkillId}` | 'claimAll' | `trophy:${string}`
   | `bait:${BaitId}` | `buyBait:${BaitId}:${number}`
   | 'buyCompany' | `buyBoat:${BoatType}` | `boat:${number}` | `send:${number}` | `collect:${number}` | `crew:${number}` | `net:${number}`
@@ -122,6 +122,10 @@ export class UI {
   /** Fish Tree page: which tier is showing, which fish is selected. Journal: which tier. */
   /** The Fish Tree tab: a tier of fish, or 0 for the head starts. */
   treeTier: Tier | 0 = 1;
+  /** The Retire screen: its tab, the heir picked, the heirloom picked (a gear item id; null = your rod). */
+  retireTab: 'retire' | 'family' = 'retire';
+  heirSel = 0;
+  heirloom: number | null = null;
   treeSel = '';
   journalTier: Tier = 1;
   /** Money made per second by source, averaged over the last minute (set by main). */
@@ -235,12 +239,12 @@ export class UI {
             : panel === 'voyage' ? [game.voyage ? V.legendOf(game.voyage).spot : 'Voyage', this.voyageHtml(game)]
             : panel === 'exotic' ? ['Exotic Market', this.exoticHtml(game)]
             : panel === 'listing' ? [this.listingTitle(game), this.listingHtml(game)]
-            : panel === 'retire' ? ['Retire', this.retireHtml(game)]
+            : panel === 'retire' ? [this.retireTab === 'family' ? 'Family' : 'Retire', this.retireHtml(game)]
               : panel === 'trophies' ? [`Trophies ${game.claimed.length}/${ACHIEVEMENTS.length}`, this.trophiesHtml(game)]
                 : panel === 'inbox' ? ['Log', this.inboxHtml()]
                 : panel === 'pub' ? ['The Pub', this.pubHtml(game)]
                 : panel === 'gearshop' ? ['Gear Shop', this.gearShopHtml(game)]
-                : panel === 'character' ? ['Character', this.characterHtml(game)]
+                : panel === 'character' ? [game.generation > 1 ? `${game.heir.name} · Gen ${game.generation}` : 'Character', this.characterHtml(game)]
                 : panel === 'gearitem' ? [this.gearItemTitle(game), this.gearItemHtml(game)]
                   : ['Settings', this.settingsHtml(game)];
     // ◄ back to the parent (if any), X always closes. A boat flips to the previous/next boat instead of showing the money (it's in the corner anyway).
@@ -837,7 +841,7 @@ export class UI {
     const totals: Partial<Record<StatId, number>> = {};
     for (const s of STAT_ORDER) { const v = game.gearStat(s); if (v) totals[s] = v; }
     return tabs + `<div class="doll"><img class="fisher" src="${fisher}" alt="you"><div class="dollslots">${slots}</div></div>
-      <div class="totals"><span>TOTAL</span>${this.statLine(totals) || 'No bonuses yet'}</div>`;
+      <div class="totals"><span>TOTAL</span>${this.statLine(totals) || 'No bonuses yet'}${game.heir.trait ? ` <small>(${TRAITS[game.heir.trait].name})</small>` : ''}</div>`;
   }
 
   /** Stats as one short line: "Luck 20% · Reflex 15%". */
@@ -953,13 +957,35 @@ export class UI {
   }
 
   /** Retire: what this run turns into, what stays, what goes. */
+  /**
+   * Retire: hand the rod to an heir. RETIRE: the Pearls this run pays, three
+   * heirs to pick from (one trait each), one piece of gear to hand down.
+   * FAMILY: the generations so far.
+   */
   private retireHtml(game: Game): string {
     const gain = game.pearlsOnRetire();
-    return `<div class="row"><div class="slot">${icon('coin')}</div><div class="meta"><b>This run</b><div class="sub"><small>Earned so far</small></div></div>${coin(game.earned, 3)}</div>
-      <div class="row"><div class="slot">${icon('pearl')}</div><div class="meta"><b>+${gain} Pearls</b><div class="sub"><small>You have ${game.pearls}. Spend them in the Fish Tree</small></div></div></div>
-      <p class="note">Keep: Pearls, Fish Tree, journal, achievements. Reset: money, gear, skills, bait, boats, pier, staff.</p>
-      ${gain >= 1 ? `<button class="btn wide" data-act="doRetire">RETIRE ${icon('pearl', 2)} +${gain}</button>` : '<p class="note">Earn $1M in a run to retire.</p>'}
-      <button class="btn wide plain" data-act="tree">FISH TREE</button>`;
+    const tabs = `<div class="tiers two">${(['retire', 'family'] as const).map((k) => `<button class="tab${this.retireTab === k ? ' on' : ''}" style="--c:#7a5a3a" data-act="retireTab:${k}">${k === 'retire' ? 'RETIRE' : `FAMILY ${game.generation}`}</button>`).join('')}</div>`;
+    if (this.retireTab === 'family') {
+      // Newest first; the last six fit.
+      const gens = [...game.family.map((f, i) => ({ ...f, gen: i + 1 })), { name: game.heir.name, trait: game.heir.trait, pearls: gain, best: game.runBest?.fish, bestKg: game.runBest?.kg, gen: game.generation, now: true }].reverse();
+      const rows = gens.slice(0, 6).map((f) => `<div class="row"><div class="slot">${f.best ? `<img class="fit" src="${fishIcon(fishById(f.best), false, 48, 28)}" alt="">` : icon('rod')}</div>
+        <div class="meta"><b>${f.name} <span class="small">Gen ${f.gen}${f.trait ? ` · ${TRAITS[f.trait].name}` : ''}</span></b><div class="sub"><small>${f.best ? `${fishById(f.best).name} ${f.bestKg} kg` : 'No catch yet'} · ${'now' in f ? 'fishing now' : `${f.pearls} Pearls`}</small></div></div></div>`).join('');
+      return tabs + rows + (gens.length > 6 ? `<p class="note">And ${gens.length - 6} before them.</p>` : '');
+    }
+    if (gain < 1) return tabs + `<div class="row"><div class="slot">${icon('pearl')}</div><div class="meta"><b>Not yet</b><div class="sub"><small>Earn $250k in a run for a Pearl</small></div></div></div><button class="btn wide plain" data-act="tree">FISH TREE</button>`;
+    const heirs = game.offerHeirs().map((h, i) => `<button class="heir${this.heirSel === i ? ' sel' : ''}" data-act="heir:${i}"><b>${h.name}</b><i>${TRAITS[h.trait!].name}</i><small>${TRAITS[h.trait!].blurb}</small></button>`).join('');
+    const items = this.heirloomItems(game), item = items.find((g) => g.id === this.heirloom) ?? items[0];
+    const def = item ? game.gearDef(item) : null;
+    return tabs + `<div class="row tight"><div class="slot">${icon('pearl')}</div><div class="meta"><b>+${gain} Pearls</b><div class="sub"><small>Earned ${kmb(game.earned)} this run</small></div></div></div>
+      <p class="note">Pick your heir:</p><div class="heirs">${heirs}</div>
+      ${item && def ? `<div class="row gearrow">${this.gearTile(def, item, 'heirloom')}<div class="meta"><b>${def.name}</b><div class="sub"><small>Heirloom</small></div></div>${items.length > 1 ? '<button class="btn plain" data-act="heirloom">CHANGE</button>' : ''}</div>`
+        : `<div class="row"><div class="slot">${icon('shirt')}</div><div class="meta"><b>No heirloom</b><div class="sub"><small>Hand down a hat, shirt, pants or boots</small></div></div></div>`}
+      <button class="btn wide" data-act="doRetire">RETIRE ${icon('pearl', 2)} +${gain}</button>`;
+  }
+
+  /** Gear you could hand down: what you wear, then your bag; not rods. */
+  heirloomItems(game: Game): GearItem[] {
+    return [...GEAR_SLOTS.map((s) => game.equipped[s]), ...game.gearBag].filter((g): g is GearItem => !!g && game.gearDef(g).slot !== 'rod');
   }
 
   private settingsHtml(game: Game): string {
