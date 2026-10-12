@@ -4,6 +4,23 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-12  Polish pass from the tracker
+  WHAT: Playtest: --retire N (play one run out), a sea column in the income
+        split, a LATE GAME line, the bot hires the First Mate; fixed the
+        bot sticking at a trader it couldn't afford. Panel headers show
+        money short past a million (16B); kmb() knows billions. Small
+        phones (320 wide / under 600 tall): thinner frame, smaller header,
+        tighter rows; all 24 panels fit at 320x568 and 360x640. Banners sit
+        over the top bar while a panel is open. Fishing skill: "needs a
+        better rod" when a level changes nothing (a Common-only rod).
+        Tapping the river at the dock casts / reels like the big button.
+        The bell's badge counts only rare finds that never showed on screen.
+        The $/s board stays hidden on a brand-new game.
+  WHY:  Items from the work tracker and a first-session audit: titles cut
+        to "Fish ...", panels scrolling on small phones, the letter banner
+        covering titles, "88% > 88%", a second river tap doing nothing, the
+        bell badge at 7 within a minute of play.
+
 2026-10-12  Fish Tree and voyage map: full height, bigger tiles
   WHAT: The Fish Tree and the voyage panels now take the full sheet height
         (not just their content) and the star map / sea map grow to fill it.

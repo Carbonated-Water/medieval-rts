@@ -187,7 +187,8 @@ export class UI {
   /** The $/sec readout under the purse: one line per source you have. */
   private ratesHtml(game: Game): string {
     const r = this.rates;
-    if (!r) return '';
+    // Nothing to show on a brand-new game.
+    if (!r || (!game.earned && !r.you)) return '';
     const rows: [string, number][] = [['You', r.you]];
     if (game.hands.length) rows.push(['Fishermen', r.hands]);
     if (game.boats.length) rows.push(['Boats', r.boats]);
