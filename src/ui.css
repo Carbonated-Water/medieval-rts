@@ -498,3 +498,22 @@ body.fighting .banner, body.fighting #notes { visibility: hidden; }
   #sheet .panel.voyage .vspot.legend { width: 64px; height: 40px; }
   #sheet .panel.voyage .vspot.legend img { width: 56px; height: 32px; }
 }
+/* Small phones (320 wide or under 600 tall): a thinner frame, a smaller header, tighter rows. */
+@media (max-width: 340px), (max-height: 600px) {
+  #sheet .panel { border-width: 24px; border-image-width: 24px; }
+  #sheet .head { margin: -12px -12px 8px -12px; gap: 6px; }
+  #sheet .body { gap: 4px; margin: 0 -12px -10px -12px; }
+  #sheet h2 { font-size: 32px; }
+  #sheet .head .cash { font-size: 26px; }
+  #sheet .xbtn, #sheet .bbtn { width: 32px; height: 32px; }
+  #sheet .row { padding: 4px 6px; }
+  #sheet .row .slot { width: 36px; height: 36px; }
+  #sheet .meta { gap: 3px; }
+  #sheet .srow { padding: 1px 6px; }
+  #sheet .srow b { font-size: 22px; }
+  #sheet .srow small { font-size: 12px; }
+  #sheet .statlist { gap: 2px; }
+  #sheet .panel.stats .note { display: none; }
+  #sheet .setbox { gap: 1px; padding: 4px 6px; }
+  #sheet .setbox .bon { font-size: 13px; }
+}

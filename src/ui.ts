@@ -66,6 +66,8 @@ export const ACH_ICON: Record<AchStat, IconName> = {
 const num = (n: number) => n.toLocaleString('en-US');
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 const coin = (n: number, scale = 2) => `<span class="cash"><img src="${pixelIcon('coin', scale)}" alt="">${num(n)}</span>`;
+/** In a panel header: exact up to a million, then short (the exact sum is in the corner). */
+const headCash = (n: number) => (n < 1e6 ? coin(n, 3) : `<span class="cash"><img src="${pixelIcon('coin', 3)}" alt="">${kmb(n)}</span>`);
 /** Short money for tight buttons: $8.8M. */
 const cash = (n: number) => `<span class="cash"><img src="${pixelIcon('coin', 2)}" alt="">${kmb(n)}</span>`;
 const icon = (name: IconName, scale = 3) => `<img src="${pixelIcon(name, scale)}" alt="">`;
@@ -77,7 +79,7 @@ const short = (s: string) => s.replace(/\.$/, '');
 /** Compact money for tight rows: 950, 12.4k, 3.1M. */
 const kmb = (n: number) => {
   const a = Math.abs(n), sign = n < 0 ? '-' : '';
-  return sign + (a >= 1e6 ? `${(a / 1e6).toFixed(a >= 1e7 ? 0 : 1)}M` : a >= 1e3 ? `${(a / 1e3).toFixed(a >= 1e4 ? 0 : 1)}k` : String(Math.round(a)));
+  return sign + (a >= 1e9 ? `${(a / 1e9).toFixed(a >= 1e10 ? 0 : 1)}B` : a >= 1e6 ? `${(a / 1e6).toFixed(a >= 1e7 ? 0 : 1)}M` : a >= 1e3 ? `${(a / 1e3).toFixed(a >= 1e4 ? 0 : 1)}k` : String(Math.round(a)));
 };
 /** Minutes as "45m" or "3.2h". */
 const mins = (m: number) => (!isFinite(m) || m <= 0 ? 'never' : m < 90 ? `${Math.ceil(m)}m` : `${(m / 60).toFixed(1)}h`);
@@ -271,7 +273,7 @@ export class UI {
     const n = game.boats.length;
     const right = panel === 'boat' && n > 1
       ? `<span class="flip"><button class="bbtn" data-act="boatPrev" aria-label="previous boat">${icon('prev', 2)}</button><small>${this.boatSel + 1}/${n}</small><button class="bbtn" data-act="boatNext" aria-label="next boat">${icon('next', 2)}</button></span>`
-      : panel === 'boat' || panel === 'voyage' ? '' : panel === 'tree' ? `<span class="cash">${icon('pearl', 3)}${game.pearls}</span>` : coin(game.money, 3);
+      : panel === 'boat' || panel === 'voyage' ? '' : panel === 'tree' ? `<span class="cash">${icon('pearl', 3)}${game.pearls}</span>` : headCash(game.money);
     const tabs = tabbed ? `<div class="tiers three">${([['harbor', 'FLEET'], ['ledger', 'LEDGER'], ['harborup', 'HARBOR']] as const)
       .map(([p, label]) => `<button class="tab${panel === p ? ' on' : ''}" style="--c:#2f6fd6" data-act="coTab:${p}">${label}</button>`).join('')}</div>` : '';
     const co = tabbed || panel === 'boat' || panel === 'shipyard' ? ' co' : '';

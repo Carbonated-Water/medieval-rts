@@ -874,10 +874,10 @@ export const FLAGSHIP_UP_MAX = 5;
 export const FLAGSHIP_UP_STEP = 3;
 export const FLAGSHIP_UPS: Record<FlagshipUpId, { name: string; price: number; does: (n: number) => string }> = {
   hold: { name: 'Bigger Hold', price: 8_000_000, does: (n) => `+${n * 20}% voyage haul` },
-  hull: { name: 'Iron Hull', price: 10_000_000, does: (n) => `+${n} hull · crew ${n * 5}% less rough seas` },
-  stores: { name: 'Galley Stores', price: 8_000_000, does: (n) => `+${n} supplies · crew +${n * 3}% legend` },
-  sails: { name: 'Swift Sails', price: 6_000_000, does: (n) => `Rest ${n * 12}% shorter · crew trips ${n * 6}% shorter` },
-  harpoon: { name: 'Harpoon Gun', price: 15_000_000, does: (n) => `Fight pull +${n * 15}% · crew +${n * 4}% legend` },
+  hull: { name: 'Iron Hull', price: 10_000_000, does: (n) => `+${n} hull · -${n * 5}% rough seas` },
+  stores: { name: 'Galley Stores', price: 8_000_000, does: (n) => `+${n} ${n === 1 ? 'supply' : 'supplies'} · +${n * 3}% legend` },
+  sails: { name: 'Swift Sails', price: 6_000_000, does: (n) => `-${n * 12}% rest · -${n * 6}% crew trips` },
+  harpoon: { name: 'Harpoon Gun', price: 15_000_000, does: (n) => `+${n * 15}% fight pull · +${n * 4}% legend` },
 };
 export const flagshipUpCost = (id: FlagshipUpId, n: number) => Math.round((FLAGSHIP_UPS[id].price * Math.pow(FLAGSHIP_UP_STEP, n)) / 100_000) * 100_000;
 

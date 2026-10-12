@@ -446,11 +446,12 @@ function buzzOnBite(): void {
   bitesBefore = bites;
 }
 
-/** Keep banners just below the top bar (and its rates board). */
+/** Keep banners just below the top bar (and its rates board); with a panel open, over the top bar so the panel's header stays clear. */
 let bannerTop = -1;
 function placeBanner(): void {
   const top = document.getElementById('top');
-  const y = top ? Math.round(top.getBoundingClientRect().bottom + 8) : 70;
+  const box = top?.getBoundingClientRect();
+  const y = !box ? 70 : ui.open ? Math.round(box.top + 2) : Math.round(box.bottom + 8);
   if (y !== bannerTop) { bannerTop = y; document.documentElement.style.setProperty('--banner-top', `${y}px`); }
 }
 
