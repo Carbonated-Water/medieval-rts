@@ -14,7 +14,7 @@
  */
 import {
   AUTO, BAITS, BERTHS, BITE_WAIT, BOATS, BOAT_ORDER, COMPANY_PRICE, GEAR_ITEMS, GEAR_SLOTS, GEAR_TIERS, HARBOR_UPGRADES, HOLDERS,
-  LEGENDS, CREW_ROLE_ORDER, FLAGSHIP_UP_ORDER, PIER_STAFF, SKILLS, TREE_FISH, VOYAGE, rodReach, HEAD_STARTS, type GearDef, type GearKind, type HarborUpgradeId, type SkillId,
+  LEGENDS, CREW_ROLE_ORDER, FLAGSHIP_UP_ORDER, MATE, PIER_STAFF, SKILLS, TREE_FISH, VOYAGE, rodReach, HEAD_STARTS, type GearDef, type GearKind, type HarborUpgradeId, type SkillId,
 } from '../src/data';
 import { Game } from '../src/game';
 import { Fight } from '../src/fight';
@@ -23,7 +23,8 @@ import * as V from '../src/voyage';
 /** A piece's stat points, all stats counted alike. */
 const points = (stats: Partial<Record<string, number>>) => Object.values(stats).reduce((n: number, v) => n + (v ?? 0), 0);
 
-export interface Options { hours: number; seed: number; errand: number; runs: number; quiet?: boolean }
+/** retire: the most times the bot retires (0 = play one run out, to test the late game). */
+export interface Options { hours: number; seed: number; errand: number; runs: number; retire?: number; quiet?: boolean }
 
 /** Seeded RNG (mulberry32), so a seed replays the same run. */
 const mulberry = (seed: number) => () => {
@@ -44,7 +45,9 @@ const kmb = (n: number) => { const a = Math.abs(n); return (n < 0 ? '-' : '') + 
 export interface Report {
   seed: number;
   milestones: { t: number; run: number; what: string }[];
-  snapshots: { t: number; run: number; money: number; earned: number; perMin: number; you: number; hands: number; boats: number; taps: number }[];
+  snapshots: { t: number; run: number; money: number; earned: number; perMin: number; you: number; hands: number; boats: number; sea: number; taps: number }[];
+  /** The late game at the end: crew, Flagship, legends, Pearls. */
+  late?: { seats: number; stars: number; fives: number; ups: number; mate: boolean; legends: number; crewTrips: number; pearls: number };
   taps: Record<TapKind, number>;
   fights: { legend: string; won: boolean; secs: number }[];
   voyages: { t: number; legend: string; result: string; haul: number }[];
@@ -69,7 +72,8 @@ class Bot {
   rep: Report;
   /** Rolling income: earned at each snapshot. */
   lastEarned = 0;
-  made = { you: 0, hands: 0, boats: 0 };
+  made = { you: 0, hands: 0, boats: 0, sea: 0 };
+  crewTrips = 0;
 
   constructor(readonly o: Options, seed: number) {
     this.rng = mulberry(seed);
@@ -334,6 +338,8 @@ class Bot {
         if (CREW_ROLE_ORDER.every((r) => (g.crew[r]?.stars ?? 0) >= 5)) this.mark('crew all 5 stars');
       }
     }
+    if (!g.mate && this.can(MATE.price, 0.3) && g.hireMate()) { this.tap('voyage', 2); this.mark('first mate'); }
+    this.crewTrips += g.crewNews.splice(0).length;
     // The Flagship's upgrades: the cheapest next level.
     const up = FLAGSHIP_UP_ORDER.map((id) => ({ id, cost: g.flagshipUpCost(id) })).filter((u) => u.cost !== null).sort((a, b) => a.cost! - b.cost!)[0];
     if (up && this.can(up.cost!, 0.3) && g.buyFlagshipUp(up.id)) {
@@ -382,7 +388,11 @@ class Bot {
         if (!v.used) {
           if (s.kind === 'fish') k = 0;
           else if (s.kind === 'wreck') k = v.hull >= 2 ? 0 : 1;
-          else if (s.kind === 'trader') k = v.supplies <= movesLeft ? 0 : v.hull < V.maxHull(v) ? 1 : 2;
+          else if (s.kind === 'trader') {
+            // Only what the hold can pay for; otherwise sail on.
+            const p = V.traderPrices(v);
+            k = v.supplies <= movesLeft && v.haul >= p.supplies ? 0 : v.hull < V.maxHull(v) && v.haul >= p.repair ? 1 : 2;
+          }
           else if (s.kind === 'event') k = v.supplies > movesLeft ? 0 : list.length - 1;
         } else if (s.kind === 'fish' && v.supplies > movesLeft + 1) k = 0;
         g.voyageChoose(k);
@@ -428,6 +438,7 @@ class Bot {
     // Worth it once the run pays at least 5 Pearls and half again what you have.
     // Pearls owned so far, counting the ones spent on the tree and head starts.
     const owned = g.pearls + g.fishTree.reduce((n, id) => n + (TREE_FISH.find((f) => f.id === id)?.cost ?? 0), 0) + g.perks.reduce((n, id) => n + HEAD_STARTS.find((p) => p.id === id)!.cost, 0);
+    if (this.rep.retires.length >= (this.o.retire ?? Infinity)) return;
     if (runFor < 1800 || g.voyage || gain < Math.max(5, owned * 1.5)) return;
     // Not before trying a voyage, unless the run has gone on a long time.
     if (!this.rep.voyages.some((v) => v.t > this.runStart) && runFor < 8 * 3600) return;
@@ -447,7 +458,7 @@ class Bot {
     this.run++;
     this.runStart = this.t;
     this.lastEarned = 0;
-    this.made = { you: 0, hands: 0, boats: 0 };
+    this.made = { you: 0, hands: 0, boats: 0, sea: 0 };
   }
 
   snapshot() {
@@ -455,11 +466,11 @@ class Bot {
     const perMin = (earnedNow - this.lastEarned) / 10;
     this.lastEarned = earnedNow;
     // Each source's share of the last 10 minutes (made is per session, so it resets with a retire).
-    const m = g.made, d = { you: m.you - this.made.you, hands: m.hands - this.made.hands, boats: m.boats - this.made.boats };
-    if (d.you < 0 || d.hands < 0 || d.boats < 0) Object.assign(d, m);
+    const m = g.made, d = { you: m.you - this.made.you, hands: m.hands - this.made.hands, boats: m.boats - this.made.boats, sea: m.sea - this.made.sea };
+    if (d.you < 0 || d.hands < 0 || d.boats < 0 || d.sea < 0) Object.assign(d, m);
     this.made = { ...m };
-    const tot = d.you + d.hands + d.boats || 1;
-    this.rep.snapshots.push({ t: this.t, run: this.run, money: g.money, earned: earnedNow, perMin, you: d.you / tot, hands: d.hands / tot, boats: d.boats / tot, taps: Object.values(this.taps).reduce((s, n) => s + n, 0) });
+    const tot = d.you + d.hands + d.boats + d.sea || 1;
+    this.rep.snapshots.push({ t: this.t, run: this.run, money: g.money, earned: earnedNow, perMin, you: d.you / tot, hands: d.hands / tot, boats: d.boats / tot, sea: d.sea / tot, taps: Object.values(this.taps).reduce((s, n) => s + n, 0) });
   }
 
   play() {
@@ -480,6 +491,12 @@ class Bot {
       if (this.t >= nextSnap) { nextSnap += 600; this.snapshot(); }
     }
     if (this.t - this.lastBuy > 600) this.rep.gaps.push({ from: this.lastBuy, to: this.t, what: 'no purchase (to the end)' });
+    const g = this.g, seats = CREW_ROLE_ORDER.filter((r) => g.crew[r]);
+    if (g.flagship) this.rep.late = {
+      seats: seats.length, stars: seats.reduce((n, r) => n + g.crew[r]!.stars, 0), fives: seats.filter((r) => g.crew[r]!.stars >= 5).length,
+      ups: FLAGSHIP_UP_ORDER.reduce((n, id) => n + g.flagshipUp(id), 0), mate: g.mate,
+      legends: Object.values(g.landed).reduce((n, k) => n + k, 0), crewTrips: this.crewTrips, pearls: g.pearls,
+    };
     return this.rep;
   }
 }
@@ -488,15 +505,19 @@ export function print(r: Report): string {
   const out: string[] = [];
   out.push(`=== Playtest, seed ${r.seed} ===`, '', 'MILESTONES');
   for (const m of r.milestones) out.push(`  ${fmtT(m.t).padStart(6)}  ${r.retires.length ? `run ${m.run}  ` : ''}${m.what}`);
-  out.push('', 'INCOME (every 10 min)', '    time   $/min    money   earned  split you/hands/boats   taps');
+  out.push('', 'INCOME (every 10 min)', '    time   $/min    money   earned  split you/hands/boats/sea   taps');
   for (const s of r.snapshots) {
-    out.push(`  ${fmtT(s.t).padStart(6)} ${kmb(s.perMin).padStart(7)} ${kmb(s.money).padStart(8)} ${kmb(s.earned).padStart(8)}   ${[s.you, s.hands, s.boats].map((x) => `${Math.round(x * 100)}%`.padStart(4)).join(' ')}          ${String(s.taps).padStart(6)}`);
+    out.push(`  ${fmtT(s.t).padStart(6)} ${kmb(s.perMin).padStart(7)} ${kmb(s.money).padStart(8)} ${kmb(s.earned).padStart(8)}   ${[s.you, s.hands, s.boats, s.sea ?? 0].map((x) => `${Math.round(x * 100)}%`.padStart(4)).join(' ')}     ${String(s.taps).padStart(6)}`);
   }
   const total = Object.values(r.taps).reduce((s, n) => s + n, 0);
   out.push('', `TAPS: ${total} total  ` + Object.entries(r.taps).filter(([, n]) => n).map(([k, n]) => `${k} ${n}`).join(' · '));
   if (r.voyages.length) {
     const won = r.fights.filter((f) => f.won).length;
     out.push('', `VOYAGES: ${r.voyages.length} (${r.voyages.filter((v) => v.result === 'caught').length} legends, ${r.voyages.filter((v) => v.result === 'failed').length} failed) · fights won ${won}/${r.fights.length}`);
+  }
+  if (r.late) {
+    const l = r.late;
+    out.push('', `LATE GAME: crew ${l.seats}/8 seats, ${l.stars} stars (${l.fives} at 5) · Flagship upgrades ${l.ups}/25 · First Mate ${l.mate ? 'yes' : 'no'} · legends landed ${l.legends} · crew trips ${l.crewTrips} · Pearls ${l.pearls}`);
   }
   if (r.lines.length) {
     out.push('', 'YOUR LINES (how bites ended)');

@@ -288,7 +288,7 @@ export class Game {
   nextExoticId = 1;
   private wantedClock = 0;
   /** Value made so far this session, by source (fish caught at their price, boat hauls). For the $/sec readout; not saved. */
-  made = { you: 0, hands: 0, boats: 0 };
+  made = { you: 0, hands: 0, boats: 0, sea: 0 };
   /** One entry per line in the water (length = lineCount). */
   lines: Line[] = [{ type: 'idle' }];
   claimed: string[] = [];
@@ -743,11 +743,12 @@ export class Game {
     const out = { haul: v.haul, exotic: null as Exotic | null, sold: 0, pearls: 0, result: v.result, gear: null as GearItem | null };
     this.money += v.haul;
     this.earned += v.haul;
+    this.made.sea += v.haul;
     if (v.result === 'caught') {
       const l = V.legendOf(v);
       this.landed[l.id] = (this.landed[l.id] ?? 0) + 1;
       out.exotic = this.addExotic(l.id, v.kg);
-      if (!out.exotic) { out.sold = this.exoticValue(l.id, v.kg ?? l.kg); this.money += out.sold; this.earned += out.sold; }
+      if (!out.exotic) { out.sold = this.exoticValue(l.id, v.kg ?? l.kg); this.money += out.sold; this.earned += out.sold; this.made.sea += out.sold; }
       out.pearls = V.pearlsFor(l);
       this.pearls += out.pearls;
     }
@@ -883,11 +884,12 @@ export class Game {
     const out: CrewResult = { legend: l.id, haul: haul - cut, cut, rough, caught: false, pearls: 0, sold: 0 };
     this.money += out.haul;
     this.earned += out.haul;
+    this.made.sea += out.haul;
     if (this.rng() < odds.legend) {
       out.caught = true;
       this.landed[l.id] = (this.landed[l.id] ?? 0) + 1;
       const kg = Math.round(l.kg * (0.7 + this.rng() * 0.7));
-      if (!this.addExotic(l.id, kg)) { out.sold = this.exoticValue(l.id, kg); this.money += out.sold; this.earned += out.sold; }
+      if (!this.addExotic(l.id, kg)) { out.sold = this.exoticValue(l.id, kg); this.money += out.sold; this.earned += out.sold; this.made.sea += out.sold; }
       out.pearls = V.pearlsFor(l);
       this.pearls += out.pearls;
     }
@@ -1003,6 +1005,7 @@ export class Game {
     this.listings.splice(i, 1);
     this.money += o.amount;
     this.earned += o.amount;
+    this.made.sea += o.amount;
     return o.amount;
   }
 
@@ -1021,6 +1024,7 @@ export class Game {
     this.wanted = this.wanted.filter((x) => x !== w);
     this.money += w.reward;
     this.earned += w.reward;
+    this.made.sea += w.reward;
     return w.reward;
   }
 

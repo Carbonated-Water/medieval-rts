@@ -1,10 +1,10 @@
 // Runs sim/playtest.ts on the real game code through Vite (no build step).
-// npm run playtest -- --hours 6 --seed 1 [--errand 60] [--runs 3] [--json out.json]
+// npm run playtest -- --hours 6 --seed 1 [--errand 60] [--runs 3] [--retire 0] [--json out.json]
 import { createServer } from 'vite';
 import { writeFileSync } from 'node:fs';
 
 const arg = (name, def) => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1] : def; };
-const opts = { hours: Number(arg('hours', 4)), seed: Number(arg('seed', 1)), errand: Number(arg('errand', 60)), runs: Number(arg('runs', 1)) };
+const opts = { hours: Number(arg('hours', 4)), seed: Number(arg('seed', 1)), errand: Number(arg('errand', 60)), runs: Number(arg('runs', 1)), retire: arg('retire') === undefined ? undefined : Number(arg('retire')) };
 const server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: 'custom', logLevel: 'error' });
 try {
   const { run } = await server.ssrLoadModule('/sim/playtest.ts');
