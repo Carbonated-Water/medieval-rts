@@ -7,7 +7,7 @@ import {
   MIN_BITE_WAIT, REEL_WINDOW, PERFECT_ZONE, PERFECT_PER_LEVEL, PERFECT_VALUE, AUTO_PERFECT_REF, AUTO_PERFECT_MAX, STRENGTH_FIGHT, REFLEX_PER_LEVEL, RODS, HAND_RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, START_WORMS, STRENGTH_PER_LEVEL, TIERS,
   TOO_STRONG_WEIGHT, VARIANTS, VARIANT_ORDER, WORMS_PER_PICK, WORM_SPAWN_SECONDS, WORM_SPOTS, baitById,
   type AchStat, type AchievementDef, type BaitId, type FishDef, type GearKind, type SkillId, type Tier, type Variant,
-  CHUMS, FRENZY_SPEED, ICEBOXES, NETS, GEAR_BAG, GEAR_SELL, DROP_SELL, PUB, CREW_ROLE_ORDER, SAILOR_NAMES, type CrewRole, QUIRKS, QUIRK_ORDER, type QuirkId, FLAGSHIP_UPS, FLAGSHIP_UP_MAX, flagshipUpCost, type FlagshipUpId, GEAR_SLOTS, GEAR_TIERS, LEGACY_GEAR, STARTER_GEAR, gearById, rodReach, type GearDef, type GearSlot, type StatId, type GearTier,
+  CHUMS, FRENZY_SPEED, ICEBOXES, NETS, GEAR_BAG, GEAR_SELL, DROP_SELL, PUB, CREW_ROLE_ORDER, SAILOR_NAMES, type CrewRole, QUIRKS, QUIRK_ORDER, type QuirkId, MATE, MATE_JOB_ORDER, type MateJob, FLAGSHIP_UP_ORDER, FLAGSHIP_UPS, FLAGSHIP_UP_MAX, flagshipUpCost, type FlagshipUpId, GEAR_SLOTS, GEAR_TIERS, LEGACY_GEAR, STARTER_GEAR, gearById, rodReach, type GearDef, type GearSlot, type StatId, type GearTier,
   GEAR_ITEMS, SETS, SET_ORDER, SET_SLOTS, SET_TIERS, SET_BONUS_SCALE, setPieceId, DROP_CHANCE, KEEN_EYE, VOYAGE_PIECE, DROP_ROLL, FINE_ROLL, LUCK_SCALE, FORTUNE_SCALE, STAT_CAP, STAT_ORDER, type SetId, type SetEffect, type SetSlot,
   BILLFISH, SEA_FISH, SHELLFISH, TREE_FISH, pearlsFor, HEAD_STARTS, HEAD_START_CASH, type HeadStartId, TRAITS, TRAIT_ORDER, HEIR_NAMES, type TraitId, treeFishById, type TreeFish, COLLECTORS, EXOTIC, LEGENDS, VOYAGE, type LegendDef, type Region,
 } from './data';
@@ -97,6 +97,11 @@ export interface SaveData {
   pubClock?: number;
   nextSailorId?: number;
   crewTrip?: CrewTrip | null;
+  /** The First Mate: hired, which jobs are on, the budget, and the legend the crew last sailed for. */
+  mate?: boolean;
+  mateOn?: Partial<Record<MateJob, boolean>>;
+  mateBudget?: number;
+  crewLegend?: string | null;
   landed?: Record<string, number>;
   /** The Exotic Market. */
   exoticHold?: Exotic[];
@@ -267,6 +272,13 @@ export class Game {
   pubClock = 0;
   nextSailorId = 1;
   crewTrip: CrewTrip | null = null;
+  mate = false;
+  mateOn: Partial<Record<MateJob, boolean>> = {};
+  mateBudget = 1;
+  crewLegend: string | null = null;
+  private mateClock = 0;
+  /** What the First Mate did, for the pickup log; not saved. */
+  mateNews: { kind: 'sail' | 'sell' | 'sign' | 'upgrade'; text: string }[] = [];
   /** Crews home, for the screen to announce. */
   crewNews: CrewResult[] = [];
   landed: Record<string, number> = {};
@@ -856,6 +868,7 @@ export class Game {
     const crew = this.crewStars();
     for (const r of CREW_ROLE_ORDER) if (this.crew[r]?.quirk === 'drunk' && this.rng() < 0.5) crew[r] = Math.max(1, crew[r]! - 1);
     this.crewTrip = { legend, t: 0, dur, crew, quirks: this.crewQuirks() as QuirkId[] };
+    this.crewLegend = legend;
     return true;
   }
 
@@ -881,6 +894,68 @@ export class Game {
     out.gear = this.voyagePiece(l.region);
     out.pearls += this.diverPearl();
     this.crewNews.push(out);
+  }
+
+  // ---------- the First Mate ----------
+
+  hireMate(): boolean {
+    if (!this.flagship || this.mate || this.money < MATE.price) return false;
+    this.money -= MATE.price;
+    this.mate = true;
+    this.mateOn = { sail: true, sell: true, sign: true, upgrade: true };
+    return true;
+  }
+
+  toggleMate(job: MateJob): void {
+    if (this.mate && MATE_JOB_ORDER.includes(job)) this.mateOn = { ...this.mateOn, [job]: !this.mateOn[job] };
+  }
+
+  setMateBudget(i: number): void {
+    this.mateBudget = clamp(i, 0, MATE.budgets.length - 1);
+  }
+
+  /** What the First Mate may spend on one thing. */
+  mateSpend(): number {
+    return this.money * MATE.budgets[clamp(this.mateBudget, 0, MATE.budgets.length - 1)]!;
+  }
+
+  /** Every couple of seconds: each job that's on, in turn. */
+  private tickMate(dt: number): void {
+    if (!this.mate || (this.mateClock += dt) < MATE.every) return;
+    this.mateClock = 0;
+    const on = this.mateOn;
+    if (on.sell) this.mateSell();
+    if (on.sign) {
+      for (const s of [...this.pubBoard]) {
+        const seat = this.crew[s.role];
+        if ((!seat || this.sailorStars(seat) < this.sailorStars(s)) && this.signFee(s) <= this.mateSpend() && this.signSailor(s.id))
+          this.mateNews.push({ kind: 'sign', text: `Signed ${s.name}, ${s.stars}-star ${s.role}` });
+      }
+    }
+    if (on.upgrade) {
+      const up = FLAGSHIP_UP_ORDER.map((id) => ({ id, cost: this.flagshipUpCost(id) })).filter((u): u is { id: typeof u.id; cost: number } => u.cost !== null).sort((a, b) => a.cost - b.cost)[0];
+      if (up && up.cost <= this.mateSpend() && this.buyFlagshipUp(up.id)) this.mateNews.push({ kind: 'upgrade', text: `Bought ${FLAGSHIP_UPS[up.id].name} ${this.flagshipUp(up.id)}` });
+    }
+    if (on.sail && this.crewLegend && this.canSendCrew()) {
+      const l = LEGENDS.find((x) => x.id === this.crewLegend);
+      if (l && this.legendOpen(l) && this.sendCrew(l.id)) this.mateNews.push({ kind: 'sail', text: `Crew sailed for ${l.spot}` });
+    }
+  }
+
+  /** WANTED notices first, then list the hold, then take an offer at the fish's value (or 90% once it's been up 10 minutes). */
+  private mateSell(): void {
+    for (const w of [...this.wanted]) {
+      const e = [...this.exoticHold, ...this.listings.map((l) => l.exotic)].find((x) => this.meetsWanted(w, x));
+      if (e) { const n = this.fulfillWanted(w.id, e.id); if (n) this.mateNews.push({ kind: 'sell', text: `${w.buyer} paid ${n.toLocaleString()}` }); }
+    }
+    for (const e of [...this.exoticHold]) this.listExotic(e.id);
+    for (const l of [...this.listings]) {
+      const best = l.offers.map((o, k) => ({ o, k })).sort((a, b) => b.o.amount - a.o.amount)[0];
+      if (best && best.o.amount >= l.exotic.value * (l.age > 600 ? 0.9 : 1)) {
+        const n = this.sellToOffer(l.exotic.id, best.k);
+        if (n) this.mateNews.push({ kind: 'sell', text: `Sold ${LEGENDS.find((x) => x.id === l.exotic.fish)!.name} ${n.toLocaleString()}` });
+      }
+    }
   }
 
   // ---------- the Exotic Market ----------
@@ -1274,6 +1349,7 @@ export class Game {
     this.tickChum(dt);
     this.tickPub(dt);
     this.tickCrew(dt);
+    this.tickMate(dt);
     this.lines.forEach((line, i) => {
       if (line.type === 'idle') return;
       line.t += dt;
@@ -2114,7 +2190,7 @@ export class Game {
       exoticHold: this.exoticHold, listings: this.listings, wanted: this.wanted, nextExoticId: this.nextExoticId,
       equipped: this.equipped, gearBag: this.gearBag, nextGearId: this.nextGearId, net: this.net, chum: this.chum, icebox: this.icebox,
       flagship: this.flagship, flagshipRest: this.flagshipRest, flagshipUps: this.flagshipUps, voyage: this.voyage, landed: this.landed,
-      crew: this.crew, pubBoard: this.pubBoard, pubClock: this.pubClock, nextSailorId: this.nextSailorId, crewTrip: this.crewTrip,
+      crew: this.crew, pubBoard: this.pubBoard, pubClock: this.pubClock, nextSailorId: this.nextSailorId, crewTrip: this.crewTrip, mate: this.mate, mateOn: this.mateOn, mateBudget: this.mateBudget, crewLegend: this.crewLegend,
       hands: this.hands.map((h) => ({ ...h, line: { type: 'idle' as const }, react: null })), handRods: 2, crate: this.crate,
     };
   }

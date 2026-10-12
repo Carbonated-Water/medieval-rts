@@ -2,7 +2,7 @@ import { rodReach, HEAD_STARTS, type HeadStartId, TRAITS, HARBOR_STAFF,
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_ORDER, COMPANY_PRICE, COMPANY_UNLOCK_EARNED, DEV_MULTIPLIER, GROUNDS, HARBOR_UPGRADES,
   MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, PIER_STAFF, HANDS_MAX,
   TRACKS, TRACK_MAX, TRACK_ORDER, WAREHOUSE, type HarborUpgradeId, type TrackId, HAND_NAMES, HAND_SKILL_MAX, LETTERS, RODS, HAND_RODS, FISH, GEAR, PERFECT_PER_LEVEL, SKILLS, STRENGTH_PER_LEVEL, HAGGLE_PER_LEVEL,
-  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, TREE_FISH, type TreeFish, PUB, CREW_ROLES, CREW_ROLE_ORDER, QUIRKS, FLAGSHIP_UPS, FLAGSHIP_UP_ORDER, FLAGSHIP_UP_MAX, type FlagshipUpId, LEGENDS, EXOTIC, REGIONS, VOYAGE, GEAR_BAG, GEAR_ITEMS, GEAR_SLOTS, GEAR_TIERS, STATS, STAT_ORDER, SETS, SET_SLOTS, KEEN_EYE, FORTUNE_SCALE, LUCK_SCALE, SKILL_TIER_BONUS, NETS, setPieceId, gearById, type SetId, type GearDef, type GearSlot, type GearTier, type StatId,
+  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, TREE_FISH, type TreeFish, PUB, CREW_ROLES, CREW_ROLE_ORDER, QUIRKS, MATE, MATE_JOB_ORDER, type MateJob, FLAGSHIP_UPS, FLAGSHIP_UP_ORDER, FLAGSHIP_UP_MAX, type FlagshipUpId, LEGENDS, EXOTIC, REGIONS, VOYAGE, GEAR_BAG, GEAR_ITEMS, GEAR_SLOTS, GEAR_TIERS, STATS, STAT_ORDER, SETS, SET_SLOTS, KEEN_EYE, FORTUNE_SCALE, LUCK_SCALE, SKILL_TIER_BONUS, NETS, setPieceId, gearById, type SetId, type GearDef, type GearSlot, type GearTier, type StatId,
 } from './data';
 import { type Boat, type Exotic, type Game, type GearItem, type Sailor, fishById } from './game';
 import * as V from './voyage';
@@ -16,7 +16,7 @@ export type Panel = 'pub' | 'flagship' | 'gearshop' | 'character' | 'gearitem' |
 export type Action =
   | 'cast' | 'reel' | 'close' | 'back' | 'reset' | 'toggleDev' | Panel
   | `gsMode:${'buy' | 'sell'}` | `gpick:${string}` | 'keenEye' | `gbuy:${string}` | `gsel:${'bag' | 'eq'}:${string}`
-  | `gequip:${number}` | `gunequip:${GearSlot}` | `gsell:${number}` | 'gsellall' | `charTab:${'gear' | 'bag'}` | `buyN:${'1' | '5' | 'max'}` | 'trainAll' | 'toggleBuzz' | `pubTab:${'board' | 'crew'}` | `sign:${number}` | 'pubRefresh' | `crewSail:${string}` | `lhWho:${'you' | 'crew'}` | `fight:${string}` | 'fightDone' | `lhRegion:${'coast' | 'ocean' | 'abyss'}`
+  | `gequip:${number}` | `gunequip:${GearSlot}` | `gsell:${number}` | 'gsellall' | `charTab:${'gear' | 'bag'}` | `buyN:${'1' | '5' | 'max'}` | 'trainAll' | 'toggleBuzz' | `pubTab:${'board' | 'crew' | 'mate'}` | 'hireMate' | `mate:${MateJob}` | `mateBudget:${number}` | `sign:${number}` | 'pubRefresh' | `crewSail:${string}` | `lhWho:${'you' | 'crew'}` | `fight:${string}` | 'fightDone' | `lhRegion:${'coast' | 'ocean' | 'abyss'}`
   | 'buyFlagship' | 'flagship' | `flagshipUp:${FlagshipUpId}` | `sail:${string}` | `vsail:${number}` | `vchoose:${number}` | 'vlegend' | 'vfight' | 'vhome'
   | `exTab:${'hold' | 'listed' | 'wanted'}` | `exList:${number}` | `exUnlist:${number}` | `exOpen:${number}` | `exSell:${number}:${number}` | `exGive:${number}` | 'exDev' | 'boatPrev' | 'boatNext' | `coTab:${'harbor' | 'ledger' | 'harborup'}`
   | `achTab:${'base' | 'tree'}` | `treeTier:${number}` | `treeSel:${string}` | `unlock:${string}` | `retireTab:${'retire' | 'family'}` | `heir:${number}` | 'heirloom' | `perk:${HeadStartId}` | 'doRetire' | `journalTier:${number}`
@@ -108,7 +108,7 @@ export class UI {
   lhRegion: 'coast' | 'ocean' | 'abyss' = 'coast';
   /** Lighthouse: who sails, you or your crew. Pub: the board or your crew. */
   lhWho: 'you' | 'crew' = 'you';
-  pubTab: 'board' | 'crew' = 'board';
+  pubTab: 'board' | 'crew' | 'mate' = 'board';
   /** Buy this many levels at once (0 = as many as you can afford). */
   buyN: 0 | 1 | 5 = 1;
   /** Buzz the phone when a fish bites your line (a setting kept on this device). */
@@ -732,7 +732,9 @@ export class UI {
   private pubHtml(game: Game): string {
     if (!game.flagship) return `<div class="row"><div class="slot">${icon('lock')}</div><div class="meta"><b>Closed</b><div class="sub"><small>Buy the Flagship at the lighthouse</small></div></div></div>`;
     const seated = CREW_ROLE_ORDER.filter((r) => game.crew[r]).length;
-    const tabs = `<div class="tiers two"><button class="tab${this.pubTab === 'board' ? ' on' : ''}" style="--c:#7a3a2a" data-act="pubTab:board">RECRUITS</button><button class="tab${this.pubTab === 'crew' ? ' on' : ''}" style="--c:#7a3a2a" data-act="pubTab:crew">CREW ${seated}/${CREW_ROLE_ORDER.length}</button></div>`;
+    const tab = (k: 'board' | 'crew' | 'mate', label: string) => `<button class="tab${this.pubTab === k ? ' on' : ''}" style="--c:#7a3a2a" data-act="pubTab:${k}">${label}</button>`;
+    const tabs = `<div class="tiers three">${tab('board', 'RECRUITS')}${tab('crew', `CREW ${seated}/${CREW_ROLE_ORDER.length}`)}${tab('mate', 'FIRST MATE')}</div>`;
+    if (this.pubTab === 'mate') return tabs + this.mateHtml(game);
     const stars = (n: number) => `<span class="stars">${Array.from({ length: 5 }, (_, k) => `<img src="${pixelIcon('star', 2)}" class="${k < n ? '' : 'off'}" alt="">`).join('')}</span>`;
     const quirk = (s: Sailor) => (s.quirk ? `<span class="quirk${QUIRKS[s.quirk].fee < 1 ? ' bad' : ''}">${QUIRKS[s.quirk].name.toUpperCase()}</span>` : '');
     if (this.pubTab === 'crew') {
@@ -753,6 +755,27 @@ export class UI {
     const left = Math.max(0, Math.ceil(PUB.refresh - game.pubClock));
     return tabs + rows + `<div class="row tight"><div class="meta"><div class="sub"><small>New faces ${clock(left)}</small></div></div>
       <button class="btn plain" data-act="pubRefresh" ${game.money < PUB.refreshPrice ? 'disabled' : ''}>${cash(PUB.refreshPrice)}</button></div>`;
+  }
+
+  /** The First Mate: hire, then a switch per job and how much they may spend. */
+  private mateHtml(game: Game): string {
+    const jobIcon: Record<MateJob, IconName> = { sail: 'boat', sell: 'coin', sign: 'crew', upgrade: 'anchor' };
+    if (!game.mate) {
+      return `<div class="row"><div class="slot">${icon('captain')}</div><div class="meta"><b>First Mate</b><div class="sub"><small>Runs voyages</small></div></div>
+        <button class="btn" data-act="hireMate" ${game.money < MATE.price ? 'disabled' : ''}>${cash(MATE.price)}</button></div>`
+        + MATE_JOB_ORDER.map((j) => `<div class="row tight"><div class="slot">${icon(jobIcon[j])}</div><div class="meta"><b>${MATE.jobs[j].name}</b><div class="sub"><small>${MATE.jobs[j].blurb}</small></div></div></div>`).join('');
+    }
+    const jobs = MATE_JOB_ORDER.map((j) => {
+      const on = !!game.mateOn[j];
+      return `<div class="row tight"><div class="slot">${icon(jobIcon[j])}</div><div class="meta"><b>${MATE.jobs[j].name}</b><div class="sub"><small>${MATE.jobs[j].blurb}</small></div></div>
+        <button class="btn ${on ? '' : 'plain'}" data-act="mate:${j}">${on ? 'ON' : 'OFF'}</button></div>`;
+    }).join('');
+    const legend = game.crewLegend ? LEGENDS.find((l) => l.id === game.crewLegend) : null;
+    const status = !game.mateOn.sail ? 'Re-sail is off: the Flagship is yours.'
+      : legend ? `Re-sailing for ${legend.spot}. Turn it off to sail yourself.` : 'Send the crew once; the mate keeps them going.';
+    return jobs + `<div class="row tight"><div class="meta"><b>Budget</b><div class="sub"><small>Max share of money per buy</small></div></div></div>
+      <div class="budgets">${MATE.budgets.map((v, i) => `<button class="ground ${game.mateBudget === i ? 'sel' : ''}" data-act="mateBudget:${i}">${pct(v)}</button>`).join('')}</div>
+      <p class="note">${status}</p>`;
   }
 
   /** The Flagship's upgrades: one row each, what the next level does, its price. */

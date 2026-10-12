@@ -4,6 +4,20 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-12  The First Mate: automated voyages
+  WHAT: A FIRST MATE tab at the Pub. Hire once for 250M; four switches
+        (all on when hired): Re-sail (the crew sails again for the last
+        legend as soon as it's home), Sell legends (fills WANTED notices,
+        lists the hold, takes an offer at the fish's value, 90% after 10
+        min), Sign crew (any recruit with more working stars than the
+        seat), Upgrade ship (the cheapest Flagship upgrade). Signing and
+        upgrades spend up to a budget share (5/10/25/50%). Each thing the
+        mate does is a line in the pickup log. Crew-home banners now show a
+        Diver's Pearl even when the legend got away.
+  WHY:  The user asked for automated voyages: once the crew is set up,
+        sending them out, selling the legends and keeping the crew and ship
+        up to date was the same taps every 10 minutes.
+
 2026-10-12  The Pub: eight crew roles, quirks, real prices; Flagship upgrades
   WHAT: Four new seats: Cook (Flagship rests 10% less a star), Quartermaster
         (crew cut -10% a star), Lookout (+15% voyage finds a star), Diver

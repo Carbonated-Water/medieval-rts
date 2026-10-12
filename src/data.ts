@@ -927,6 +927,24 @@ export const QUIRKS: Record<QuirkId, { name: string; does: string; fee: number }
   drunk: { name: 'Drunk', does: '-1 star some days', fee: 0.4 },
 };
 export const QUIRK_ORDER = Object.keys(QUIRKS) as QuirkId[];
+
+/**
+ * The First Mate (hired at the Pub): runs the voyages for you. Each job has
+ * a switch; signing and upgrades spend up to the budget share of your money.
+ */
+export type MateJob = 'sail' | 'sell' | 'sign' | 'upgrade';
+export const MATE_JOB_ORDER: MateJob[] = ['sail', 'sell', 'sign', 'upgrade'];
+export const MATE = {
+  price: 250_000_000,
+  every: 2, // seconds between looks
+  budgets: [0.05, 0.1, 0.25, 0.5],
+  jobs: {
+    sail: { name: 'Re-sail', blurb: 'Crew sails again when home' },
+    sell: { name: 'Sell legends', blurb: 'WANTED first, then offers' },
+    sign: { name: 'Sign crew', blurb: 'Signs better recruits' },
+    upgrade: { name: 'Upgrade ship', blurb: 'Buys Flagship upgrades' },
+  } as Record<MateJob, { name: string; blurb: string }>,
+};
 export const SAILOR_NAMES = ['Old Mags', 'Barnacle Bo', 'Quill', 'Marlo', 'Fen', 'Jasper', 'Odile', 'Rook', 'Spratt', 'Hettie', 'Calder', 'Pim', 'Yara', 'Dunstan', 'Moll', 'Ishmael', 'Greta', 'Tobiah', 'Sable', 'Wick', 'Finn', 'Tib', 'Wren', 'Salty Pete', 'Ida', 'Bram', 'Nell', 'Hob', 'Rosa', 'Gus', 'Mira', 'Jory', 'Edda', 'Cobb', 'Lark',
   'One-Eye Sal', 'Duff', 'Tilly', 'Ansel', 'Brine', 'Kit', 'Morwen', 'Ned'];
 

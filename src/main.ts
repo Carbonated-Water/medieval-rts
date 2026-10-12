@@ -1,4 +1,4 @@
-import { HEAD_STARTS, type HeadStartId, ACHIEVEMENTS, BOATS, DEV_MULTIPLIER, HAND_NAMES, HARBOR_UPGRADES, LETTERS, TRACKS, type GroundId, type HarborUpgradeId, type TrackId, RODS, SKILLS, VARIANTS, baitById, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, LEGENDS, gearById, type GearSlot, FLAGSHIP_UPS, type FlagshipUpId } from './data';
+import { HEAD_STARTS, type HeadStartId, ACHIEVEMENTS, BOATS, DEV_MULTIPLIER, HAND_NAMES, HARBOR_UPGRADES, LETTERS, TRACKS, type GroundId, type HarborUpgradeId, type TrackId, RODS, SKILLS, VARIANTS, baitById, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, LEGENDS, gearById, type GearSlot, FLAGSHIP_UPS, type FlagshipUpId, type MateJob } from './data';
 import { Game, type GearItem, fishById, type Line, type SaveData } from './game';
 import { Fight } from './fight';
 import { FightView } from './fightui';
@@ -196,7 +196,10 @@ function onAction(a: Action): void {
   else if (a.startsWith('gsMode:')) ui.gsMode = a.slice(7) as 'buy' | 'sell';
   else if (a.startsWith('buyN:')) ui.buyN = a.slice(5) === 'max' ? 0 : Number(a.slice(5)) as 1 | 5;
   else if (a === 'trainAll') { const k = game.trainAll(ui.buyN || Infinity); if (k) note.banner(pixelIcon('hook'), 'TRAINED', `${k} level${k === 1 ? '' : 's'}`, 'plain'); }
-  else if (a.startsWith('pubTab:')) ui.pubTab = a.slice(7) as 'board' | 'crew';
+  else if (a.startsWith('pubTab:')) ui.pubTab = a.slice(7) as 'board' | 'crew' | 'mate';
+  else if (a === 'hireMate') { if (game.hireMate()) note.banner(pixelIcon('captain'), 'HIRED', 'A First Mate', 'plain'); }
+  else if (a.startsWith('mateBudget:')) game.setMateBudget(Number(a.slice(11)));
+  else if (a.startsWith('mate:')) game.toggleMate(a.slice(5) as MateJob);
   else if (a.startsWith('lhWho:')) ui.lhWho = a.slice(6) as 'you' | 'crew';
   else if (a.startsWith('sign:')) { const s = game.pubBoard.find((x) => x.id === Number(a.slice(5))); if (s && game.signSailor(s.id)) note.banner(pixelIcon('crew'), 'SIGNED', `${s.name}, ${s.role}`, 'plain'); }
   else if (a === 'pubRefresh') game.refreshBoard();
@@ -460,9 +463,11 @@ function voyageFind(item: GearItem): void {
 /** Tackle news: a frenzy starts (Chum Bucket), the Landing Net brings in a second fish. */
 function tackleNews(): void {
   if (game.frenzyNews) { game.frenzyNews = false; note.banner(pixelIcon('bait'), 'FRENZY!', 'Bites come fast', 'rare'); }
+  // The First Mate's work: a line each in the pickup log.
+  for (const m of game.mateNews.splice(0)) note.log(`mate-${m.kind}-${m.text}`, pixelIcon(({ sail: 'boat', sell: 'coin', sign: 'crew', upgrade: 'anchor' } as const)[m.kind]), `<b>First Mate</b> ${m.text}`, m.kind === 'sell' ? 'good' : 'plain');
   for (const r of game.crewNews.splice(0)) {
     const l = LEGENDS.find((x) => x.id === r.legend)!;
-    note.banner(pixelIcon(r.caught ? 'trophy' : 'boat'), r.caught ? `CREW BROUGHT ${l.name.toUpperCase()}` : 'CREW HOME', `Haul ${r.haul.toLocaleString()}${r.caught ? ` · +${r.pearls} Pearls` : ' · the legend got away'}${r.rough ? ' · rough seas' : ''}`, r.caught ? 'rare' : 'plain');
+    note.banner(pixelIcon(r.caught ? 'trophy' : 'boat'), r.caught ? `CREW BROUGHT ${l.name.toUpperCase()}` : 'CREW HOME', `Haul ${r.haul.toLocaleString()}${r.caught ? '' : ' · the legend got away'}${r.pearls ? ` · +${r.pearls} Pearl${r.pearls > 1 ? 's' : ''}` : ''}${r.rough ? ' · rough seas' : ''}`, r.caught ? 'rare' : 'plain');
     if (r.gear) voyageFind(r.gear);
   }
   // Gear found fishing: a line in the pickup log (gold for a fine roll; "sold" when the bag was full).

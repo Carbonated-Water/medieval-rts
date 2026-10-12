@@ -4,7 +4,7 @@ import {
   COMPANY_UNLOCK_EARNED, LETTERS, TRACK_GROWTH, TRACK_MAX, TRACK_ORDER, CLOTHES, DEV_MULTIPLIER, FISH, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_MAX, VARIANTS,
   MAX_GROUND_WORMS, START_WORMS, STRENGTH_PER_LEVEL, WORM_SPAWN_SECONDS, skillCost, TREE_FISH, pearlsFor, gearById, LEGENDS, rodReach, HAND_RODS, HEAD_START_CASH,
   SETS, SET_ORDER, SET_SLOTS, SET_TIERS, setPieceId, STAT_CAP, DROP_SELL, DROP_ROLL, KEEN_EYE, PERFECT_ZONE, PERFECT_PER_LEVEL, AUTO_PERFECT_MAX, STRENGTH_FIGHT,
-  PUB, QUIRKS, VOYAGE, FLAGSHIP_UP_MAX, flagshipUpCost, type CrewRole, type QuirkId,
+  PUB, QUIRKS, VOYAGE, MATE, FLAGSHIP_UP_MAX, flagshipUpCost, type CrewRole, type QuirkId,
 } from './data';
 import { Game, fishById, type Line } from './game';
 
@@ -1517,5 +1517,50 @@ describe('Flagship upgrades', () => {
     expect(after.rough).toBeCloseTo(before.rough - 0.05, 5);
     expect(after.time).toBeLessThan(before.time);
     expect(after.legend).toBeCloseTo(before.legend + 0.07, 5);
+  });
+});
+
+describe('the First Mate', () => {
+  const ready = (seed = 1) => {
+    const g = new Game({ money: 1e9, company: true, flagship: true, crew: { captain: { id: 1, name: 'C', role: 'captain', stars: 1 }, harpooner: { id: 2, name: 'H', role: 'harpooner', stars: 5 } } }, rng(seed));
+    g.tick(0.1);
+    return g;
+  };
+
+  it('is hired once at the Pub, with every job on', () => {
+    const g = ready();
+    expect(g.hireMate()).toBe(true);
+    expect(g.money).toBe(1e9 - MATE.price);
+    expect(g.hireMate()).toBe(false);
+    expect(g.mateOn).toEqual({ sail: true, sell: true, sign: true, upgrade: true });
+    g.toggleMate('sail');
+    expect(g.mateOn.sail).toBe(false);
+  });
+
+  it('re-sails the crew to the last legend and sells what they bring home', () => {
+    const g = ready(2);
+    g.hireMate();
+    g.mateOn = { sail: true, sell: true };
+    expect(g.sendCrew('kelpwyrm')).toBe(true);
+    let trips = 0;
+    for (let k = 0; k < 6 * 3600 && trips < 5; k++) { g.tick(1); trips += g.crewNews.splice(0).length; }
+    expect(trips).toBe(5);
+    expect(g.crewTrip).not.toBeNull(); // out again
+    tick(g, 1200); // offers come in on the listings
+    expect(g.exoticHold).toHaveLength(0);
+    expect(g.mateNews.some((m) => m.kind === 'sell')).toBe(true);
+  });
+
+  it('signs better recruits and buys upgrades within its budget, and does nothing when off', () => {
+    const g = ready(3);
+    g.hireMate();
+    g.mateOn = {};
+    tick(g, 10);
+    expect(g.flagshipUps).toEqual({});
+    g.mateOn = { upgrade: true, sign: true };
+    g.setMateBudget(3); // 50%
+    tick(g, 10);
+    expect(Object.values(g.flagshipUps).reduce((a, b) => a + (b ?? 0), 0)).toBeGreaterThan(0);
+    expect(Object.keys(g.crew).length).toBeGreaterThan(2);
   });
 });
