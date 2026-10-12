@@ -101,3 +101,16 @@ describe('big-fish fight', () => {
     expect(new Fight(LEGENDS[0]!, rng(4)).lit).toBe(true);
   });
 });
+
+describe('Strength in fights', () => {
+  it('more power lands the same legend sooner', () => {
+    const time = (power: number) => {
+      const f = new Fight(LEGENDS[0]!, rng(5), undefined, power), st = { on: true, k: 0 };
+      while (!f.end && f.time < 300) f.update(1 / 60, stretches(f, st));
+      return { end: f.end, t: f.time };
+    };
+    const weak = time(1), strong = time(1.5);
+    expect(strong.end).toBe('caught');
+    expect(strong.t).toBeLessThan(weak.t);
+  });
+});

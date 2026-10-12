@@ -48,7 +48,7 @@ export class FightView {
     this.el.innerHTML = `<div class="water"><div class="surface"></div>
         <svg class="rope" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="50" y1="0" x2="50" y2="60"/></svg>
         <img class="fish" src="${pixelFishIcon(f, false, 192, 112)}" alt="${f.name}"></div>
-      <div class="top"><b>${f.name}</b><div class="stam"><i></i></div>
+      <div class="top"><b>${f.name}</b>${fight.power > 1 ? `<small class="pull">STRENGTH: PULL +${Math.round((fight.power - 1) * 100)}%</small>` : ''}<div class="stam"><i></i></div>
         <div class="snag"><small>FREE</small><div class="bar free"><i></i></div><small>WEAR</small><div class="bar wear"><i></i></div></div></div>
       <div class="prompt"></div>
       <div class="tension"><span class="z slack" style="width:${FIGHT.slack * 100}%"></span><span class="z low" style="width:${(g0 - FIGHT.slack) * 100}%"></span>

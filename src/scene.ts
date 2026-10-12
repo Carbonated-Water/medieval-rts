@@ -859,6 +859,7 @@ export class Scene {
       if (line.type === 'bite') {
         const a = this.alerts[slot]!;
         a.visible = true;
+        if (line.perfect && line.t < line.perfect) g.circle(bx, by + 3, 3 + Math.round(8 * (1 - line.t / line.perfect))).stroke({ color: PAL.gold, width: 1, alpha: 0.95 });
         a.position.set(home.x, home.y - 6 + Math.round(Math.sin(this.time * 18 + slot)));
       }
     }

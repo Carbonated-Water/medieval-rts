@@ -41,7 +41,8 @@ export class Fight {
   private flash = 0;
   private flashNext: number;
 
-  constructor(readonly fish: LegendDef, private rng: () => number = Math.random, private reel = FIGHT.reel) {
+  /** `power`: your Strength (1 = none): the fish tires that much faster, and reeling raises tension more slowly. */
+  constructor(readonly fish: LegendDef, private rng: () => number = Math.random, private reel = FIGHT.reel, readonly power = 1) {
     this.next = this.gap();
     this.snagNext = this.span(FIGHT.snagEvery);
     this.flashNext = this.span(FIGHT.flashEvery);
@@ -118,11 +119,11 @@ export class Fight {
           this.tension = Math.max(0, this.tension - FIGHT.runEase * dt);
           this.stamina -= FIGHT.runTire * dt;
         }
-      } else this.tension = Math.max(0, this.tension + (holding ? FIGHT.reelTension + pull * FIGHT.pullOnReel : pull - FIGHT.ease) * dt);
+      } else this.tension = Math.max(0, this.tension + (holding ? (FIGHT.reelTension + pull * FIGHT.pullOnReel) / (1 + (this.power - 1) / 2) : pull - FIGHT.ease) * dt);
       // Reeling tires the fish, by how fast the reel spins: best in the green, a little with a loose line, a bit more (but risky) up high.
       if (holding) {
         const z = this.zone, k = z === 'green' ? 1 : z === 'high' ? 1.3 : 0.4;
-        this.stamina -= (this.reel * this.spin * k * dt) / this.fish.stamina;
+        this.stamina -= (this.reel * this.power * this.spin * k * dt) / this.fish.stamina;
       }
     }
     this.slack = this.zone === 'slack' ? this.slack + dt : 0;

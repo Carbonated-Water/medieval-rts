@@ -50,6 +50,8 @@ export interface Report {
   voyages: { t: number; legend: string; result: string; haul: number }[];
   gaps: { from: number; to: number; what: string }[];
   retires: { t: number; pearls: number; earned: number }[];
+  /** Your own lines, per run: how bites ended (held = a too-strong fish landed by Strength or rod reach), escapes by who was reeling. */
+  lines: { run: number; caught: number; perfect: number; held: number; snapped: number; escaped: number; tooStrong: number; escapedBy: Record<string, number>; bites: Record<string, number> }[];
 }
 
 class Bot {
@@ -73,7 +75,7 @@ class Bot {
     this.rng = mulberry(seed);
     this.g = new Game({}, mulberry(seed * 7919 + 1));
     this.nextErrand = o.errand;
-    this.rep = { seed, milestones: [], snapshots: [], taps: this.taps, fights: [], voyages: [], gaps: [], retires: [] };
+    this.rep = { seed, milestones: [], snapshots: [], taps: this.taps, fights: [], voyages: [], gaps: [], retires: [], lines: [] };
   }
 
   tap(k: TapKind, n = 1) { this.taps[k] += n; }
@@ -147,6 +149,24 @@ class Bot {
     this.pub();
     this.away = WALK + STOP * stops;
     this.tap('other', 1); // walk back
+  }
+
+  /** How your lines' bites end: watch each line for a new result. */
+  seenResult: unknown[] = [];
+  countLines() {
+    const g = this.g;
+    let c = this.rep.lines.find((x) => x.run === this.run);
+    if (!c) { c = { run: this.run, caught: 0, perfect: 0, held: 0, snapped: 0, escaped: 0, tooStrong: 0, escapedBy: {}, bites: {} }; this.rep.lines.push(c); }
+    g.lines.forEach((l, i) => {
+      if (l.type !== 'result' || this.seenResult[i] === l) return;
+      this.seenResult[i] = l;
+      if (l.outcome === 'scared') return;
+      const who = AUTO[g.auto]!.name;
+      c!.bites[who] = (c!.bites[who] ?? 0) + 1;
+      if (l.outcome === 'caught') { c!.caught++; if (l.perfect) c!.perfect++; if (l.strong) { c!.held++; c!.tooStrong++; } }
+      else if (l.outcome === 'snapped') { c!.snapped++; c!.tooStrong++; }
+      else if (l.outcome === 'escaped') { c!.escaped++; c!.escapedBy[who] = (c!.escapedBy[who] ?? 0) + 1; }
+    });
   }
 
   /** Gear found fishing: put on any piece with more stat points than the one in its slot; count drops and sets. */
@@ -373,7 +393,7 @@ class Bot {
 
   /** The fight, played by a rule: hold in the low/slack zone, let go when high or when it runs (after a reaction delay). */
   fight(l: typeof LEGENDS[number]): boolean {
-    const f = new Fight(l, this.rng);
+    const f = new Fight(l, this.rng, undefined, this.g.fightPower());
     let holding = false, decideIn = 0, secs = 0;
     while (!f.end && secs < 300) {
       if ((decideIn -= 1 / 60) <= 0) {
@@ -437,6 +457,7 @@ class Bot {
     while (this.t < end) {
       this.g.tick(DT);
       this.fish();
+      this.countLines();
       this.wearDrops();
       this.t += DT;
       if (this.t >= this.nextErrand && this.away <= 0) {
@@ -465,6 +486,15 @@ export function print(r: Report): string {
   if (r.voyages.length) {
     const won = r.fights.filter((f) => f.won).length;
     out.push('', `VOYAGES: ${r.voyages.length} (${r.voyages.filter((v) => v.result === 'caught').length} legends, ${r.voyages.filter((v) => v.result === 'failed').length} failed) · fights won ${won}/${r.fights.length}`);
+  }
+  if (r.lines.length) {
+    out.push('', 'YOUR LINES (how bites ended)');
+    for (const c of r.lines) {
+      const bites = c.caught + c.snapped + c.escaped || 1, pct = (n: number) => `${((n / bites) * 100).toFixed(1)}%`;
+      out.push(`  run ${c.run}: ${c.caught + c.snapped + c.escaped} bites · PERFECT ${c.perfect} ${pct(c.perfect)} · escaped (too slow) ${c.escaped} ${pct(c.escaped)} · too strong ${c.tooStrong} ${pct(c.tooStrong)}: held ${c.held}, snapped ${c.snapped} ${pct(c.snapped)}`);
+      const by = Object.entries(c.bites).map(([k, n]) => `${k} ${c.escapedBy[k] ?? 0}/${n}`).join(' · ');
+      out.push(`         escapes by reeler: ${by}`);
+    }
   }
   if (r.gaps.length) {
     out.push('', 'STALLS (10+ min with nothing worth buying)');

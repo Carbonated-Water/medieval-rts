@@ -3,7 +3,7 @@ import {
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_REPEAT, BOOTS, CAPTAIN_WAGE, COMPANY_PRICE, CREW_BASE, GROUNDS, HANDS_MAX, handCost, PIER_SPOTS, PIER_SECTIONS, SELLER_BAG, SHELLFISH,
   COMPANY_UNLOCK_EARNED, LETTERS, TRACK_GROWTH, TRACK_MAX, TRACK_ORDER, CLOTHES, DEV_MULTIPLIER, FISH, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_MAX, VARIANTS,
   MAX_GROUND_WORMS, START_WORMS, STRENGTH_PER_LEVEL, WORM_SPAWN_SECONDS, skillCost, TREE_FISH, pearlsFor, gearById, LEGENDS, rodReach, HAND_RODS, HEAD_START_CASH,
-  SETS, SET_ORDER, SET_SLOTS, SET_TIERS, setPieceId, STAT_CAP, DROP_SELL, DROP_ROLL, KEEN_EYE,
+  SETS, SET_ORDER, SET_SLOTS, SET_TIERS, setPieceId, STAT_CAP, DROP_SELL, DROP_ROLL, KEEN_EYE, PERFECT_ZONE, PERFECT_PER_LEVEL, AUTO_PERFECT_MAX, STRENGTH_FIGHT,
 } from './data';
 import { Game, fishById, type Line } from './game';
 
@@ -1409,5 +1409,40 @@ describe('gear sets, drops and the new stats', () => {
   it('old saves without a charm slot load with it empty', () => {
     const g = new Game({ equipped: { rod: { id: 1, def: 'twigrod', stats: {} } } });
     expect(g.equipped.charm).toBeNull();
+  });
+});
+
+describe('Reflex: PERFECT reels', () => {
+  it('reeling inside the zone is PERFECT and sells for double; late is not', () => {
+    const g = new Game({}, rng(3));
+    waitForBite(g);
+    const bite = g.lines[0]!;
+    expect(bite.type === 'bite' && bite.perfect).toBeCloseTo(g.perfectZone());
+    g.reel();
+    const r = g.lines[0]!;
+    expect(r.type === 'result' && r.perfect).toBe(true);
+    waitForBite(g);
+    for (let t = 0; t < g.perfectZone() + 0.05; t += 0.02) g.tick(0.02);
+    g.reel();
+    const late = g.lines[0]!;
+    expect(late.type === 'result' && late.outcome === 'caught' && !late.perfect).toBe(true);
+  });
+
+  it('Reflexes levels and Reflex gear widen the zone; the Autofisher hits it more', () => {
+    const g = new Game({});
+    const base = g.perfectZone(), auto = g.autoPerfectChance();
+    g.reflexes = 10;
+    expect(g.perfectZone()).toBeCloseTo((PERFECT_ZONE + 10 * PERFECT_PER_LEVEL) * (1 + g.gearStat('reflex') / 100), 5); // the Twig Rod adds a little Reflex
+    g.equipped.hat = { id: 900, def: 'strawhat', stats: { reflex: 100 } };
+    expect(g.perfectZone()).toBeGreaterThan(base * 2);
+    expect(g.autoPerfectChance()).toBeGreaterThan(auto * 2);
+    expect(g.autoPerfectChance()).toBeLessThanOrEqual(AUTO_PERFECT_MAX);
+  });
+
+  it('Strength adds fight pull', () => {
+    const g = new Game({});
+    expect(g.fightPower()).toBe(1);
+    g.equipped.hat = { id: 900, def: 'strawhat', stats: { strength: 100 } };
+    expect(g.fightPower()).toBeCloseTo(1 + STRENGTH_FIGHT);
   });
 });

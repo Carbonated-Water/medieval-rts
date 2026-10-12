@@ -4,7 +4,7 @@ import {
   SIGHTING_CHANCE, SONAR_STEP, STORM_LOSS, TRACKS, TRACK_GROWTH, TRACK_MAX, WAREHOUSE, crewCost,
   type GroundDef, type GroundId, type HarborUpgradeId, type TrackId,
   HANDS_MAX, PIER_STAFF, TRACK_ORDER, MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, SELLER_BAG, handCost, HAND_REACT, HAND_REACT_PER_LEVEL, HAND_REST, HAND_SKILL_MAX, LETTERS, handSkillCost, type BoatType, BITE_WAIT, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, GEAR, HAGGLE_PER_LEVEL, HOLDERS, MAX_GROUND_WORMS,
-  MIN_BITE_WAIT, REEL_WINDOW, REFLEX_PER_LEVEL, RODS, HAND_RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, START_WORMS, STRENGTH_PER_LEVEL, TIERS,
+  MIN_BITE_WAIT, REEL_WINDOW, PERFECT_ZONE, PERFECT_PER_LEVEL, PERFECT_VALUE, AUTO_PERFECT_REF, AUTO_PERFECT_MAX, STRENGTH_FIGHT, REFLEX_PER_LEVEL, RODS, HAND_RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, START_WORMS, STRENGTH_PER_LEVEL, TIERS,
   TOO_STRONG_WEIGHT, VARIANTS, VARIANT_ORDER, WORMS_PER_PICK, WORM_SPAWN_SECONDS, WORM_SPOTS, baitById,
   type AchStat, type AchievementDef, type BaitId, type FishDef, type GearKind, type SkillId, type Tier, type Variant,
   CHUMS, FRENZY_SPEED, ICEBOXES, NETS, GEAR_BAG, GEAR_SELL, DROP_SELL, PUB, CREW_ROLE_ORDER, SAILOR_NAMES, type CrewRole, GEAR_SLOTS, GEAR_TIERS, LEGACY_GEAR, STARTER_GEAR, gearById, rodReach, type GearDef, type GearSlot, type StatId, type GearTier,
@@ -160,8 +160,8 @@ export type Line =
   | { type: 'idle' }
   | { type: 'casting'; t: number; bait: BaitId }
   | { type: 'waiting'; t: number; biteAt: number; bait: BaitId; fish?: FishDef; tooStrong?: boolean }
-  | { type: 'bite'; t: number; window: number; fish: FishDef; tooStrong: boolean; bait?: BaitId }
-  | { type: 'result'; t: number; outcome: 'caught' | 'escaped' | 'snapped' | 'scared'; fish?: FishDef; caught?: Catch; strong?: boolean };
+  | { type: 'bite'; t: number; window: number; fish: FishDef; tooStrong: boolean; bait?: BaitId; /** seconds of PERFECT zone (your lines) */ perfect?: number }
+  | { type: 'result'; t: number; outcome: 'caught' | 'escaped' | 'snapped' | 'scared'; fish?: FishDef; caught?: Catch; strong?: boolean; perfect?: boolean };
 
 /** Every fish in the game: river, sea, the Fish Tree, and the expedition legends. */
 const ALL_FISH: FishDef[] = [...FISH, ...SEA_FISH, ...SHELLFISH, ...BILLFISH, ...TREE_FISH, ...LEGENDS];
@@ -1094,6 +1094,21 @@ export class Game {
     return (REEL_WINDOW + REFLEX_PER_LEVEL * this.reflexes) * (1 + this.gearStat('reflex') / 100);
   }
 
+  /** Seconds at the start of a bite that count as PERFECT (Reflexes levels, then Reflex). */
+  perfectZone(): number {
+    return (PERFECT_ZONE + PERFECT_PER_LEVEL * this.reflexes) * (1 + this.gearStat('reflex') / 100);
+  }
+
+  /** How often the Autofisher reels PERFECT. */
+  autoPerfectChance(): number {
+    return Math.min(AUTO_PERFECT_MAX, this.perfectZone() / AUTO_PERFECT_REF);
+  }
+
+  /** Your pull in legend fights: how much faster the fish tires (1 = no Strength). */
+  fightPower(): number {
+    return 1 + (STRENGTH_FIGHT * (this.gearStat('strength') + 10 * this.strength)) / 100;
+  }
+
   /** Chance to land a fish one tier above the rod instead of snapping. */
   strengthChance(): number {
     return Math.min(0.95, STRENGTH_PER_LEVEL * this.strength + (this.gearStat('strength') / 100) * 0.5);
@@ -1155,7 +1170,7 @@ export class Game {
     if (soonest >= 0) this.reelLine(soonest);
   }
 
-  private reelLine(i: number): void {
+  private reelLine(i: number, auto = false): void {
     const line = this.lines[i];
     if (!line) return;
     if (line.type === 'waiting' || line.type === 'casting') {
@@ -1164,7 +1179,8 @@ export class Game {
       const strong = line.tooStrong && this.rng() < this.landChance(line.fish);
       if (line.tooStrong && !strong) this.lines[i] = { type: 'result', t: 0, outcome: 'snapped', fish: line.fish };
       else {
-        this.lines[i] = { type: 'result', t: 0, outcome: 'caught', fish: line.fish, caught: this.land(line.fish, false, line.bait), strong };
+        const perfect = auto ? this.rng() < this.autoPerfectChance() : line.t <= (line.perfect ?? 0);
+        this.lines[i] = { type: 'result', t: 0, outcome: 'caught', fish: line.fish, caught: this.land(line.fish, false, line.bait, perfect), strong, ...(perfect ? { perfect } : {}) };
         // The Landing Net sometimes brings in a second one.
         if (this.rng() < Math.min(0.9, NETS[this.net]!.chance + this.gearStat('twin') / 100)) { this.land(line.fish, false, line.bait); this.doubleNews++; }
       }
@@ -1199,7 +1215,7 @@ export class Game {
         this.lines[i] = { type: 'waiting', t: 0, biteAt, bait: line.bait, ...this.rollFish(line.bait) };
       } else if (line.type === 'waiting' && line.t >= line.biteAt) {
         const { fish, tooStrong } = line.fish ? { fish: line.fish, tooStrong: !!line.tooStrong } : this.rollFish(line.bait);
-        this.lines[i] = { type: 'bite', t: 0, window: this.reelWindow(), fish, tooStrong, bait: line.bait };
+        this.lines[i] = { type: 'bite', t: 0, window: this.reelWindow(), perfect: this.perfectZone(), fish, tooStrong, bait: line.bait };
       } else if (line.type === 'bite' && line.t >= line.window) {
         this.lines[i] = { type: 'result', t: 0, outcome: 'escaped', fish: line.fish };
       } else if (line.type === 'result' && line.t >= RESULT_SECONDS) {
@@ -1221,7 +1237,7 @@ export class Game {
       if (line.type !== 'bite') { this.autoReact[i] = undefined; return; }
       const roll = a.react[0] + this.rng() * (a.react[1] - a.react[0]);
       const react = (this.autoReact[i] ??= a.sure ? Math.min(roll, line.window * 0.5) : roll);
-      if (line.t >= react) { this.autoReact[i] = undefined; this.reelLine(i); }
+      if (line.t >= react) { this.autoReact[i] = undefined; this.reelLine(i, true); }
     });
     this.castWhere((line) => line.type === 'idle' || (line.type === 'result' && line.t >= a.recast));
   }
@@ -1246,7 +1262,7 @@ export class Game {
 
   /** A fish is landed: maybe a variant, weigh it (clothes make it bigger), price it, bag it, log it. */
   /** A fish is landed (by you, or by a hired hand into the pier crate): variant, weight, price, journal. */
-  private land(fish: FishDef, byHand = false, bait: BaitId = 'worm'): Catch {
+  private land(fish: FishDef, byHand = false, bait: BaitId = 'worm', perfect = false): Catch {
     // Your gear: Fortune for variants, Size for weight (hired hands don't wear yours).
     const boost = byHand ? 1 : 1 + (FORTUNE_SCALE * this.gearStat('fortune')) / 100;
     let variant = this.rollVariant(boost);
@@ -1255,7 +1271,7 @@ export class Game {
     const ratio = (0.6 + this.rng() * 0.8) * (byHand ? 1 : 1 + this.gearStat('size') / 100) * v.size * baitById(bait).size;
     const kg = Math.round(fish.kg * ratio * 100) / 100;
     const tenth = !byHand && this.setEffect('tenth') && ++this.tenth % 10 === 0;
-    const value = Math.max(1, Math.round(fish.price * ratio * v.value * (tenth ? 2 : 1)));
+    const value = Math.max(1, Math.round(fish.price * ratio * v.value * (tenth ? 2 : 1) * (perfect ? PERFECT_VALUE : 1)));
     const c: Catch = { id: this.nextId++, fish: fish.id, kg, value, ...(variant ? { variant } : {}) };
     (byHand ? this.crate : this.bag).push(c);
     this.made[byHand ? 'hands' : 'you'] += this.priceOf(c);

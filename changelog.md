@@ -4,6 +4,27 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-12  Reflex is PERFECT reels, Strength pulls in fights, a Stats screen
+  WHAT: PERFECT: reel in the first part of a bite (a gold ring shrinks on the
+        bobber) and the fish sells for double, "PERFECT!" float. Zone 0.25s
+        + 0.015s a Reflexes level, x (1 + Reflex%); the Autofisher reels
+        PERFECT on zone/2s of bites (max 80%). Strength still holds
+        too-strong fish, and now gives fight power (Fight's \`power\`): the
+        legend tires faster and reeling raises tension more slowly; the fight
+        shows "STRENGTH: PULL +X%". Stats screen (tap TOTAL on the Character
+        screen, now one line with STATS >): every stat with what it does for
+        you right now ("PERFECT zone 0.42s · Autofisher 21%", "Hold 40%
+        too-strong · Fights +43%", "Shiny 1 in 181", "Gear drops 1 in 138
+        catches"). Skill and stat blurbs updated. Harness: YOUR LINES report
+        (bites, PERFECT, escaped, too strong: held/snapped, escapes by
+        Autofisher level).
+  WHY:  The user asked to make players understand what Strength and Reflex
+        do. The harness showed they did almost nothing: 0 escapes in ~25k
+        bites a seed (cheap Reflexes levels made the window longer than any
+        reaction), and only 0.5-1.4% of bites snapped. First PERFECT tuning
+        (0.35s zone, auto zone/1.2) hit 68-89% and pulled the Flagship to
+        3h20; now ~25%, run 1 Flagship 4h04 (3 seeds; was 4h28).
+
 2026-10-12  Gear sets, four new stats, gear drops, shopkeeper Gear Shop
   WHAT: Five sets (Fishmonger, Jester, Monk, Pirate, Abyss), each a hat,
         shirt, pants, boots and a new Charm slot, at every tier Bronze to

@@ -1,8 +1,8 @@
 import { rodReach, HEAD_STARTS, type HeadStartId, TRAITS, HARBOR_STAFF,
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_ORDER, COMPANY_PRICE, COMPANY_UNLOCK_EARNED, DEV_MULTIPLIER, GROUNDS, HARBOR_UPGRADES,
   MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, PIER_STAFF, HANDS_MAX,
-  TRACKS, TRACK_MAX, TRACK_ORDER, WAREHOUSE, type HarborUpgradeId, type TrackId, HAND_NAMES, HAND_SKILL_MAX, LETTERS, RODS, HAND_RODS, FISH, GEAR, REFLEX_PER_LEVEL, SKILLS, STRENGTH_PER_LEVEL, HAGGLE_PER_LEVEL,
-  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, TREE_FISH, type TreeFish, PUB, CREW_ROLES, CREW_ROLE_ORDER, LEGENDS, EXOTIC, REGIONS, VOYAGE, GEAR_BAG, GEAR_ITEMS, GEAR_SLOTS, GEAR_TIERS, STATS, STAT_ORDER, SETS, SET_SLOTS, KEEN_EYE, setPieceId, gearById, type SetId, type GearDef, type GearSlot, type GearTier, type StatId,
+  TRACKS, TRACK_MAX, TRACK_ORDER, WAREHOUSE, type HarborUpgradeId, type TrackId, HAND_NAMES, HAND_SKILL_MAX, LETTERS, RODS, HAND_RODS, FISH, GEAR, PERFECT_PER_LEVEL, SKILLS, STRENGTH_PER_LEVEL, HAGGLE_PER_LEVEL,
+  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, TREE_FISH, type TreeFish, PUB, CREW_ROLES, CREW_ROLE_ORDER, LEGENDS, EXOTIC, REGIONS, VOYAGE, GEAR_BAG, GEAR_ITEMS, GEAR_SLOTS, GEAR_TIERS, STATS, STAT_ORDER, SETS, SET_SLOTS, KEEN_EYE, FORTUNE_SCALE, LUCK_SCALE, SKILL_TIER_BONUS, NETS, setPieceId, gearById, type SetId, type GearDef, type GearSlot, type GearTier, type StatId,
 } from './data';
 import { type Boat, type Exotic, type Game, type GearItem, type Sailor, fishById } from './game';
 import * as V from './voyage';
@@ -11,7 +11,7 @@ import { fisherIcon, gearIcon, pixelFishIcon as fishIcon, pixelIcon, type HatSty
 import type { Place } from './scene';
 
 /** One panel per job: the market sells fish, the tackle shop sells gear, the school trains skills. */
-export type Panel = 'pub' | 'gearshop' | 'character' | 'gearitem' | 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'ledger' | 'boat' | 'tree' | 'retire' | 'lighthouse' | 'exotic' | 'listing' | 'voyage' | 'shipyard' | 'harborup' | 'pier' | 'pierstaff' | 'hand' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
+export type Panel = 'pub' | 'gearshop' | 'character' | 'gearitem' | 'stats' | 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'ledger' | 'boat' | 'tree' | 'retire' | 'lighthouse' | 'exotic' | 'listing' | 'voyage' | 'shipyard' | 'harborup' | 'pier' | 'pierstaff' | 'hand' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
 
 export type Action =
   | 'cast' | 'reel' | 'close' | 'back' | 'reset' | 'toggleDev' | Panel
@@ -118,6 +118,7 @@ export class UI {
   parentOf(panel: Panel | null): Panel | null {
     if (panel === 'boat' || panel === 'shipyard') return this.coTab;
     if (panel === 'gearitem') return this.gearFrom;
+    if (panel === 'stats') return 'character';
     return ({ hand: 'pier', pierstaff: 'pier', tree: 'settings', retire: 'settings', listing: 'exotic', voyage: 'lighthouse' } as Partial<Record<Panel, Panel>>)[panel ?? 'market'] ?? null;
   }
   /** Trophy page: the originals, or the Fish Tree's. */
@@ -254,6 +255,7 @@ export class UI {
                 : panel === 'gearshop' ? ['Gear Shop', this.gearShopHtml(game)]
                 : panel === 'character' ? [game.generation > 1 ? `${game.heir.name} · Gen ${game.generation}` : 'Character', this.characterHtml(game)]
                 : panel === 'gearitem' ? [this.gearItemTitle(game), this.gearItemHtml(game)]
+                : panel === 'stats' ? ['Your Stats', this.statsHtml(game)]
                   : ['Settings', this.settingsHtml(game)];
     // ◄ back to the parent (if any), X always closes. A boat flips to the previous/next boat instead of showing the money (it's in the corner anyway).
     const tabbed = game.company && (panel === 'harbor' || panel === 'ledger' || panel === 'harborup');
@@ -587,7 +589,7 @@ export class UI {
   /** "now > next" for a skill, in a few words. */
   private skillEffect(game: Game, id: SkillId, lvl: number, canTrain: boolean): string {
     const step = (a: string, b: string) => `${a}${canTrain ? ` <span class="up">&gt; ${b}</span>` : ''}`;
-    if (id === 'reflexes') return step(`${game.reelWindow().toFixed(2)}s`, `${(game.reelWindow() + REFLEX_PER_LEVEL).toFixed(2)}s`);
+    if (id === 'reflexes') return step(`PERFECT ${game.perfectZone().toFixed(2)}s`, `${(game.perfectZone() + PERFECT_PER_LEVEL * (1 + game.gearStat('reflex') / 100)).toFixed(2)}s`);
     if (id === 'haggling') return step(`Prices +${pct(lvl * HAGGLE_PER_LEVEL)}`, `+${pct((lvl + 1) * HAGGLE_PER_LEVEL)}`);
     if (id === 'strength') return step(`Hold ${pct(game.strengthChance())}`, pct(game.strengthChance() + STRENGTH_PER_LEVEL));
     const best = game.rodTier as Tier;
@@ -877,7 +879,33 @@ export class UI {
     const shown = Object.fromEntries(STAT_ORDER.filter((s) => totals[s]).map((s) => [s, totals[s]]));
     return tabs + `<div class="doll2"><div class="dcol">${left}</div><div class="stage"><img src="${fisher}" alt="you"></div><div class="dcol">${right}</div></div>`
       + this.setBox(game)
-      + `<div class="totals"><span>TOTAL</span>${this.statLine(shown) || 'No bonuses yet'}${game.heir.trait ? ` <small>(${TRAITS[game.heir.trait].name})</small>` : ''}</div>`;
+      + `<button class="totals" data-act="stats"><span>TOTAL</span><em>${this.statLine(shown) || 'No bonuses yet'}</em>${game.heir.trait ? ` <small>(${TRAITS[game.heir.trait].name})</small>` : ''}<b class="more">STATS &gt;</b></button>`;
+  }
+
+  /**
+   * Every stat with what it does for you right now, in game terms (seconds,
+   * "1 in N", how many Fishing levels it's worth), counting your skills,
+   * tackle and Keen Eye where they add to the same thing.
+   */
+  private statsHtml(game: Game): string {
+    const s = game.statsFor(), one = (p: number) => (p > 0 ? `1 in ${Math.max(1, Math.round(1 / p))}` : 'never');
+    const boost = 1 + (FORTUNE_SCALE * s.fortune) / 100;
+    const twin = Math.min(0.9, NETS[game.net]!.chance + s.twin / 100);
+    const says: Record<StatId, string> = {
+      size: `Fish weigh and sell ${s.size}% more`,
+      luck: `Rare fish bite as if +${((s.luck / 100) * LUCK_SCALE / SKILL_TIER_BONUS).toFixed(1)} Fishing levels`,
+      patience: `Bites come ${(1 + s.patience / 100).toFixed(2)}x as fast`,
+      reflex: `PERFECT zone ${game.perfectZone().toFixed(2)}s · Autofisher ${pct(game.autoPerfectChance())}`,
+      strength: `Hold ${pct(game.strengthChance())} too-strong · Fights +${Math.round((game.fightPower() - 1) * 100)}%`,
+      fortune: `Shiny ${one(VARIANTS.shiny.chance * boost)} · Golden ${one(VARIANTS.golden.chance * boost)}`,
+      twin: `${one(twin)} catches come in twos`,
+      crew: `Your fishermen bite ${(1 + s.crew / 100).toFixed(2)}x as fast`,
+      scavenge: `Gear drops ${one(game.dropChance())} catches`,
+      thrift: `${s.thrift}% of casts use no bait`,
+      stride: `Walk ${s.stride}% faster`,
+    };
+    return `<div class="statlist">${STAT_ORDER.map((k) => `<div class="srow${s[k] ? '' : ' zero'}"><b>${STATS[k].name}</b><span>${s[k]}%</span><small>${says[k]}</small></div>`).join('')}</div>
+      <p class="note">PERFECT: reel while the gold ring shrinks for double value.</p>`;
   }
 
   /** The set you wear most of: its five pieces (missing ones dark), its bonuses, where to find what's missing. */

@@ -206,8 +206,8 @@ export const STATS: Record<StatId, { name: string; blurb: string }> = {
   size: { name: 'Size', blurb: 'Bigger fish, worth more' },
   luck: { name: 'Luck', blurb: 'Rarer fish bite more often' },
   patience: { name: 'Patience', blurb: 'Bites come sooner' },
-  reflex: { name: 'Reflex', blurb: 'More time to hit REEL' },
-  strength: { name: 'Strength', blurb: 'Land fish too strong for your rod' },
+  reflex: { name: 'Reflex', blurb: 'Bigger PERFECT zone: double value' },
+  strength: { name: 'Strength', blurb: 'Hold too-strong fish, pull harder in fights' },
   fortune: { name: 'Fortune', blurb: 'Giant, Golden and Shiny more often' },
   stride: { name: 'Stride', blurb: 'Walk faster' },
   crew: { name: 'Crew', blurb: 'Your fishermen get bites sooner' },
@@ -490,9 +490,9 @@ export interface SkillDef { name: string; max: number; start: number; blurb: str
 const curve = (base: number, growth: number) => (level: number) => Math.round((base * Math.pow(growth, level)) / 5) * 5;
 export const SKILLS: Record<SkillId, SkillDef> = {
   fishing: { name: 'Fishing', max: 25, start: 1, blurb: 'Rarer fish bite more often.', cost: (l) => Math.round((30 * Math.pow(1.4, l - 1)) / 5) * 5 },
-  reflexes: { name: 'Reflexes', max: 10, start: 0, blurb: 'More time to hit REEL!', cost: curve(40, 1.55) },
+  reflexes: { name: 'Reflexes', max: 10, start: 0, blurb: 'A bigger PERFECT zone (and more time to reel).', cost: curve(40, 1.55) },
   haggling: { name: 'Haggling', max: 10, start: 0, blurb: 'Sell fish for 5% more per level.', cost: curve(60, 1.6) },
-  strength: { name: 'Strength', max: 10, start: 0, blurb: 'Chance to land a fish too strong for your rod.', cost: curve(120, 1.6) },
+  strength: { name: 'Strength', max: 10, start: 0, blurb: 'Hold fish too strong for your rod; pull harder in fights.', cost: curve(120, 1.6) },
 };
 
 export const SKILL_MAX = SKILLS.fishing.max;
@@ -515,6 +515,19 @@ export const BITE_WAIT: [number, number] = [2.2, 6.5];
 export const MIN_BITE_WAIT = 0.6;
 /** Seconds you have to hit Reel once the bobber dips (before Reflexes). */
 export const REEL_WINDOW = 0.9;
+/**
+ * PERFECT: reel in the first part of a bite and the fish sells for double.
+ * The zone is PERFECT_ZONE s (+PERFECT_PER_LEVEL a Reflexes level) x (1 +
+ * Reflex%). The Autofisher hits PERFECT on zone / AUTO_PERFECT_REF of bites
+ * (at most AUTO_PERFECT_MAX).
+ */
+export const PERFECT_ZONE = 0.25;
+export const PERFECT_PER_LEVEL = 0.015;
+export const PERFECT_VALUE = 2;
+export const AUTO_PERFECT_REF = 2;
+export const AUTO_PERFECT_MAX = 0.8;
+/** Strength in legend fights: each 100% (a Strength level counts 10%) tires the fish this much faster; reeling raises tension half that much slower. */
+export const STRENGTH_FIGHT = 0.5;
 
 /** Dev mode: fish sell for this many times their price. */
 export const DEV_MULTIPLIER = 20;

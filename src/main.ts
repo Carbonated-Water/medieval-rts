@@ -203,6 +203,7 @@ function onAction(a: Action): void {
   else if (a.startsWith('crewSail:')) { if (game.sendCrew(a.slice(9))) { note.banner(pixelIcon('boat'), 'CREW SAILED', LEGENDS.find((l) => l.id === a.slice(9))!.spot, 'plain'); ui.open = null; } }
   else if (a.startsWith('charTab:')) ui.charTab = a.slice(8) as 'gear' | 'bag';
   else if (a.startsWith('gpick:')) ui.gsPick = a.slice(6);
+  else if (a === 'stats') ui.open = 'stats';
   else if (a === 'keenEye') { if (game.buyKeenEye()) note.banner(pixelIcon('pearl'), 'KEEN EYE', `Level ${game.keenEye}`, 'rare'); }
   else if (a.startsWith('gbuy:')) {
     const r = game.buyGearPiece(a.slice(5));
@@ -217,7 +218,7 @@ function onAction(a: Action): void {
   else if (a === 'gsellall') { const n = game.sellAllGear(); if (n) note.banner(pixelIcon('coin'), 'SOLD ALL', `$${n.toLocaleString()}`, 'plain'); }
   else if (a.startsWith('fight:')) {
     const legend = LEGENDS.find((l) => l.id === a.slice(6));
-    if (legend) { ui.open = null; fightView.start(new Fight(legend)); }
+    if (legend) { ui.open = null; fightView.start(new Fight(legend, Math.random, undefined, game.fightPower())); }
   } else if (a === 'fightDone') { fightView.close(); ui.open = game.voyage ? 'voyage' : 'lighthouse'; }
   else if (a === 'buyFlagship') { if (game.buyFlagship()) note.banner(pixelIcon('boat'), 'THE FLAGSHIP', 'Ready to sail', 'rare'); }
   else if (a.startsWith('sail:')) { if (game.startVoyage(a.slice(5))) ui.open = 'voyage'; }
@@ -228,7 +229,7 @@ function onAction(a: Action): void {
     // The real thing: the result goes to the voyage.
     voyageFight = true;
     ui.open = null;
-    fightView.start(new Fight(LEGENDS.find((l) => l.id === game.voyage!.legend)!));
+    fightView.start(new Fight(LEGENDS.find((l) => l.id === game.voyage!.legend)!, Math.random, undefined, game.fightPower()));
   } else if (a === 'vhome') {
     const out = game.endVoyage();
     if (out?.result === 'caught') note.banner(pixelIcon('trophy'), 'HOME WITH A LEGEND', `+${out.pearls} Pearls${out.sold ? ` · hold full, sold $${out.sold.toLocaleString()}` : ''}`, 'rare');
@@ -344,6 +345,7 @@ function announceLine(line: Extract<Line, { type: 'result' }>, slot: number): vo
     if (game.journal[f.id]!.count === 1) note.banner(pic, 'NEW FISH', f.name, 'rare');
     else if (v === 'shiny') note.banner(pic, 'SHINY', f.name, 'rare');
     else if (v) note.quiet(pic, `<b>${VARIANTS[v].name}</b> ${f.name}`, 'rare');
+    if (line.perfect) note.float('PERFECT!', x, at.y - 22, 'rare');
     if (line.strong) note.float('HELD!', x, at.y - 40, 'plain');
   } else if (line.outcome === 'snapped' && f) {
     const need = RODS.find((r) => r.tier >= f.tier)!;
