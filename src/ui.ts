@@ -271,7 +271,7 @@ export class UI {
     const n = game.boats.length;
     const right = panel === 'boat' && n > 1
       ? `<span class="flip"><button class="bbtn" data-act="boatPrev" aria-label="previous boat">${icon('prev', 2)}</button><small>${this.boatSel + 1}/${n}</small><button class="bbtn" data-act="boatNext" aria-label="next boat">${icon('next', 2)}</button></span>`
-      : panel === 'boat' ? '' : coin(game.money, 3);
+      : panel === 'boat' || panel === 'voyage' ? '' : panel === 'tree' ? `<span class="cash">${icon('pearl', 3)}${game.pearls}</span>` : coin(game.money, 3);
     const tabs = tabbed ? `<div class="tiers three">${([['harbor', 'FLEET'], ['ledger', 'LEDGER'], ['harborup', 'HARBOR']] as const)
       .map(([p, label]) => `<button class="tab${panel === p ? ' on' : ''}" style="--c:#2f6fd6" data-act="coTab:${p}">${label}</button>`).join('')}</div>` : '';
     const co = tabbed || panel === 'boat' || panel === 'shipyard' ? ' co' : '';
@@ -684,7 +684,7 @@ export class UI {
       const p = at(f), own = game.fishTree.includes(f.id);
       const state = own ? 'own' : game.canUnlock(f.id) ? 'buy' : game.treeReachable(f) ? 'next' : 'far';
       return `<button class="star ${state}${this.treeSel === f.id ? ' sel' : ''}" style="left:${p.x}%;top:${p.y}%" data-act="treeSel:${f.id}">
-        <img src="${fishIcon(f, !own, 40, 24)}" alt=""><i>${own ? '' : f.cost}</i></button>`;
+        <img src="${fishIcon(f, !own, 64, 38)}" alt=""><i>${own ? '' : f.cost}</i></button>`;
     }).join('');
     const sky = `<div class="sky"><span class="side l">RIVER</span><span class="side r">SEA</span><svg viewBox="0 0 100 100" preserveAspectRatio="none">${lines}<line x1="50" y1="4" x2="50" y2="96" class="split"/></svg>${nodes}</div>`;
     const sel = fish.find((f) => f.id === this.treeSel);
@@ -694,7 +694,7 @@ export class UI {
       : `<div class="row"><div class="meta"><b>${sel.name} <span class="small">$${kmb(sel.price)} each</span></b><div class="sub"><small class="wrap">${
           sel.side === 'river' ? 'River: you and your fishermen' : `${BOATS[sel.boat!].name}: ${GROUNDS.find((g) => g.id === sel.ground)!.name} and deeper`}</small></div></div>
         ${game.fishTree.includes(sel.id) ? '<span class="maxed">OWNED</span>' : `<button class="btn" data-act="unlock:${sel.id}" ${game.canUnlock(sel.id) ? '' : 'disabled'}>${icon('pearl', 2)} ${sel.cost}</button>`}</div>`;
-    return pearls + tabs + sky + detail;
+    return tabs + sky + detail;
   }
 
   /** The Lighthouse: where expeditions will sail from. For now, practice fights against the legends. */
@@ -820,11 +820,11 @@ export class UI {
     const KIND: Record<V.SpotKind, IconName> = { fish: 'net', event: 'quest', wreck: 'wreck', trader: 'coin' };
     const spots = v.rows.map((row, r) => row.map((s, i) => {
       const here = r === v.row && i === v.at, past = r < v.row, reach = V.canReach(v, i) && r === v.row + 1;
-      return `<button class="vspot${here ? ' here' : ''}${past ? ' past' : ''}${reach ? ' reach' : ''}" style="left:${xOf(r, i)}%;top:${yOf(r)}%" ${reach ? `data-act="vsail:${i}"` : 'disabled'}>${icon(here ? 'boat' : KIND[s.kind], 2)}</button>`;
+      return `<button class="vspot${here ? ' here' : ''}${past ? ' past' : ''}${reach ? ' reach' : ''}" style="left:${xOf(r, i)}%;top:${yOf(r)}%" ${reach ? `data-act="vsail:${i}"` : 'disabled'}>${icon(here ? 'boat' : KIND[s.kind], 3)}</button>`;
     }).join('')).join('');
     const toLegend = v.stage === 'map' && v.row === v.rows.length - 1;
-    const legend = `<button class="vspot legend${toLegend ? ' reach' : ''}${v.stage === 'fight' || v.stage === 'over' ? ' here' : ''}" style="left:50%;top:${yOf(v.rows.length)}%" ${toLegend ? 'data-act="vlegend"' : 'disabled'}><img class="fit" src="${fishIcon(l, false, 48, 28)}" alt=""></button>`;
-    const home = `<span class="vspot home${v.row < 0 ? ' here' : ''}" style="left:50%;top:${yOf(-1)}%">${icon(v.row < 0 ? 'boat' : 'anchor', 2)}</span>`;
+    const legend = `<button class="vspot legend${toLegend ? ' reach' : ''}${v.stage === 'fight' || v.stage === 'over' ? ' here' : ''}" style="left:50%;top:${yOf(v.rows.length)}%" ${toLegend ? 'data-act="vlegend"' : 'disabled'}><img class="fit" src="${fishIcon(l, false, 80, 46)}" alt=""></button>`;
+    const home = `<span class="vspot home${v.row < 0 ? ' here' : ''}" style="left:50%;top:${yOf(-1)}%">${icon(v.row < 0 ? 'boat' : 'anchor', 3)}</span>`;
     const map = `<div class="vmap"><svg viewBox="0 0 100 100" preserveAspectRatio="none">${lines.join('')}</svg>${home}${spots}${legend}</div>`;
     let card = `<p class="vnote">${v.note}</p>`;
     if (v.stage === 'map') card += `<p class="note">${toLegend ? `Sail on to ${l.spot} to fight the ${l.name}.` : 'Choose where to sail next. Each move costs a supply.'}</p>`;

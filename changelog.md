@@ -4,6 +4,19 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-12  Fish Tree and voyage map: full height, bigger tiles
+  WHAT: The Fish Tree and the voyage panels now take the full sheet height
+        (not just their content) and the star map / sea map grow to fill it.
+        Tree fish tiles 64x50 (art 56x34, was 50x40 / 40x24); voyage spots
+        48px with icons at 27px (was 34 / 16), the legend 84x52, bigger
+        supplies/hull/haul bar. The tree header shows your Pearls (the
+        Pearls row is gone from the fish tiers); the voyage header drops
+        the money, so titles aren't cut to "Fish ..." / "Kelp ...". Small
+        phones (320 wide / under 600 tall) get slightly smaller tiles so
+        nothing overlaps or scrolls.
+  WHY:  The user found the Pearl upgrade tiers and the voyage screen
+        "tiny tiny": both sat in a half-height sheet with small art.
+
 2026-10-12  The First Mate: automated voyages
   WHAT: A FIRST MATE tab at the Pub. Hire once for 250M; four switches
         (all on when hired): Re-sail (the crew sails again for the last
