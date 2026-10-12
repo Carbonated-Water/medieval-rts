@@ -864,30 +864,70 @@ export const VOYAGE = {
   pearls: { coast: 1, ocean: 2, abyss: 4, old: 15 },
 };
 
-/** The Pub: sailors you sign to crew the Flagship on voyages without you. */
-export type CrewRole = 'captain' | 'navigator' | 'bosun' | 'harpooner';
-export const CREW_ROLE_ORDER: CrewRole[] = ['captain', 'navigator', 'bosun', 'harpooner'];
+/**
+ * The Flagship's upgrades (bought at the lighthouse): each helps your own
+ * voyages and your crew's. Level n costs price × PRICE_STEP^n.
+ */
+export type FlagshipUpId = 'hold' | 'hull' | 'stores' | 'sails' | 'harpoon';
+export const FLAGSHIP_UP_ORDER: FlagshipUpId[] = ['hold', 'hull', 'stores', 'sails', 'harpoon'];
+export const FLAGSHIP_UP_MAX = 5;
+export const FLAGSHIP_UP_STEP = 3;
+export const FLAGSHIP_UPS: Record<FlagshipUpId, { name: string; price: number; does: (n: number) => string }> = {
+  hold: { name: 'Bigger Hold', price: 8_000_000, does: (n) => `+${n * 20}% voyage haul` },
+  hull: { name: 'Iron Hull', price: 10_000_000, does: (n) => `+${n} hull · crew ${n * 5}% less rough seas` },
+  stores: { name: 'Galley Stores', price: 8_000_000, does: (n) => `+${n} supplies · crew +${n * 3}% legend` },
+  sails: { name: 'Swift Sails', price: 6_000_000, does: (n) => `Rest ${n * 12}% shorter · crew trips ${n * 6}% shorter` },
+  harpoon: { name: 'Harpoon Gun', price: 15_000_000, does: (n) => `Fight pull +${n * 15}% · crew +${n * 4}% legend` },
+};
+export const flagshipUpCost = (id: FlagshipUpId, n: number) => Math.round((FLAGSHIP_UPS[id].price * Math.pow(FLAGSHIP_UP_STEP, n)) / 100_000) * 100_000;
+
+/** The Pub: sailors you sign to crew the Flagship on voyages without you. Eight seats, one per role. */
+export type CrewRole = 'captain' | 'navigator' | 'bosun' | 'harpooner' | 'cook' | 'quartermaster' | 'lookout' | 'diver';
+export const CREW_ROLE_ORDER: CrewRole[] = ['captain', 'navigator', 'bosun', 'harpooner', 'cook', 'quartermaster', 'lookout', 'diver'];
 export const PUB = {
   board: 4, // sailors looking for work
   refresh: 1800, // new faces every 30 min
-  refreshPrice: 50_000,
-  signPerStar: 20_000, // signing fee
-  cutPerStar: 0.02, // each sailor's share of the haul money
+  refreshPrice: 5_000_000,
+  sign: [500_000, 2_500_000, 10_000_000, 40_000_000, 150_000_000], // signing fee by stars
+  cutPerStar: 0.012, // each sailor's share of the haul money
   haulShare: 0.6, // a crew's haul vs sailing yourself
-  captainPerStar: 0.1, // haul
+  captainPerStar: 0.12, // haul
   navPerStar: 0.08, // trip time
-  roughBase: 0.4, bosunPerStar: 0.08, // rough seas halve the haul
-  legendBase: 0.2, harpoonPerStar: 0.15, // bringing the legend home
+  roughBase: 0.4, bosunPerStar: 0.07, // rough seas halve the haul
+  legendBase: 0.2, harpoonPerStar: 0.13, // bringing the legend home
+  cookPerStar: 0.1, // the Flagship's rest after your voyages
+  qmPerStar: 0.1, // the crew's cut
+  lookoutPerStar: 0.15, // voyage finds (gear)
+  diverPerStar: 0.1, // a Pearl brought up each trip
   trip: { coast: 600, ocean: 1200, abyss: 2400 } as Record<Region, number>,
-  stars: [0.35, 0.65, 0.85, 0.96], // roll below each: 1, 2, 3, 4 stars; else 5
+  stars: [0.4, 0.72, 0.9, 0.975], // roll below each: 1, 2, 3, 4 stars; else 5
+  quirk: 0.55, // chance a sailor has a quirk
 };
 export const CREW_ROLES: Record<CrewRole, { name: string; does: (stars: number) => string }> = {
   captain: { name: 'Captain', does: (s) => `+${Math.round(s * PUB.captainPerStar * 100)}% haul` },
   navigator: { name: 'Navigator', does: (s) => `-${Math.round(s * PUB.navPerStar * 100)}% trip time` },
-  bosun: { name: 'Bosun', does: (s) => `${Math.round((PUB.roughBase - s * PUB.bosunPerStar) * 100)}% rough seas` },
-  harpooner: { name: 'Harpooner', does: (s) => `${Math.round((PUB.legendBase + s * PUB.harpoonPerStar) * 100)}% legend` },
+  bosun: { name: 'Bosun', does: (s) => `-${Math.round(s * PUB.bosunPerStar * 100)}% rough seas` },
+  harpooner: { name: 'Harpooner', does: (s) => `+${Math.round(s * PUB.harpoonPerStar * 100)}% legend` },
+  cook: { name: 'Cook', does: (s) => `-${Math.round(s * PUB.cookPerStar * 100)}% Flagship rest` },
+  quartermaster: { name: 'Quartermaster', does: (s) => `-${Math.round(s * PUB.qmPerStar * 100)}% crew cut` },
+  lookout: { name: 'Lookout', does: (s) => `+${Math.round(s * PUB.lookoutPerStar * 100)}% voyage finds` },
+  diver: { name: 'Diver', does: (s) => `${Math.round(s * PUB.diverPerStar * 100)}% chance of a Pearl` },
 };
-export const SAILOR_NAMES = ['Old Mags', 'Finn', 'Tib', 'Wren', 'Salty Pete', 'Ida', 'Bram', 'Nell', 'Hob', 'Rosa', 'Gus', 'Mira', 'Jory', 'Edda', 'Cobb', 'Lark',
+/** Quirks: a twist on a sailor, good or bad, and what it does to their fee. */
+export type QuirkId = 'lucky' | 'greedy' | 'cheap' | 'veteran' | 'salty' | 'swift' | 'shanty' | 'seasick' | 'drunk';
+export const QUIRKS: Record<QuirkId, { name: string; does: string; fee: number }> = {
+  lucky: { name: 'Lucky', does: '+5% legend', fee: 1.3 },
+  greedy: { name: 'Greedy', does: 'takes 3x cut', fee: 0.6 },
+  cheap: { name: 'Thrifty', does: 'takes no cut', fee: 1.4 },
+  veteran: { name: 'Veteran', does: 'works as +1 star', fee: 1.8 },
+  salty: { name: 'Salty', does: '-5% rough seas', fee: 1.2 },
+  swift: { name: 'Quick', does: '-5% trip time', fee: 1.2 },
+  shanty: { name: 'Singer', does: '+5% haul', fee: 1.3 },
+  seasick: { name: 'Seasick', does: '+10% rough seas', fee: 0.5 },
+  drunk: { name: 'Drunk', does: '-1 star some days', fee: 0.4 },
+};
+export const QUIRK_ORDER = Object.keys(QUIRKS) as QuirkId[];
+export const SAILOR_NAMES = ['Old Mags', 'Barnacle Bo', 'Quill', 'Marlo', 'Fen', 'Jasper', 'Odile', 'Rook', 'Spratt', 'Hettie', 'Calder', 'Pim', 'Yara', 'Dunstan', 'Moll', 'Ishmael', 'Greta', 'Tobiah', 'Sable', 'Wick', 'Finn', 'Tib', 'Wren', 'Salty Pete', 'Ida', 'Bram', 'Nell', 'Hob', 'Rosa', 'Gus', 'Mira', 'Jory', 'Edda', 'Cobb', 'Lark',
   'One-Eye Sal', 'Duff', 'Tilly', 'Ansel', 'Brine', 'Kit', 'Morwen', 'Ned'];
 
 /** The harbor: berths (how many boats), automation, and the warehouse (offline earnings cap). */

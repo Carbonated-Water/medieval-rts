@@ -4,6 +4,26 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-12  The Pub: eight crew roles, quirks, real prices; Flagship upgrades
+  WHAT: Four new seats: Cook (Flagship rests 10% less a star), Quartermaster
+        (crew cut -10% a star), Lookout (+15% voyage finds a star), Diver
+        (10% a star of a Pearl on any voyage home). Recruits can have a quirk
+        (55%): Lucky, Veteran (+1 star), Thrifty (no cut), Salty, Quick,
+        Singer, or the cheap ones, Greedy (3x cut), Seasick, Drunk (a star
+        lower some trips). Quirks change the fee. Signing costs
+        500k / 2.5M / 10M / 40M / 150M by stars (was 20k a star); new faces
+        cost 5M (was 50k); 5 stars roll 2.5% (was 4%). Lighthouse: an
+        UPGRADE button opens the Flagship's five upgrades (Bigger Hold,
+        Iron Hull, Galley Stores, Swift Sails, Harpoon Gun), 5 levels each,
+        x3 per level, each helping your own voyages and your crew's. The
+        crew tab is a 2-column grid of eight seats. Fixed: tight rows were
+        12px too wide (the Pub's refresh row scrolled sideways).
+  WHY:  The user could max the Pub in seconds: late-game income is legend
+        sales (30-70M/min in the harness), and fees were 20k a star. Playtest
+        (seeds 1, 2): all eight seats fill within an hour of the Flagship,
+        5-star crews take much longer, Flagship upgrades max about 2.5h
+        after buying it. Run 1 pacing unchanged.
+
 2026-10-12  School: tap a skill for what it does
   WHAT: Each School row has a blue ? on its icon; tapping the row (not its
         price) opens a parchment tip under it saying what the skill does

@@ -14,7 +14,7 @@
  */
 import {
   AUTO, BAITS, BERTHS, BITE_WAIT, BOATS, BOAT_ORDER, COMPANY_PRICE, GEAR_ITEMS, GEAR_SLOTS, GEAR_TIERS, HARBOR_UPGRADES, HOLDERS,
-  LEGENDS, PIER_STAFF, SKILLS, TREE_FISH, VOYAGE, rodReach, HEAD_STARTS, type GearDef, type GearKind, type HarborUpgradeId, type SkillId,
+  LEGENDS, CREW_ROLE_ORDER, FLAGSHIP_UP_ORDER, PIER_STAFF, SKILLS, TREE_FISH, VOYAGE, rodReach, HEAD_STARTS, type GearDef, type GearKind, type HarborUpgradeId, type SkillId,
 } from '../src/data';
 import { Game } from '../src/game';
 import { Fight } from '../src/fight';
@@ -328,7 +328,18 @@ class Bot {
     if (!g.flagship) return;
     for (const s of [...g.pubBoard]) {
       const seat = g.crew[s.role];
-      if ((!seat || seat.stars < s.stars) && this.can(g.signFee(s), 0.2) && g.signSailor(s.id)) { this.tap('voyage', 2); this.mark(`crew ${Object.keys(g.crew).length}`); }
+      if ((!seat || g.sailorStars(seat) < g.sailorStars(s)) && this.can(g.signFee(s), 0.2) && g.signSailor(s.id)) {
+        this.tap('voyage', 2);
+        this.mark(`crew ${Object.keys(g.crew).length}`);
+        if (CREW_ROLE_ORDER.every((r) => (g.crew[r]?.stars ?? 0) >= 5)) this.mark('crew all 5 stars');
+      }
+    }
+    // The Flagship's upgrades: the cheapest next level.
+    const up = FLAGSHIP_UP_ORDER.map((id) => ({ id, cost: g.flagshipUpCost(id) })).filter((u) => u.cost !== null).sort((a, b) => a.cost! - b.cost!)[0];
+    if (up && this.can(up.cost!, 0.3) && g.buyFlagshipUp(up.id)) {
+      this.tap('voyage', 2);
+      const n = FLAGSHIP_UP_ORDER.reduce((s, id) => s + g.flagshipUp(id), 0);
+      if (n === 1 || n === 10 || n === 25) this.mark(`flagship ups ${n}`);
     }
   }
 
@@ -371,7 +382,7 @@ class Bot {
         if (!v.used) {
           if (s.kind === 'fish') k = 0;
           else if (s.kind === 'wreck') k = v.hull >= 2 ? 0 : 1;
-          else if (s.kind === 'trader') k = v.supplies <= movesLeft ? 0 : v.hull < VOYAGE.hull ? 1 : 2;
+          else if (s.kind === 'trader') k = v.supplies <= movesLeft ? 0 : v.hull < V.maxHull(v) ? 1 : 2;
           else if (s.kind === 'event') k = v.supplies > movesLeft ? 0 : list.length - 1;
         } else if (s.kind === 'fish' && v.supplies > movesLeft + 1) k = 0;
         g.voyageChoose(k);

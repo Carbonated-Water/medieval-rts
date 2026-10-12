@@ -1,4 +1,4 @@
-import { HEAD_STARTS, type HeadStartId, ACHIEVEMENTS, BOATS, DEV_MULTIPLIER, HAND_NAMES, HARBOR_UPGRADES, LETTERS, TRACKS, type GroundId, type HarborUpgradeId, type TrackId, RODS, SKILLS, VARIANTS, baitById, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, LEGENDS, gearById, type GearSlot } from './data';
+import { HEAD_STARTS, type HeadStartId, ACHIEVEMENTS, BOATS, DEV_MULTIPLIER, HAND_NAMES, HARBOR_UPGRADES, LETTERS, TRACKS, type GroundId, type HarborUpgradeId, type TrackId, RODS, SKILLS, VARIANTS, baitById, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, LEGENDS, gearById, type GearSlot, FLAGSHIP_UPS, type FlagshipUpId } from './data';
 import { Game, type GearItem, fishById, type Line, type SaveData } from './game';
 import { Fight } from './fight';
 import { FightView } from './fightui';
@@ -200,6 +200,8 @@ function onAction(a: Action): void {
   else if (a.startsWith('lhWho:')) ui.lhWho = a.slice(6) as 'you' | 'crew';
   else if (a.startsWith('sign:')) { const s = game.pubBoard.find((x) => x.id === Number(a.slice(5))); if (s && game.signSailor(s.id)) note.banner(pixelIcon('crew'), 'SIGNED', `${s.name}, ${s.role}`, 'plain'); }
   else if (a === 'pubRefresh') game.refreshBoard();
+  else if (a === 'flagship') ui.open = 'flagship';
+  else if (a.startsWith('flagshipUp:')) { if (game.buyFlagshipUp(a.slice(11) as FlagshipUpId)) note.banner(pixelIcon('boat'), 'FLAGSHIP', FLAGSHIP_UPS[a.slice(11) as FlagshipUpId].name, 'plain'); }
   else if (a.startsWith('crewSail:')) { if (game.sendCrew(a.slice(9))) { note.banner(pixelIcon('boat'), 'CREW SAILED', LEGENDS.find((l) => l.id === a.slice(9))!.spot, 'plain'); ui.open = null; } }
   else if (a.startsWith('charTab:')) ui.charTab = a.slice(8) as 'gear' | 'bag';
   else if (a.startsWith('gpick:')) ui.gsPick = a.slice(6);

@@ -2,7 +2,7 @@ import { rodReach, HEAD_STARTS, type HeadStartId, TRAITS, HARBOR_STAFF,
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_ORDER, COMPANY_PRICE, COMPANY_UNLOCK_EARNED, DEV_MULTIPLIER, GROUNDS, HARBOR_UPGRADES,
   MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, PIER_STAFF, HANDS_MAX,
   TRACKS, TRACK_MAX, TRACK_ORDER, WAREHOUSE, type HarborUpgradeId, type TrackId, HAND_NAMES, HAND_SKILL_MAX, LETTERS, RODS, HAND_RODS, FISH, GEAR, PERFECT_PER_LEVEL, SKILLS, STRENGTH_PER_LEVEL, HAGGLE_PER_LEVEL,
-  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, TREE_FISH, type TreeFish, PUB, CREW_ROLES, CREW_ROLE_ORDER, LEGENDS, EXOTIC, REGIONS, VOYAGE, GEAR_BAG, GEAR_ITEMS, GEAR_SLOTS, GEAR_TIERS, STATS, STAT_ORDER, SETS, SET_SLOTS, KEEN_EYE, FORTUNE_SCALE, LUCK_SCALE, SKILL_TIER_BONUS, NETS, setPieceId, gearById, type SetId, type GearDef, type GearSlot, type GearTier, type StatId,
+  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, TREE_FISH, type TreeFish, PUB, CREW_ROLES, CREW_ROLE_ORDER, QUIRKS, FLAGSHIP_UPS, FLAGSHIP_UP_ORDER, FLAGSHIP_UP_MAX, type FlagshipUpId, LEGENDS, EXOTIC, REGIONS, VOYAGE, GEAR_BAG, GEAR_ITEMS, GEAR_SLOTS, GEAR_TIERS, STATS, STAT_ORDER, SETS, SET_SLOTS, KEEN_EYE, FORTUNE_SCALE, LUCK_SCALE, SKILL_TIER_BONUS, NETS, setPieceId, gearById, type SetId, type GearDef, type GearSlot, type GearTier, type StatId,
 } from './data';
 import { type Boat, type Exotic, type Game, type GearItem, type Sailor, fishById } from './game';
 import * as V from './voyage';
@@ -11,13 +11,13 @@ import { fisherIcon, gearIcon, pixelFishIcon as fishIcon, pixelIcon, type HatSty
 import type { Place } from './scene';
 
 /** One panel per job: the market sells fish, the tackle shop sells gear, the school trains skills. */
-export type Panel = 'pub' | 'gearshop' | 'character' | 'gearitem' | 'stats' | 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'ledger' | 'boat' | 'tree' | 'retire' | 'lighthouse' | 'exotic' | 'listing' | 'voyage' | 'shipyard' | 'harborup' | 'pier' | 'pierstaff' | 'hand' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
+export type Panel = 'pub' | 'flagship' | 'gearshop' | 'character' | 'gearitem' | 'stats' | 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'ledger' | 'boat' | 'tree' | 'retire' | 'lighthouse' | 'exotic' | 'listing' | 'voyage' | 'shipyard' | 'harborup' | 'pier' | 'pierstaff' | 'hand' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
 
 export type Action =
   | 'cast' | 'reel' | 'close' | 'back' | 'reset' | 'toggleDev' | Panel
   | `gsMode:${'buy' | 'sell'}` | `gpick:${string}` | 'keenEye' | `gbuy:${string}` | `gsel:${'bag' | 'eq'}:${string}`
   | `gequip:${number}` | `gunequip:${GearSlot}` | `gsell:${number}` | 'gsellall' | `charTab:${'gear' | 'bag'}` | `buyN:${'1' | '5' | 'max'}` | 'trainAll' | 'toggleBuzz' | `pubTab:${'board' | 'crew'}` | `sign:${number}` | 'pubRefresh' | `crewSail:${string}` | `lhWho:${'you' | 'crew'}` | `fight:${string}` | 'fightDone' | `lhRegion:${'coast' | 'ocean' | 'abyss'}`
-  | 'buyFlagship' | `sail:${string}` | `vsail:${number}` | `vchoose:${number}` | 'vlegend' | 'vfight' | 'vhome'
+  | 'buyFlagship' | 'flagship' | `flagshipUp:${FlagshipUpId}` | `sail:${string}` | `vsail:${number}` | `vchoose:${number}` | 'vlegend' | 'vfight' | 'vhome'
   | `exTab:${'hold' | 'listed' | 'wanted'}` | `exList:${number}` | `exUnlist:${number}` | `exOpen:${number}` | `exSell:${number}:${number}` | `exGive:${number}` | 'exDev' | 'boatPrev' | 'boatNext' | `coTab:${'harbor' | 'ledger' | 'harborup'}`
   | `achTab:${'base' | 'tree'}` | `treeTier:${number}` | `treeSel:${string}` | `unlock:${string}` | `retireTab:${'retire' | 'family'}` | `heir:${number}` | 'heirloom' | `perk:${HeadStartId}` | 'doRetire' | `journalTier:${number}`
   | 'sellAll' | `sellFish:${string}` | `buy:${GearKind}` | `train:${SkillId}` | `skillTip:${SkillId}` | 'claimAll' | `trophy:${string}`
@@ -125,7 +125,7 @@ export class UI {
     if (panel === 'boat' || panel === 'shipyard') return this.coTab;
     if (panel === 'gearitem') return this.gearFrom;
     if (panel === 'stats') return 'character';
-    return ({ hand: 'pier', pierstaff: 'pier', tree: 'settings', retire: 'settings', listing: 'exotic', voyage: 'lighthouse' } as Partial<Record<Panel, Panel>>)[panel ?? 'market'] ?? null;
+    return ({ hand: 'pier', pierstaff: 'pier', tree: 'settings', retire: 'settings', listing: 'exotic', voyage: 'lighthouse', flagship: 'lighthouse' } as Partial<Record<Panel, Panel>>)[panel ?? 'market'] ?? null;
   }
   /** Trophy page: the originals, or the Fish Tree's. */
   achTab: 'base' | 'tree' = 'base';
@@ -251,6 +251,7 @@ export class UI {
             : panel === 'journal' ? [`Journal ${Object.keys(game.journal).length}/${FISH.length + TREE_FISH.filter((f) => f.side === 'river').length}`, this.journalHtml(game)]
             : panel === 'tree' ? ['Fish Tree', this.treeHtml(game)]
             : panel === 'lighthouse' ? ['Lighthouse', this.lighthouseHtml(game)]
+            : panel === 'flagship' ? ['Flagship', this.flagshipHtml(game)]
             : panel === 'voyage' ? [game.voyage ? V.legendOf(game.voyage).spot : 'Voyage', this.voyageHtml(game)]
             : panel === 'exotic' ? ['Exotic Market', this.exoticHtml(game)]
             : panel === 'listing' ? [this.listingTitle(game), this.listingHtml(game)]
@@ -700,13 +701,14 @@ export class UI {
   private lighthouseHtml(game: Game): string {
     if (!game.company) return `<div class="row"><div class="slot">${icon('lock')}</div><div class="meta"><b>Boarded up</b><div class="sub"><small>Own the Fishing Co. first</small></div></div></div>`;
     const r = this.lhRegion, rest = Math.ceil(game.flagshipRest);
+    const upgrade = `<button class="btn plain" data-act="flagship">UPGRADE</button>`;
     // The Flagship: buy it, at sea (resume), resting, or ready.
     const ship = !game.flagship
       ? `<div class="row"><div class="slot">${icon('boat')}</div><div class="meta"><b>The Flagship</b><div class="sub"><small>Sail to the legends</small></div></div>
         <button class="btn" data-act="buyFlagship" ${game.money < VOYAGE.flagship ? 'disabled' : ''}>${cash(VOYAGE.flagship)}</button></div>`
-      : game.crewTrip ? `<div class="row tight"><div class="slot">${icon('crew')}</div><div class="meta"><b>Crew at sea</b><div class="sub"><small>${LEGENDS.find((l) => l.id === game.crewTrip!.legend)!.spot} · ${clock(game.crewTrip.dur - game.crewTrip.t)} left</small></div></div></div>`
+      : game.crewTrip ? `<div class="row tight"><div class="slot">${icon('crew')}</div><div class="meta"><b>Crew at sea</b><div class="sub"><small>${LEGENDS.find((l) => l.id === game.crewTrip!.legend)!.spot} · ${clock(game.crewTrip.dur - game.crewTrip.t)} left</small></div></div>${upgrade}</div>`
       : game.voyage ? `<div class="row"><div class="slot">${icon('boat')}</div><div class="meta"><b>At sea</b><div class="sub"><small>${V.legendOf(game.voyage).spot}</small></div></div><button class="btn" data-act="voyage">RESUME</button></div>`
-      : `<div class="row tight"><div class="slot">${icon('boat')}</div><div class="meta"><b>The Flagship</b><div class="sub"><small>${game.canSail() ? 'Ready to sail' : `Resting ${Math.floor(rest / 60)}:${String(rest % 60).padStart(2, '0')}`}</small></div></div></div>`;
+      : `<div class="row tight"><div class="slot">${icon('boat')}</div><div class="meta"><b>The Flagship</b><div class="sub"><small>${game.canSail() ? 'Ready to sail' : `Resting ${Math.floor(rest / 60)}:${String(rest % 60).padStart(2, '0')}`}</small></div></div>${upgrade}</div>`;
     const tabs = `<div class="tiers three">${(['coast', 'ocean', 'abyss'] as const).map((k) => `<button class="tab${r === k ? ' on' : ''}" style="--c:${k === 'coast' ? '#2eb082' : k === 'ocean' ? '#2f6fd6' : '#4a3a7a'}" data-act="lhRegion:${k}">${game.regionOpen(k) ? '' : icon('lock', 2)}${REGIONS[k].name.toUpperCase()}</button>`).join('')}</div>`;
     // With a Captain signed at the Pub, choose who sails.
     const crewing = game.canSendCrew(), who = crewing ? this.lhWho : 'you';
@@ -726,31 +728,43 @@ export class UI {
 
   // ---------- the Pub ----------
 
-  /** Sailors for hire (RECRUITS) and your four seats (CREW). */
+  /** Sailors for hire (RECRUITS) and your eight seats (CREW). */
   private pubHtml(game: Game): string {
     if (!game.flagship) return `<div class="row"><div class="slot">${icon('lock')}</div><div class="meta"><b>Closed</b><div class="sub"><small>Buy the Flagship at the lighthouse</small></div></div></div>`;
     const seated = CREW_ROLE_ORDER.filter((r) => game.crew[r]).length;
-    const tabs = `<div class="tiers two"><button class="tab${this.pubTab === 'board' ? ' on' : ''}" style="--c:#7a3a2a" data-act="pubTab:board">RECRUITS</button><button class="tab${this.pubTab === 'crew' ? ' on' : ''}" style="--c:#7a3a2a" data-act="pubTab:crew">CREW ${seated}/4</button></div>`;
+    const tabs = `<div class="tiers two"><button class="tab${this.pubTab === 'board' ? ' on' : ''}" style="--c:#7a3a2a" data-act="pubTab:board">RECRUITS</button><button class="tab${this.pubTab === 'crew' ? ' on' : ''}" style="--c:#7a3a2a" data-act="pubTab:crew">CREW ${seated}/${CREW_ROLE_ORDER.length}</button></div>`;
     const stars = (n: number) => `<span class="stars">${Array.from({ length: 5 }, (_, k) => `<img src="${pixelIcon('star', 2)}" class="${k < n ? '' : 'off'}" alt="">`).join('')}</span>`;
-    const who = (s: Sailor) => `<b>${s.name} <span class="small">${CREW_ROLES[s.role].name.toUpperCase()}</span></b>`;
+    const quirk = (s: Sailor) => (s.quirk ? `<span class="quirk${QUIRKS[s.quirk].fee < 1 ? ' bad' : ''}">${QUIRKS[s.quirk].name.toUpperCase()}</span>` : '');
     if (this.pubTab === 'crew') {
-      const rows = CREW_ROLE_ORDER.map((r) => {
+      const seats = CREW_ROLE_ORDER.map((r) => {
         const s = game.crew[r];
-        return s ? `<div class="row"><div class="slot">${icon('crew')}</div><div class="meta">${who(s)}<div class="sub">${stars(s.stars)}<small>${CREW_ROLES[r].does(s.stars)}</small></div></div></div>`
-          : `<div class="row"><div class="slot">${icon('crew')}</div><div class="meta"><b class="none">${CREW_ROLES[r].name}</b><div class="sub"><small>Empty seat</small></div></div></div>`;
+        return s ? `<div class="seat"><b>${CREW_ROLES[r].name.toUpperCase()}</b><span>${s.name}</span><div class="sl">${stars(s.stars)}${quirk(s)}</div><small>${CREW_ROLES[r].does(game.sailorStars(s))}${s.quirk ? `<br>${QUIRKS[s.quirk].does}` : ''}</small></div>`
+          : `<div class="seat open"><b>${CREW_ROLES[r].name.toUpperCase()}</b><span>Empty seat</span><small>Per star: ${CREW_ROLES[r].does(1)}</small></div>`;
       }).join('');
       const o = game.crewOdds();
-      const sum = game.crew.captain ? `Haul ${Math.round(o.haul * 100)}% of yours · they take ${Math.round(o.cut * 100)}% · legend ${Math.round(o.legend * 100)}% · rough seas ${Math.round(o.rough * 100)}%` : 'Sign a Captain to send the crew out.';
-      return tabs + rows + `<p class="note">${sum}</p>`;
+      const sum = game.crew.captain ? `Haul ${Math.round(o.haul * 100)}% of yours · cut ${Math.round(o.cut * 100)}% · legend ${Math.round(o.legend * 100)}% · rough ${Math.round(o.rough * 100)}%` : 'Sign a Captain to send the crew out.';
+      return tabs + `<div class="seats">${seats}</div><p class="note">${sum}</p>`;
     }
     const rows = game.pubBoard.map((s) => {
       const mine = game.crew[s.role];
-      return `<div class="row"><div class="slot">${icon('crew')}</div><div class="meta">${who(s)}<div class="sub">${stars(s.stars)}<small>${CREW_ROLES[s.role].does(s.stars)}${mine ? ` · yours ${mine.stars}` : ''}</small></div></div>
+      return `<div class="row"><div class="meta"><b>${s.name} <span class="small">${CREW_ROLES[s.role].name.toUpperCase()}</span></b><div class="sub">${stars(s.stars)}${quirk(s)}${mine ? `<small class="fx">yours: ${mine.stars}</small>` : ''}</div><small class="fx">${CREW_ROLES[s.role].does(game.sailorStars(s))}${s.quirk ? ` · ${QUIRKS[s.quirk].does}` : ''}</small></div>
         <button class="btn" data-act="sign:${s.id}" ${game.money < game.signFee(s) ? 'disabled' : ''}>${cash(game.signFee(s))}</button></div>`;
     }).join('') || '<p class="empty">Everyone here signed on. New faces soon.</p>';
     const left = Math.max(0, Math.ceil(PUB.refresh - game.pubClock));
     return tabs + rows + `<div class="row tight"><div class="meta"><div class="sub"><small>New faces ${clock(left)}</small></div></div>
       <button class="btn plain" data-act="pubRefresh" ${game.money < PUB.refreshPrice ? 'disabled' : ''}>${cash(PUB.refreshPrice)}</button></div>`;
+  }
+
+  /** The Flagship's upgrades: one row each, what the next level does, its price. */
+  private flagshipHtml(game: Game): string {
+    const ic: Record<FlagshipUpId, IconName> = { hold: 'trap', hull: 'anchor', stores: 'bag', sails: 'boat', harpoon: 'hook' };
+    const rows = FLAGSHIP_UP_ORDER.map((id) => {
+      const u = FLAGSHIP_UPS[id], n = game.flagshipUp(id), cost = game.flagshipUpCost(id);
+      const pips = `<span class="pips">${Array.from({ length: FLAGSHIP_UP_MAX }, (_, k) => `<i class="${k < n ? 'on' : ''}"></i>`).join('')}</span>`;
+      const btn = cost === null ? '<span class="maxed">MAX</span>' : `<button class="btn" data-act="flagshipUp:${id}" ${game.money < cost ? 'disabled' : ''}>${cash(cost)}</button>`;
+      return `<div class="row"><div class="slot">${icon(ic[id])}</div><div class="meta"><b>${u.name}</b><div class="sub">${pips}</div><small class="fx wrap">${cost === null ? u.does(n) : `Next: ${u.does(n + 1)}`}</small></div>${btn}</div>`;
+    }).join('');
+    return rows;
   }
 
   // ---------- voyages ----------
@@ -765,7 +779,7 @@ export class UI {
     const v = game.voyage;
     if (!v) return '<p class="empty">No voyage under way.</p>';
     const l = V.legendOf(v);
-    const stat = `<div class="vstat"><span>${icon('bag', 2)}${v.supplies} ${v.supplies === 1 ? 'supply' : 'supplies'}</span><span>${icon('anchor', 2)}${'#'.repeat(v.hull).replace(/#/g, '<i class="hp"></i>')}${'<i class="hp lost"></i>'.repeat(Math.max(0, VOYAGE.hull - v.hull))}</span><span>${icon('coin', 2)}$${kmb(v.haul)}</span></div>`;
+    const stat = `<div class="vstat"><span>${icon('bag', 2)}${v.supplies} ${v.supplies === 1 ? 'supply' : 'supplies'}</span><span>${icon('anchor', 2)}${'#'.repeat(v.hull).replace(/#/g, '<i class="hp"></i>')}${'<i class="hp lost"></i>'.repeat(Math.max(0, V.maxHull(v) - v.hull))}</span><span>${icon('coin', 2)}$${kmb(v.haul)}</span></div>`;
     // Positions in the map box (percent): rows from the bottom up, spots spread across.
     const yOf = (row: number) => (row < 0 ? 90 : row >= v.rows.length ? 9 : 70 - row * 21);
     const xOf = (row: number, i: number) => (row < 0 || row >= v.rows.length ? 50 : ((i + 0.5) / v.rows[row]!.length) * 100);

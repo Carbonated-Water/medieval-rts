@@ -262,7 +262,7 @@ body.fighting .banner, body.fighting #notes { visibility: hidden; }
 #notes .line span { max-width: 60vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #sheet small.warn { color: var(--red); }
 /* Ledger rows. */
-#sheet .row.tight { padding: 3px 6px; width: 100%; text-align: left; font: inherit; color: inherit; }
+#sheet .row.tight { padding: 3px 6px; width: 100%; box-sizing: border-box; text-align: left; font: inherit; color: inherit; }
 #sheet .row.tight .slot { width: 30px; height: 26px; }
 #sheet .row.tight .meta { gap: 3px; }
 #sheet .row.tight .meta b { font: 16px/1 'Kenney Mini'; }
@@ -446,3 +446,24 @@ body.fighting .banner, body.fighting #notes { visibility: hidden; }
 #sheet .row.open { box-shadow: inset 0 0 0 2px #2f6fd6; }
 #sheet .tip { position: relative; margin: 2px 6px 4px; padding: 6px 8px; font: 14px/1.2 'Kenney Mini'; color: var(--ink); background: var(--parch-light); box-shadow: 0 0 0 2px var(--outline), 0 3px 0 rgba(46, 31, 18, 0.35); }
 #sheet .tip:before { content: ''; position: absolute; left: 22px; top: -10px; border: 4px solid transparent; border-bottom-color: var(--outline); }
+
+/* The Pub: eight seats, two to a row; quirks. */
+#sheet .seats { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+#sheet .seat { display: flex; flex-direction: column; gap: 1px; padding: 4px 6px; background: var(--parch); box-shadow: inset 0 0 0 2px var(--parch-dark); min-width: 0; }
+#sheet .seat b { font: 13px/1 'Kenney Mini'; font-weight: normal; color: #7a3a2a; }
+#sheet .seat span { font: 22px/0.8 'Kenney Pixel'; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#sheet .seat small { font: 12px/1.05 'Kenney Mini'; color: var(--ink-soft); }
+#sheet .seat .stars { margin: 1px 0; }
+#sheet .seat.open span, #sheet .seat.open b { color: var(--ink-soft); }
+#sheet .seat span.quirk { font: 11px/1 'Kenney Mini'; color: #fff; white-space: nowrap; }
+#sheet .quirk { display: inline-block; padding: 1px 3px; font: 11px/1 'Kenney Mini'; color: #fff; background: #2e8a4a; vertical-align: middle; }
+#sheet .seat .sl { display: flex; align-items: center; gap: 4px; }
+#sheet .seat .sl .stars { margin: 0; }
+#sheet .seat small { white-space: normal; }
+#sheet .sub .quirk { margin-right: 6px; }
+#sheet .quirk.bad { background: #a03a2a; }
+/* The Flagship's upgrade pips. */
+#sheet .pips { display: inline-flex; gap: 2px; vertical-align: middle; margin-right: 6px; }
+#sheet .pips i { width: 8px; height: 8px; background: var(--parch-dark); }
+#sheet .pips i.on { background: var(--gold); box-shadow: inset 0 0 0 1px #8a5a10; }
+#sheet small.fx { font-size: 13px; }

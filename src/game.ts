@@ -7,7 +7,7 @@ import {
   MIN_BITE_WAIT, REEL_WINDOW, PERFECT_ZONE, PERFECT_PER_LEVEL, PERFECT_VALUE, AUTO_PERFECT_REF, AUTO_PERFECT_MAX, STRENGTH_FIGHT, REFLEX_PER_LEVEL, RODS, HAND_RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, START_WORMS, STRENGTH_PER_LEVEL, TIERS,
   TOO_STRONG_WEIGHT, VARIANTS, VARIANT_ORDER, WORMS_PER_PICK, WORM_SPAWN_SECONDS, WORM_SPOTS, baitById,
   type AchStat, type AchievementDef, type BaitId, type FishDef, type GearKind, type SkillId, type Tier, type Variant,
-  CHUMS, FRENZY_SPEED, ICEBOXES, NETS, GEAR_BAG, GEAR_SELL, DROP_SELL, PUB, CREW_ROLE_ORDER, SAILOR_NAMES, type CrewRole, GEAR_SLOTS, GEAR_TIERS, LEGACY_GEAR, STARTER_GEAR, gearById, rodReach, type GearDef, type GearSlot, type StatId, type GearTier,
+  CHUMS, FRENZY_SPEED, ICEBOXES, NETS, GEAR_BAG, GEAR_SELL, DROP_SELL, PUB, CREW_ROLE_ORDER, SAILOR_NAMES, type CrewRole, QUIRKS, QUIRK_ORDER, type QuirkId, FLAGSHIP_UPS, FLAGSHIP_UP_MAX, flagshipUpCost, type FlagshipUpId, GEAR_SLOTS, GEAR_TIERS, LEGACY_GEAR, STARTER_GEAR, gearById, rodReach, type GearDef, type GearSlot, type StatId, type GearTier,
   GEAR_ITEMS, SETS, SET_ORDER, SET_SLOTS, SET_TIERS, SET_BONUS_SCALE, setPieceId, DROP_CHANCE, KEEN_EYE, VOYAGE_PIECE, DROP_ROLL, FINE_ROLL, LUCK_SCALE, FORTUNE_SCALE, STAT_CAP, STAT_ORDER, type SetId, type SetEffect, type SetSlot,
   BILLFISH, SEA_FISH, SHELLFISH, TREE_FISH, pearlsFor, HEAD_STARTS, HEAD_START_CASH, type HeadStartId, TRAITS, TRAIT_ORDER, HEIR_NAMES, type TraitId, treeFishById, type TreeFish, COLLECTORS, EXOTIC, LEGENDS, VOYAGE, type LegendDef, type Region,
 } from './data';
@@ -88,6 +88,8 @@ export interface SaveData {
   /** Voyages: the Flagship, its rest, the voyage under way, legends landed (kept on retire). */
   flagship?: boolean;
   flagshipRest?: number;
+  /** The Flagship's upgrade levels. */
+  flagshipUps?: Partial<Record<FlagshipUpId, number>>;
   voyage?: V.VoyageState | null;
   /** The Pub: your crew, the board of sailors, its clock, a crew voyage under way. */
   crew?: Partial<Record<CrewRole, Sailor>>;
@@ -171,9 +173,9 @@ const ALL_FISH: FishDef[] = [...FISH, ...SEA_FISH, ...SHELLFISH, ...BILLFISH, ..
  * for a bought piece; better, with bonus stats, for one found fishing).
  */
 /** A sailor from the Pub. */
-export interface Sailor { id: number; name: string; role: CrewRole; stars: number }
+export interface Sailor { id: number; name: string; role: CrewRole; stars: number; quirk?: QuirkId }
 /** A crew voyage under way: the legend it's after, time, and the crew's stars when they sailed. */
-export interface CrewTrip { legend: string; t: number; dur: number; crew: Partial<Record<CrewRole, number>> }
+export interface CrewTrip { legend: string; t: number; dur: number; crew: Partial<Record<CrewRole, number>>; quirks?: QuirkId[] }
 /** A crew home: haul paid (after their cut), rough seas, the legend or not. */
 export interface CrewResult { legend: string; haul: number; cut: number; rough: boolean; caught: boolean; pearls: number; sold: number; gear?: GearItem | null }
 
@@ -258,6 +260,7 @@ export class Game {
   nextGearId = 1;
   flagship = false;
   flagshipRest = 0;
+  flagshipUps: Partial<Record<FlagshipUpId, number>> = {};
   voyage: V.VoyageState | null = null;
   crew: Partial<Record<CrewRole, Sailor>> = {};
   pubBoard: Sailor[] = [];
@@ -484,7 +487,8 @@ export class Game {
   /** A voyage home: maybe a voyage-only piece (one you don't have yet if any are left). */
   private voyagePiece(region: Region): GearItem | null {
     const p = VOYAGE_PIECE[region];
-    if (this.rng() >= p.chance) return null;
+    // A Lookout spots more.
+    if (this.rng() >= Math.min(0.95, p.chance * (1 + PUB.lookoutPerStar * (this.crewStars().lookout ?? 0)))) return null;
     const slotOf = (s: SetId) => SET_SLOTS.find((x) => SETS[s].pieces[x].source === 'voyage')!;
     const have = new Set([...GEAR_SLOTS.map((s) => this.equipped[s]), ...this.gearBag].filter((g): g is GearItem => !!g).map((g) => { const d = this.gearDef(g); return `${d.set}-${d.slot}`; }));
     const missing = SET_ORDER.filter((s) => !have.has(`${s}-${slotOf(s)}`));
@@ -642,6 +646,29 @@ export class Game {
     return true;
   }
 
+  flagshipUp(id: FlagshipUpId): number {
+    return this.flagshipUps[id] ?? 0;
+  }
+
+  /** The next level's price, or null at the top. */
+  flagshipUpCost(id: FlagshipUpId): number | null {
+    const n = this.flagshipUp(id);
+    return n >= FLAGSHIP_UP_MAX ? null : flagshipUpCost(id, n);
+  }
+
+  buyFlagshipUp(id: FlagshipUpId): boolean {
+    const cost = this.flagshipUpCost(id);
+    if (!this.flagship || !FLAGSHIP_UPS[id] || cost === null || this.money < cost) return false;
+    this.money -= cost;
+    this.flagshipUps = { ...this.flagshipUps, [id]: this.flagshipUp(id) + 1 };
+    return true;
+  }
+
+  /** How long the Flagship rests after you sail: shorter with Swift Sails and a Cook. */
+  flagshipRestTime(): number {
+    return Math.round(VOYAGE.rest * (1 - 0.12 * this.flagshipUp('sails')) * (1 - PUB.cookPerStar * (this.crewStars().cook ?? 0)));
+  }
+
   /** A region opens once you've landed a legend of the one before (Coast is always open). */
   regionOpen(r: Region): boolean {
     const landedIn = (x: Region) => LEGENDS.some((l) => l.region === x && this.landed[l.id]);
@@ -665,6 +692,11 @@ export class Game {
     if (!l || !this.canSail() || !this.legendOpen(l)) return false;
     this.voyage = V.newVoyage(legend, this.rng);
     if (this.setEffect('plunder')) this.voyage.supplies++;
+    // The Flagship's upgrades: more supplies and hull, a bigger hold.
+    this.voyage.supplies += this.flagshipUp('stores');
+    this.voyage.hull += this.flagshipUp('hull');
+    this.voyage.maxHull = this.voyage.hull;
+    this.voyage.haulX = 1 + 0.2 * this.flagshipUp('hold');
     return true;
   }
 
@@ -707,9 +739,12 @@ export class Game {
       out.pearls = V.pearlsFor(l);
       this.pearls += out.pearls;
     }
-    if (v.result !== 'failed') out.gear = this.voyagePiece(V.legendOf(v).region);
+    if (v.result !== 'failed') {
+      out.gear = this.voyagePiece(V.legendOf(v).region);
+      out.pearls += this.diverPearl();
+    }
     this.voyage = null;
-    this.flagshipRest = VOYAGE.rest;
+    this.flagshipRest = this.flagshipRestTime();
     return out;
   }
 
@@ -718,7 +753,16 @@ export class Game {
   private rollSailor(): Sailor {
     const r = this.rng(), stars = 1 + PUB.stars.filter((p) => r >= p).length;
     const role = CREW_ROLE_ORDER[Math.floor(this.rng() * CREW_ROLE_ORDER.length)]!;
-    return { id: this.nextSailorId++, name: SAILOR_NAMES[Math.floor(this.rng() * SAILOR_NAMES.length)]!, role, stars };
+    const s: Sailor = { id: this.nextSailorId++, name: SAILOR_NAMES[Math.floor(this.rng() * SAILOR_NAMES.length)]!, role, stars };
+    if (this.rng() < PUB.quirk) s.quirk = QUIRK_ORDER[Math.floor(this.rng() * QUIRK_ORDER.length)]!;
+    return s;
+  }
+
+  /** A Diver may bring up a Pearl on any voyage that makes it home. */
+  private diverPearl(): number {
+    if (this.rng() >= PUB.diverPerStar * (this.crewStars().diver ?? 0)) return 0;
+    this.pearls++;
+    return 1;
   }
 
   private fillBoard(): void {
@@ -741,8 +785,10 @@ export class Game {
     return true;
   }
 
+  /** Stars set the fee; a quirk raises or lowers it. */
   signFee(s: Sailor): number {
-    return s.stars * PUB.signPerStar;
+    const base = PUB.sign[Math.min(s.stars, PUB.sign.length) - 1]!;
+    return Math.round((base * (s.quirk ? QUIRKS[s.quirk].fee : 1)) / 10_000) * 10_000;
   }
 
   /** Sign a sailor from the board into their role's seat (the one there goes home). */
@@ -757,22 +803,39 @@ export class Game {
     return true;
   }
 
-  /** What your crew would do on a voyage: haul multiplier, their cut, rough-sea and legend chances, trip time multiplier. */
-  crewOdds(crew: Partial<Record<CrewRole, number>> = this.crewStars()): { haul: number; cut: number; rough: number; legend: number; time: number } {
-    const s = (r: CrewRole) => crew[r] ?? 0;
+  /**
+   * What your crew would do on a voyage: haul multiplier, their cut,
+   * rough-sea and legend chances, trip time multiplier. Seats, their quirks
+   * (one per seat, in seat order) and the Flagship's upgrades all count.
+   */
+  crewOdds(crew: Partial<Record<CrewRole, number>> = this.crewStars(), quirks: (QuirkId | '')[] = this.crewQuirks()): { haul: number; cut: number; rough: number; legend: number; time: number } {
+    const s = (r: CrewRole) => crew[r] ?? 0, q = (id: QuirkId) => quirks.filter((x) => x === id).length, up = (id: FlagshipUpId) => this.flagshipUp(id);
+    // Each sailor's cut goes by their stars: a Greedy one takes three times theirs, a Thrifty one none.
+    const seats = CREW_ROLE_ORDER.filter((r) => crew[r]);
+    const shares = seats.reduce((n, r, i) => n + s(r) * (quirks[i] === 'greedy' ? 3 : quirks[i] === 'cheap' ? 0 : 1), 0);
     return {
-      haul: PUB.haulShare * (1 + s('captain') * PUB.captainPerStar),
-      cut: CREW_ROLE_ORDER.reduce((n, r) => n + s(r), 0) * PUB.cutPerStar,
-      rough: Math.max(0, PUB.roughBase - s('bosun') * PUB.bosunPerStar),
-      legend: s('harpooner') ? Math.min(0.95, PUB.legendBase + s('harpooner') * PUB.harpoonPerStar) : 0,
-      time: 1 - s('navigator') * PUB.navPerStar,
+      haul: PUB.haulShare * (1 + s('captain') * PUB.captainPerStar + 0.05 * q('shanty')) * (1 + 0.2 * up('hold')),
+      cut: shares * PUB.cutPerStar * (1 - s('quartermaster') * PUB.qmPerStar),
+      rough: Math.min(0.9, Math.max(0, PUB.roughBase - s('bosun') * PUB.bosunPerStar - 0.05 * up('hull') - 0.05 * q('salty') + 0.1 * q('seasick'))),
+      legend: s('harpooner') ? Math.min(0.95, PUB.legendBase + s('harpooner') * PUB.harpoonPerStar + 0.05 * q('lucky') + 0.03 * up('stores') + 0.04 * up('harpoon')) : 0,
+      time: Math.max(0.2, (1 - s('navigator') * PUB.navPerStar - 0.05 * q('swift')) * (1 - 0.06 * up('sails'))),
     };
+  }
+
+  /** A sailor's stars at work: a Veteran works one higher. */
+  sailorStars(s: Sailor): number {
+    return s.stars + (s.quirk === 'veteran' ? 1 : 0);
   }
 
   private crewStars(): Partial<Record<CrewRole, number>> {
     const out: Partial<Record<CrewRole, number>> = {};
-    for (const r of CREW_ROLE_ORDER) if (this.crew[r]) out[r] = this.crew[r]!.stars;
+    for (const r of CREW_ROLE_ORDER) if (this.crew[r]) out[r] = this.sailorStars(this.crew[r]!);
     return out;
+  }
+
+  /** The seated sailors' quirks, one per seat in seat order ('' for none). */
+  private crewQuirks(): (QuirkId | '')[] {
+    return CREW_ROLE_ORDER.filter((r) => this.crew[r]).map((r) => this.crew[r]!.quirk ?? '');
   }
 
   /** How long the crew is gone for this legend's region. */
@@ -789,7 +852,10 @@ export class Game {
     const l = LEGENDS.find((x) => x.id === legend);
     if (!l || !this.canSendCrew() || !this.legendOpen(l)) return false;
     const dur = this.crewTripTime(l);
-    this.crewTrip = { legend, t: 0, dur, crew: this.crewStars() };
+    // A Drunk works a star lower on some trips.
+    const crew = this.crewStars();
+    for (const r of CREW_ROLE_ORDER) if (this.crew[r]?.quirk === 'drunk' && this.rng() < 0.5) crew[r] = Math.max(1, crew[r]! - 1);
+    this.crewTrip = { legend, t: 0, dur, crew, quirks: this.crewQuirks() as QuirkId[] };
     return true;
   }
 
@@ -797,7 +863,7 @@ export class Game {
     const trip = this.crewTrip;
     if (!trip || (trip.t += dt) < trip.dur) return;
     this.crewTrip = null;
-    const l = LEGENDS.find((x) => x.id === trip.legend)!, odds = this.crewOdds(trip.crew);
+    const l = LEGENDS.find((x) => x.id === trip.legend)!, odds = this.crewOdds(trip.crew, trip.quirks ?? []);
     const rough = this.rng() < odds.rough;
     const haul = Math.round(VOYAGE.haul[l.region] * odds.haul * (0.8 + this.rng() * 0.4) * (rough ? 0.5 : 1) / 1000) * 1000;
     const cut = Math.round(haul * odds.cut / 1000) * 1000;
@@ -813,6 +879,7 @@ export class Game {
       this.pearls += out.pearls;
     }
     out.gear = this.voyagePiece(l.region);
+    out.pearls += this.diverPearl();
     this.crewNews.push(out);
   }
 
@@ -1106,7 +1173,7 @@ export class Game {
 
   /** Your pull in legend fights: how much faster the fish tires (1 = no Strength). */
   fightPower(): number {
-    return 1 + (STRENGTH_FIGHT * (this.gearStat('strength') + 10 * this.strength)) / 100;
+    return (1 + (STRENGTH_FIGHT * (this.gearStat('strength') + 10 * this.strength)) / 100) * (1 + 0.15 * this.flagshipUp('harpoon'));
   }
 
   /** Chance to land a fish one tier above the rod instead of snapping. */
@@ -2046,7 +2113,7 @@ export class Game {
       pearls: this.pearls, fishTree: this.fishTree, retirements: this.retirements, seaSeen: this.seaSeen, perks: this.perks, keenEye: this.keenEye, tenth: this.tenth, heir: this.heir, family: this.family, heirChoices: this.heirChoices, runBest: this.runBest,
       exoticHold: this.exoticHold, listings: this.listings, wanted: this.wanted, nextExoticId: this.nextExoticId,
       equipped: this.equipped, gearBag: this.gearBag, nextGearId: this.nextGearId, net: this.net, chum: this.chum, icebox: this.icebox,
-      flagship: this.flagship, flagshipRest: this.flagshipRest, voyage: this.voyage, landed: this.landed,
+      flagship: this.flagship, flagshipRest: this.flagshipRest, flagshipUps: this.flagshipUps, voyage: this.voyage, landed: this.landed,
       crew: this.crew, pubBoard: this.pubBoard, pubClock: this.pubClock, nextSailorId: this.nextSailorId, crewTrip: this.crewTrip,
       hands: this.hands.map((h) => ({ ...h, line: { type: 'idle' as const }, react: null })), handRods: 2, crate: this.crate,
     };

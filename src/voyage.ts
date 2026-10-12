@@ -19,6 +19,9 @@ export interface VoyageState {
   at: number;
   supplies: number;
   hull: number;
+  /** The hull you set out with (Iron Hull adds to it) and the Bigger Hold's haul multiplier. */
+  maxHull?: number;
+  haulX?: number;
   haul: number;
   /** map: choose where to sail; spot: deal with the spot you reached; fight: at the legend; over: done. */
   stage: 'map' | 'spot' | 'fight' | 'over';
@@ -38,7 +41,8 @@ type Roll = () => number;
 const pick = <T>(list: T[], rng: Roll): T => list[Math.floor(rng() * list.length)]!;
 
 export const legendOf = (v: VoyageState): LegendDef => LEGENDS.find((l) => l.id === v.legend)!;
-const base = (v: VoyageState, rng: Roll) => Math.round((VOYAGE.haul[legendOf(v).region] * (0.8 + rng() * 0.4)) / 1000) * 1000;
+const base = (v: VoyageState, rng: Roll) => Math.round((VOYAGE.haul[legendOf(v).region] * (v.haulX ?? 1) * (0.8 + rng() * 0.4)) / 1000) * 1000;
+export const maxHull = (v: VoyageState) => v.maxHull ?? VOYAGE.hull;
 const money = (n: number) => (n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : `$${Math.round(n / 1000)}k`);
 
 /**
@@ -93,7 +97,7 @@ export const EVENTS: Record<string, EventDef> = {
   castaway: {
     text: 'A castaway waves from a raft.',
     choices: [{ label: 'TAKE THEM ABOARD', cost: '-1 supply' }, { label: 'SAIL ON' }],
-    act: (k, v) => { if (k === 1) return 'You sail on.'; v.supplies--; v.hull = Math.min(VOYAGE.hull, v.hull + 1); return 'A shipwright! They patch the hull: +1 hull.'; },
+    act: (k, v) => { if (k === 1) return 'You sail on.'; v.supplies--; v.hull = Math.min(maxHull(v), v.hull + 1); return 'A shipwright! They patch the hull: +1 hull.'; },
   },
   birds: {
     text: 'Seabirds dive over a boiling school.',
@@ -175,7 +179,7 @@ export function choose(v: VoyageState, k: number, rng: Roll): void {
   } else {
     const p = traderPrices(v);
     if (k === 0 && v.haul >= p.supplies) { v.haul -= p.supplies; v.supplies += 2; v.used = true; v.note = 'Fresh supplies loaded: +2.'; }
-    else if (k === 1 && v.haul >= p.repair && v.hull < VOYAGE.hull) { v.haul -= p.repair; v.hull++; v.used = true; v.note = 'The hull is patched: +1.'; }
+    else if (k === 1 && v.haul >= p.repair && v.hull < maxHull(v)) { v.haul -= p.repair; v.hull++; v.used = true; v.note = 'The hull is patched: +1.'; }
     else v.note = v.haul < Math.min(p.supplies, p.repair) ? 'Not enough in the hold to pay.' : 'The hull needs no repair.';
   }
   check(v);

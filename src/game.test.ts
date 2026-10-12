@@ -4,6 +4,7 @@ import {
   COMPANY_UNLOCK_EARNED, LETTERS, TRACK_GROWTH, TRACK_MAX, TRACK_ORDER, CLOTHES, DEV_MULTIPLIER, FISH, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_MAX, VARIANTS,
   MAX_GROUND_WORMS, START_WORMS, STRENGTH_PER_LEVEL, WORM_SPAWN_SECONDS, skillCost, TREE_FISH, pearlsFor, gearById, LEGENDS, rodReach, HAND_RODS, HEAD_START_CASH,
   SETS, SET_ORDER, SET_SLOTS, SET_TIERS, setPieceId, STAT_CAP, DROP_SELL, DROP_ROLL, KEEN_EYE, PERFECT_ZONE, PERFECT_PER_LEVEL, AUTO_PERFECT_MAX, STRENGTH_FIGHT,
+  PUB, QUIRKS, VOYAGE, FLAGSHIP_UP_MAX, flagshipUpCost, type CrewRole, type QuirkId,
 } from './data';
 import { Game, fishById, type Line } from './game';
 
@@ -1123,15 +1124,17 @@ describe('the Pub and crew voyages', () => {
     g.tick(0.1); // the board fills once the Flagship is yours
     return g;
   };
-  const sign = (g: Game, role: 'captain' | 'navigator' | 'bosun' | 'harpooner', stars: number) => { g.crew[role] = { id: 900 + stars, name: 'Test', role, stars }; };
+  const sign = (g: Game, role: CrewRole, stars: number, quirk?: QuirkId) => { g.crew[role] = { id: 900 + stars, name: 'Test', role, stars, ...(quirk ? { quirk } : {}) }; };
 
-  it('the board fills with the Flagship, refreshes on its clock, and signing seats a sailor for a small fee', () => {
+  it('the board fills with the Flagship, refreshes on its clock, and signing seats a sailor for their stars\' fee', () => {
     expect(new Game({}, rng(1)).pubBoard).toHaveLength(0);
     const g = ready();
     expect(g.pubBoard).toHaveLength(4);
     const first = g.pubBoard[0]!, money = g.money;
     expect(g.signSailor(first.id)).toBe(true);
-    expect(g.money).toBe(money - first.stars * 20000);
+    const fee = Math.round(PUB.sign[first.stars - 1]! * (first.quirk ? QUIRKS[first.quirk].fee : 1) / 10_000) * 10_000;
+    expect(fee).toBeGreaterThanOrEqual(150_000);
+    expect(g.money).toBe(money - fee);
     expect(g.crew[first.role]).toEqual(first);
     expect(g.pubBoard).toHaveLength(3);
     tick(g, 1801);
@@ -1166,6 +1169,39 @@ describe('the Pub and crew voyages', () => {
     const before = g.crewTripTime(LEGENDS.find((l) => l.id === 'kelpwyrm')!);
     sign(g, 'navigator', 5);
     expect(g.crewTripTime(LEGENDS.find((l) => l.id === 'kelpwyrm')!)).toBeLessThan(before);
+  });
+
+  it('fees climb steeply with stars, and quirks change fee and work', () => {
+    const g = ready(5);
+    const s = (stars: number, quirk?: QuirkId) => ({ id: 1, name: 'X', role: 'captain' as CrewRole, stars, ...(quirk ? { quirk } : {}) });
+    expect(g.signFee(s(5))).toBeGreaterThan(g.signFee(s(4)) * 2);
+    expect(g.signFee(s(3, 'drunk'))).toBeLessThan(g.signFee(s(3)));
+    expect(g.signFee(s(3, 'veteran'))).toBeGreaterThan(g.signFee(s(3)));
+    expect(g.sailorStars(s(3, 'veteran'))).toBe(4);
+    sign(g, 'captain', 3); sign(g, 'bosun', 3);
+    const plain = g.crewOdds();
+    sign(g, 'bosun', 3, 'greedy');
+    expect(g.crewOdds().cut).toBeCloseTo(plain.cut * 2, 5); // 3+3 shares become 3+9
+    sign(g, 'bosun', 3, 'cheap');
+    expect(g.crewOdds().cut).toBeCloseTo(plain.cut / 2, 5);
+    sign(g, 'bosun', 3, 'seasick');
+    expect(g.crewOdds().rough).toBeCloseTo(plain.rough + 0.1, 5);
+  });
+
+  it('the new seats: a Quartermaster trims the cut, a Cook the rest, a Diver brings up Pearls', () => {
+    const g = ready(6);
+    for (const r of ['captain', 'navigator', 'bosun', 'harpooner'] as const) sign(g, r, 5);
+    const cut = g.crewOdds().cut;
+    sign(g, 'quartermaster', 5);
+    expect(g.crewOdds().cut).toBeLessThan(cut);
+    expect(g.flagshipRestTime()).toBe(VOYAGE.rest);
+    sign(g, 'cook', 5);
+    expect(g.flagshipRestTime()).toBe(VOYAGE.rest * 0.5);
+    // A 5-star Diver: a Pearl on about half the trips.
+    sign(g, 'diver', 5);
+    const pearls = g.pearls;
+    for (let k = 0; k < 40; k++) { g.sendCrew('kelpwyrm'); tick(g, 601); g.crewNews.splice(0); g.exoticHold = []; }
+    expect(g.pearls - pearls).toBeGreaterThan(10);
   });
 
   it('a crew at sea comes home while you are away, past the warehouse limit', () => {
@@ -1444,5 +1480,42 @@ describe('Reflex: PERFECT reels', () => {
     expect(g.fightPower()).toBe(1);
     g.equipped.hat = { id: 900, def: 'strawhat', stats: { strength: 100 } };
     expect(g.fightPower()).toBeCloseTo(1 + STRENGTH_FIGHT);
+  });
+});
+
+describe('Flagship upgrades', () => {
+  it('cost more each level, stop at the max, and need the Flagship', () => {
+    const g = new Game({ money: 1e10, company: true }, rng(1));
+    expect(g.buyFlagshipUp('hold')).toBe(false);
+    g.flagship = true;
+    let spent = 0;
+    for (let n = 0; n < FLAGSHIP_UP_MAX; n++) { spent += flagshipUpCost('hold', n); expect(g.buyFlagshipUp('hold')).toBe(true); }
+    expect(g.money).toBe(1e10 - spent);
+    expect(flagshipUpCost('hold', 1)).toBeGreaterThan(flagshipUpCost('hold', 0) * 2);
+    expect(g.flagshipUpCost('hold')).toBeNull();
+    expect(g.buyFlagshipUp('hold')).toBe(false);
+  });
+
+  it('your voyages start with more hull and supplies, haul more, pull harder and rest less', () => {
+    const g = new Game({ company: true, flagship: true, flagshipUps: { hull: 2, stores: 3, hold: 5, harpoon: 2, sails: 5 } }, rng(2));
+    const pull = g.fightPower();
+    expect(g.startVoyage('kelpwyrm')).toBe(true);
+    expect(g.voyage!.hull).toBe(VOYAGE.hull + 2);
+    expect(g.voyage!.maxHull).toBe(VOYAGE.hull + 2);
+    expect(g.voyage!.supplies).toBe(VOYAGE.supplies + 3);
+    expect(g.voyage!.haulX).toBe(2);
+    expect(pull).toBeCloseTo(new Game({}, rng(2)).fightPower() * 1.3, 5);
+    expect(g.flagshipRestTime()).toBe(Math.round(VOYAGE.rest * 0.4));
+  });
+
+  it('help the crew too: more haul, less rough sea, shorter trips', () => {
+    const g = new Game({ company: true, flagship: true, crew: { captain: { id: 1, name: 'C', role: 'captain', stars: 1 }, harpooner: { id: 2, name: 'H', role: 'harpooner', stars: 1 } } }, rng(3));
+    const before = g.crewOdds();
+    g.flagshipUps = { hold: 1, hull: 1, sails: 1, harpoon: 1, stores: 1 };
+    const after = g.crewOdds();
+    expect(after.haul).toBeCloseTo(before.haul * 1.2, 5);
+    expect(after.rough).toBeCloseTo(before.rough - 0.05, 5);
+    expect(after.time).toBeLessThan(before.time);
+    expect(after.legend).toBeCloseTo(before.legend + 0.07, 5);
   });
 });
