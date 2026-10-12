@@ -793,12 +793,13 @@ describe('hired fishermen', () => {
     expect(HANDS_MAX).toBe(24);
   });
 
-  it('fish on their own with bait from your pouch, into the crate', () => {
+  it('fish on their own into the crate, digging their own worms', () => {
     const g = owner({ baits: { worm: 50 } });
     g.buyBoat();
     g.hireHand();
     tick(g, 120);
-    expect(g.baitCount('worm')).toBeLessThan(50);
+    expect(g.baitCount('worm')).toBe(50); // your worms are yours
+    expect(g.handStarved(g.hands[0]!)).toBe(false);
     expect(g.crate.length).toBeGreaterThan(3);
     expect(g.bag).toHaveLength(0);
     const value = g.crateValue();
@@ -827,6 +828,17 @@ describe('hired fishermen', () => {
     expect(g.hands[0]!.skill).toBe(25);
     const legend = g.handOdds(g.hands[0]!).filter((o) => o.fish.tier === 5).reduce((s, o) => s + o.p, 0);
     expect(legend).toBeGreaterThan(0.2);
+  });
+
+  it('fishermen use bait from your pouch for anything better than worms', () => {
+    const g = owner({ baits: { leech: 3 } });
+    g.buyBoat();
+    g.hireHand();
+    g.setHandBait(0, 'leech');
+    tick(g, 120);
+    expect(g.baitCount('leech')).toBe(0);
+    tick(g, 10);
+    expect(g.handStarved(g.hands[0]!)).toBe(true);
   });
 
   it('trained hands miss fewer bites', () => {
@@ -911,11 +923,11 @@ describe('pier staff', () => {
     expect(JSON.stringify(g.hands.map((h) => [h.rod, h.skill]))).toBe(before); // budget Off: no spending
   });
 
-  it('with the Supplier, the Manager puts trained Mythril fishermen on Golden Lures (big lures, big fish)', () => {
+  it('with the Supplier, the Manager puts fully trained Mythril fishermen on Golden Lures (big lures, big fish)', () => {
     const g = pier();
     g.buyHarbor('supplier');
     g.hireHand(); g.hireHand();
-    Object.assign(g.hands[0]!, { rod: 4, skill: 18 });
+    Object.assign(g.hands[0]!, { rod: 4, skill: 25 });
     Object.assign(g.hands[1]!, { rod: 1, skill: 5 });
     expect(g.bestBait(g.hands[0]!)).toBe('gold');
     expect(['worm', 'cricket']).toContain(g.bestBait(g.hands[1]!));

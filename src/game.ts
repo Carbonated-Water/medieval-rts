@@ -1710,7 +1710,7 @@ export class Game {
 
   /** Is this fisherman stuck for want of their bait? */
   handStarved(h: Hand): boolean {
-    return h.line.type === 'idle' && this.baitCount(h.bait) === 0;
+    return h.line.type === 'idle' && h.bait !== 'worm' && this.baitCount(h.bait) === 0;
   }
 
   crateValue(): number {
@@ -1727,14 +1727,14 @@ export class Game {
     return total;
   }
 
-  /** Each fisherman runs their own line: bait from your pouch, cast, wait, reel after a reaction time, recast. */
+  /** Each fisherman runs their own line: bait from your pouch (they dig their own worms), cast, wait, reel after a reaction time, recast. */
   private tickHands(dt: number): void {
     for (const h of this.hands) {
       const line = h.line;
       const tier = RODS[h.rod]!.tier;
       if (line.type === 'idle') {
-        if (this.baitCount(h.bait) > 0) {
-          this.baits[h.bait] = this.baitCount(h.bait) - 1;
+        if (h.bait === 'worm' || this.baitCount(h.bait) > 0) {
+          if (h.bait !== 'worm') this.baits[h.bait] = this.baitCount(h.bait) - 1;
           h.line = { type: 'casting', t: 0, bait: h.bait };
         }
         continue;

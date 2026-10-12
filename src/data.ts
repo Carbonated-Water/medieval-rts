@@ -711,8 +711,8 @@ export type HarborUpgradeId = 'master' | 'shipwright' | 'manager' | 'supplier' |
 export const HARBOR_UPGRADES: Record<HarborUpgradeId, { name: string; price: number; blurb: string; fee: number; feeName: string }> = {
   master: { name: 'Harbor Master', price: 200000, blurb: 'Sells hauls as boats come in', fee: 0.05, feeName: 'fee' },
   shipwright: { name: 'Shipwright', price: 300000, blurb: 'Upgrades every boat', fee: 0, feeName: '' },
-  manager: { name: 'Manager', price: 150000, blurb: 'Best bait for each, trains them', fee: 0.03, feeName: 'of crate' },
-  supplier: { name: 'Bait Supplier', price: 120000, blurb: 'Keeps every fisherman in bait', fee: 0.25, feeName: 'markup' },
+  manager: { name: 'Manager', price: 60000, blurb: 'Best bait for each, trains them', fee: 0.03, feeName: 'of crate' },
+  supplier: { name: 'Bait Supplier', price: 40000, blurb: 'Keeps every fisherman in bait', fee: 0.25, feeName: 'markup' },
   seller: { name: 'Fish Seller', price: 80000, blurb: 'Sells your bag and the crate', fee: 0.05, feeName: 'fee' },
 };
 export const PIER_STAFF: HarborUpgradeId[] = ['manager', 'supplier', 'seller'];

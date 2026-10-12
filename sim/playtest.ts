@@ -143,8 +143,23 @@ class Bot {
     this.tap('other', 1); // walk back
   }
 
+  /** The next rod tier up from the one you hold, if any. */
+  nextRod() {
+    const tiers = Object.keys(GEAR_TIERS), cur = tiers.indexOf(this.g.gearOf('rod')!.tier);
+    return GEAR_ITEMS.filter((d) => d.slot === 'rod' && d.tier !== 'legendary' && tiers.indexOf(d.tier) > cur).sort((a, b) => a.price - b.price)[0] ?? null;
+  }
+
   /** One purchase by the rules, or false when nothing is worth it now. */
   buyOne(stop: () => void): boolean {
+    const g = this.g;
+    // Saving for the next rod tier once it's in sight: only small buys meanwhile.
+    const rod = this.nextRod(), saving = !!rod && rod.price <= g.money * 3;
+    const can0 = this.can.bind(this);
+    this.can = (price: number, share: number) => can0(price, saving && !(rod && price === rod.price) ? Math.min(share, 0.05) : share);
+    try { return this.buyOneInner(stop); } finally { this.can = can0; }
+  }
+
+  buyOneInner(stop: () => void): boolean {
     const g = this.g;
     // Tackle: lines and the Autofisher first, then the rest.
     for (const [kind, share] of [['holders', 0.6], ['auto', 0.6], ['net', 0.3], ['chum', 0.3], ['icebox', 0.3]] as [GearKind, number][]) {

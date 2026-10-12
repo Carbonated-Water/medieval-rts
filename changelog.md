@@ -4,6 +4,16 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-11  Fishermen dig their own worms (#17)
+  WHAT: A fisherman on worms no longer takes yours (and is never "starved");
+        better bait still comes from your pouch. Manager $150k -> $60k, Bait
+        Supplier $120k -> $40k. Playtest bot: saves up for the next rod tier
+        once it's within 3x its cash instead of spending on side buys.
+  WHY:  The pier sat mostly idle on your dug worms until the staff arrived,
+        then income jumped 11x at once. Now the staff come ~1h earlier and
+        the pier earns from the first hire. (Tried the #2 rod/lure numbers
+        too: they only delayed the late spike, so they were reverted.)
+
 2026-10-11  Playtest harness
   WHAT: `npm run playtest` (sim/playtest.ts via sim/run.mjs, Vite SSR): a bot
         plays from a fresh save on the real Game (reaction-time reeling, an
