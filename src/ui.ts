@@ -39,7 +39,7 @@ const POS = [{ x: 50, y: 84 }, { x: 24, y: 52 }, { x: 76, y: 52 }, { x: 24, y: 1
 const clock = (s: number) => { const n = Math.max(0, Math.ceil(s)); return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`; };
 /** What each School skill does (the "?" on its row). */
 const SKILL_TIP: Record<SkillId, string> = {
-  fishing: "Rarer fish bite more often. The number is how often your rod's best tier bites, now and after the next level.",
+  fishing: "Rarer fish bite more often. The number is how often your rod's best tier bites now and after the next level. On a rod that lands only Common fish, levels do nothing yet: get a better rod first.",
   reflexes: "When a fish bites, a gold ring shrinks on the bobber. Reel before it's gone for a PERFECT catch: double value. Each level makes the ring last longer, and your Autofisher hits PERFECT more often.",
   haggling: `Everything you sell pays ${Math.round(HAGGLE_PER_LEVEL * 100)}% more per level: your fish, the crate and boat hauls.`,
   strength: `A fish one tier too strong for your rod snaps the line. Each level holds ${Math.round(STRENGTH_PER_LEVEL * 100)}% more of them, and you pull harder in legend fights.`,
@@ -607,6 +607,8 @@ export class UI {
     if (id === 'strength') return step(`Hold ${pct(game.strengthChance())}`, pct(game.strengthChance() + STRENGTH_PER_LEVEL));
     const best = game.rodTier as Tier;
     const odds = (o: Record<number, number>) => pct(o[best] ?? 0);
+    // A level that changes nothing on this rod (a starter rod lands only Common): say what would help instead.
+    if (canTrain && odds(game.tierOdds()) === odds(game.tierOdds(lvl + 1))) return `${TIERS[best].name} ${odds(game.tierOdds())} <span class="up">needs a better rod</span>`;
     return step(`${TIERS[best].name} ${odds(game.tierOdds())}`, odds(game.tierOdds(lvl + 1)));
   }
 
