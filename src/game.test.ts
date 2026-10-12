@@ -1634,3 +1634,17 @@ describe('Reforge and Masterwork', () => {
     expect(g.masterwork(60)).toBe(false);
   });
 });
+
+describe('Town decor', () => {
+  it('needs the Flagship, is bought once, and survives retiring', () => {
+    const g = new Game({ money: 1e12, company: true }, rng(1));
+    expect(g.buyDecor('flowers')).toBe(false);
+    g.flagship = true;
+    expect(g.buyDecor('flowers')).toBe(true);
+    expect(g.buyDecor('flowers')).toBe(false);
+    expect(g.money).toBe(1e12 - 500_000_000);
+    g.earned = 1e13;
+    const save = g.retire(0);
+    expect(save?.decor).toEqual(['flowers']);
+  });
+});

@@ -4,6 +4,24 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-12  Money sinks for the late game
+  WHAT: Flagship upgrades go to 10 levels (x3 a level; Swift Sails now
+        x0.88 rest / x0.94 crew trips a level so it never hits zero).
+        Reforge (item card, found pieces): roll the stats again in
+        80-125%, keep the better; cost by tier (bronze 2k .. diamond 40M)
+        x1.6 per reforge of that piece. Masterwork (item card,
+        Legendaries): +10% stats a level, 10 levels, 500M x2.2 a level.
+        Town Decor (menu, once the Flagship is yours; looks only, kept on
+        retire): Flower Beds 500M, Lanterns 2B, Bunting 8B, Gilded Dock
+        30B, Gilded Lighthouse 120B, Gilded Flagship 500B; the Flagship now
+        shows moored off the lighthouse while it's home. Bot: wears voyage
+        finds, masterworks and reforges worn pieces; LATE GAME line shows
+        what went into the sinks.
+  WHY:  The user chose money sinks for the late game (money piled to
+        35-55B with nothing to buy). Harness, 16h (3 seeds): 20-41B into
+        masterwork, Flagship tracks 29-31 of 50 and still climbing, cash on
+        hand 10-17B.
+
 2026-10-12  Legendary gear is a voyage chase; first buy in a minute
   WHAT: The 10 Legendary pieces drop from Abyss voyages (yours or the
         crew's): 6% a voyage, 15% for The Old One, x a Lookout's bonus,

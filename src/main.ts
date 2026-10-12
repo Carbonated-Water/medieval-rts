@@ -1,4 +1,4 @@
-import { HEAD_STARTS, type HeadStartId, ACHIEVEMENTS, BOATS, DEV_MULTIPLIER, HAND_NAMES, HARBOR_UPGRADES, LETTERS, TRACKS, type GroundId, type HarborUpgradeId, type TrackId, RODS, SKILLS, VARIANTS, baitById, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, LEGENDS, gearById, type GearSlot, FLAGSHIP_UPS, type FlagshipUpId, type MateJob } from './data';
+import { HEAD_STARTS, type HeadStartId, ACHIEVEMENTS, BOATS, DEV_MULTIPLIER, HAND_NAMES, HARBOR_UPGRADES, LETTERS, TRACKS, type GroundId, type HarborUpgradeId, type TrackId, RODS, SKILLS, VARIANTS, baitById, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, LEGENDS, gearById, type GearSlot, DECOR, FLAGSHIP_UPS, type FlagshipUpId, type MateJob } from './data';
 import { Game, type GearItem, fishById, type Line, type SaveData } from './game';
 import { Fight } from './fight';
 import { FightView } from './fightui';
@@ -205,6 +205,8 @@ function onAction(a: Action): void {
   else if (a.startsWith('sign:')) { const s = game.pubBoard.find((x) => x.id === Number(a.slice(5))); if (s && game.signSailor(s.id)) note.banner(pixelIcon('crew'), 'SIGNED', `${s.name}, ${s.role}`, 'plain'); }
   else if (a === 'pubRefresh') game.refreshBoard();
   else if (a === 'flagship') ui.open = 'flagship';
+  else if (a === 'decor') ui.open = 'decor';
+  else if (a.startsWith('buyDecor:')) { const d = DECOR.find((x) => x.id === a.slice(9)); if (d && game.buyDecor(d.id)) note.banner(pixelIcon('star'), 'TOWN DECOR', d.name, 'rare'); }
   else if (a.startsWith('reforge:')) {
     const better = game.reforge(Number(a.slice(8)));
     if (better !== null) note.float(better ? 'BETTER ROLL!' : 'NO LUCK', innerWidth / 2, innerHeight / 2, better ? 'rare' : 'plain');

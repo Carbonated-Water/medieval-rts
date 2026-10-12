@@ -435,6 +435,16 @@ export const REFORGE = {
   base: { bronze: 2_000, silver: 20_000, gold: 250_000, platinum: 4_000_000, diamond: 40_000_000, legendary: 0 } as Record<GearTier, number>,
   step: 1.6,
 };
+/** Town decor (bought from the menu once the Flagship is yours): looks only, no stats. Kept on retire. */
+export type DecorId = 'flowers' | 'lanterns' | 'bunting' | 'golddock' | 'goldlight' | 'goldship';
+export const DECOR: { id: DecorId; name: string; blurb: string; price: number }[] = [
+  { id: 'flowers', name: 'Flower Beds', blurb: 'Along the riverbank', price: 500_000_000 },
+  { id: 'lanterns', name: 'Lanterns', blurb: 'Lamps on the path', price: 2_000_000_000 },
+  { id: 'bunting', name: 'Bunting', blurb: 'Flags over the path', price: 8_000_000_000 },
+  { id: 'golddock', name: 'Gilded Dock', blurb: 'A gold dock', price: 30_000_000_000 },
+  { id: 'goldlight', name: 'Gilded Lighthouse', blurb: 'A gold tower', price: 120_000_000_000 },
+  { id: 'goldship', name: 'Gilded Flagship', blurb: 'A gold Flagship', price: 500_000_000_000 },
+];
 /** Masterwork (a Legendary piece): +10% to its stats a level, ten levels, each STEP times dearer. */
 export const MASTERWORK = { max: 10, per: 0.1, base: 500_000_000, step: 2.2 };
 /** Drops roll their stats between these (x the shop piece); "fine" at or above FINE_ROLL. */

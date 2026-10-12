@@ -8,7 +8,7 @@ import {
   TOO_STRONG_WEIGHT, VARIANTS, VARIANT_ORDER, WORMS_PER_PICK, WORM_SPAWN_SECONDS, WORM_SPOTS, baitById,
   type AchStat, type AchievementDef, type BaitId, type FishDef, type GearKind, type SkillId, type Tier, type Variant,
   CHUMS, FRENZY_SPEED, ICEBOXES, NETS, GEAR_BAG, GEAR_SELL, DROP_SELL, PUB, CREW_ROLE_ORDER, SAILOR_NAMES, type CrewRole, QUIRKS, QUIRK_ORDER, type QuirkId, MATE, MATE_JOB_ORDER, type MateJob, FLAGSHIP_UP_ORDER, FLAGSHIP_UPS, FLAGSHIP_UP_MAX, SAILS_REST, SAILS_TRIP, flagshipUpCost, type FlagshipUpId, GEAR_SLOTS, GEAR_TIERS, LEGACY_GEAR, STARTER_GEAR, gearById, rodReach, type GearDef, type GearSlot, type StatId, type GearTier,
-  GEAR_ITEMS, SETS, SET_ORDER, SET_SLOTS, SET_TIERS, SET_BONUS_SCALE, setPieceId, DROP_CHANCE, KEEN_EYE, VOYAGE_PIECE, LEGENDARY_FIND, REFORGE, MASTERWORK, DROP_ROLL, FINE_ROLL, LUCK_SCALE, FORTUNE_SCALE, STAT_CAP, STAT_ORDER, type SetId, type SetEffect, type SetSlot,
+  GEAR_ITEMS, SETS, SET_ORDER, SET_SLOTS, SET_TIERS, SET_BONUS_SCALE, setPieceId, DROP_CHANCE, KEEN_EYE, VOYAGE_PIECE, LEGENDARY_FIND, REFORGE, MASTERWORK, DECOR, type DecorId, DROP_ROLL, FINE_ROLL, LUCK_SCALE, FORTUNE_SCALE, STAT_CAP, STAT_ORDER, type SetId, type SetEffect, type SetSlot,
   BILLFISH, SEA_FISH, SHELLFISH, TREE_FISH, pearlsFor, HEAD_STARTS, HEAD_START_CASH, type HeadStartId, TRAITS, TRAIT_ORDER, HEIR_NAMES, type TraitId, treeFishById, type TreeFish, COLLECTORS, EXOTIC, LEGENDS, VOYAGE, type LegendDef, type Region,
 } from './data';
 import * as V from './voyage';
@@ -90,6 +90,8 @@ export interface SaveData {
   flagshipRest?: number;
   /** The Flagship's upgrade levels. */
   flagshipUps?: Partial<Record<FlagshipUpId, number>>;
+  /** Town decor bought (kept on retire). */
+  decor?: DecorId[];
   voyage?: V.VoyageState | null;
   /** The Pub: your crew, the board of sailors, its clock, a crew voyage under way. */
   crew?: Partial<Record<CrewRole, Sailor>>;
@@ -267,6 +269,7 @@ export class Game {
   flagship = false;
   flagshipRest = 0;
   flagshipUps: Partial<Record<FlagshipUpId, number>> = {};
+  decor: DecorId[] = [];
   voyage: V.VoyageState | null = null;
   crew: Partial<Record<CrewRole, Sailor>> = {};
   pubBoard: Sailor[] = [];
@@ -532,7 +535,15 @@ export class Game {
     return this.findPiece(set, slotOf(set), p.tier, false);
   }
 
-  // ---------- money sinks: Reforge and Masterwork ----------
+  // ---------- money sinks: town decor, Reforge, Masterwork ----------
+
+  buyDecor(id: DecorId): boolean {
+    const d = DECOR.find((x) => x.id === id);
+    if (!d || !this.flagship || this.decor.includes(id) || this.money < d.price) return false;
+    this.money -= d.price;
+    this.decor = [...this.decor, id];
+    return true;
+  }
 
   /** A piece you own, by id (worn or in the bag). */
   private ownedGear(id: number): GearItem | null {
@@ -1190,7 +1201,7 @@ export class Game {
     for (const slot of GEAR_SLOTS) { const def = STARTER_GEAR[slot]; equipped[slot] = def ? { id: id++, def, stats: { ...gearById(def)!.stats } } : null; }
     if (kept) equipped[this.gearDef(kept).slot] = { ...kept, id: id++ };
     return {
-      pearls: this.pearls + gain, fishTree: [...this.fishTree], retirements: this.retirements + 1, seaSeen: [...this.seaSeen], landed: { ...this.landed },
+      pearls: this.pearls + gain, fishTree: [...this.fishTree], retirements: this.retirements + 1, seaSeen: [...this.seaSeen], landed: { ...this.landed }, decor: [...this.decor],
       journal: this.journal, claimed: [...this.claimed], dev: this.dev, perks: [...this.perks], keenEye: this.keenEye, newRun: true,
       heir: next, family, equipped, nextGearId: id,
     };
@@ -2281,7 +2292,7 @@ export class Game {
       pearls: this.pearls, fishTree: this.fishTree, retirements: this.retirements, seaSeen: this.seaSeen, perks: this.perks, keenEye: this.keenEye, tenth: this.tenth, heir: this.heir, family: this.family, heirChoices: this.heirChoices, runBest: this.runBest,
       exoticHold: this.exoticHold, listings: this.listings, wanted: this.wanted, nextExoticId: this.nextExoticId,
       equipped: this.equipped, gearBag: this.gearBag, nextGearId: this.nextGearId, net: this.net, chum: this.chum, icebox: this.icebox,
-      flagship: this.flagship, flagshipRest: this.flagshipRest, flagshipUps: this.flagshipUps, voyage: this.voyage, landed: this.landed,
+      flagship: this.flagship, flagshipRest: this.flagshipRest, flagshipUps: this.flagshipUps, decor: this.decor, voyage: this.voyage, landed: this.landed,
       crew: this.crew, pubBoard: this.pubBoard, pubClock: this.pubClock, nextSailorId: this.nextSailorId, crewTrip: this.crewTrip, mate: this.mate, mateOn: this.mateOn, mateBudget: this.mateBudget, crewLegend: this.crewLegend,
       hands: this.hands.map((h) => ({ ...h, line: { type: 'idle' as const }, react: null })), handRods: 2, crate: this.crate,
     };

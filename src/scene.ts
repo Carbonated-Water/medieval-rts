@@ -112,6 +112,11 @@ export class Scene {
   private harbor = new Sprite();
   private lighthouse = new Sprite();
   private jetty = new Sprite();
+  /** Town decor (redrawn when what you've bought changes), the dock planks (gilded), the Flagship at its mooring. */
+  private decorFx = new Graphics();
+  private decorKey = '';
+  private dockPlanks: TilingSprite | null = null;
+  private moored = new Sprite();
   private ship = new Sprite();
   private boatSprites: Sprite[] = [];
   private warehouse = new Sprite();
@@ -265,6 +270,10 @@ export class Scene {
     this.ship = add(new Sprite(this.cached('ship', () => boatCanvas(0, true))));
     this.ship.anchor.set(0.5, 1);
     this.ship.alpha = 0.75;
+    // The Flagship at its mooring off the lighthouse, while it's home.
+    this.moored = add(new Sprite(this.cached('flagship', () => boatCanvas(4, false, 'net', { hull: 3, engine: 2, sonar: 1, ice: 1, captain: 1 }))));
+    this.moored.anchor.set(0.5, 1);
+    this.moored.position.set(lh.x + 26, lh.y + 16);
     // Shadows, ripples and lines are redrawn every frame on top of the water.
     add(this.fx);
     // Near bank: grass-topped dirt, the sandy path, then a meadow with tufts.
@@ -284,7 +293,7 @@ export class Scene {
     }
     // Dock: planks from the bank out to the fishing spot, posts down into the water.
     const dockW = 14;
-    tiling(plankCanvas(dockW), V.dockX - dockW / 2, V.dockEnd - 4, dockW, V.riverBottom - V.dockEnd + 2);
+    this.dockPlanks = tiling(plankCanvas(dockW), V.dockX - dockW / 2, V.dockEnd - 4, dockW, V.riverBottom - V.dockEnd + 2);
     this.builtPier = this.game.pierOpen;
     this.builtSpots = this.game.pierSpots;
     if (this.builtPier) {
@@ -317,6 +326,9 @@ export class Scene {
     shop('baitshop', baitShopCanvas, V.baitX, V.path + 12, 0);
     shop('gearshop', gearShopCanvas, this.gearShopX(), V.path + 12, 0);
     this.pub = shop('pub', pubCanvas, this.pubX(), V.path + 12, 0);
+    // Town decor sits over the bank and the path.
+    this.decorKey = '';
+    this.decorFx = add(new Graphics());
     // Worms poke out of the dirt bank (redrawn every frame).
     this.wormFx = add(new Graphics());
     this.world.addChild(layer);
@@ -740,6 +752,52 @@ export class Scene {
     });
   }
 
+  /**
+   * Town decor: flowers on the bank, lanterns on the path, bunting between
+   * the stalls (drawn once per change); gold tints on the dock, lighthouse
+   * and the moored Flagship.
+   */
+  private drawDecor(): void {
+    const V = this.V, game = this.game, has = (id: string) => game.decor.includes(id as never);
+    const GOLD = 0xffd860;
+    this.lighthouse.tint = has('goldlight') ? GOLD : 0xffffff;
+    if (this.dockPlanks) this.dockPlanks.tint = has('golddock') ? GOLD : 0xffffff;
+    this.moored.visible = game.flagship && !game.voyage && !game.crewTrip;
+    this.moored.tint = has('goldship') ? GOLD : 0xffffff;
+    const key = game.decor.join(',');
+    if (key === this.decorKey) return;
+    this.decorKey = key;
+    const g = this.decorFx.clear();
+    const clear = (x: number) => Math.abs(x - V.marketX) > 22 && Math.abs(x - V.tackleX) > 22 && Math.abs(x - V.dockX) > 10;
+    if (has('flowers')) {
+      // Along the top of the near bank, skipping the dock.
+      for (let x = 3; x < V.w - 2; x += 5) {
+        if (!clear(x)) continue;
+        const c = [PAL.redLight, PAL.goldLight, PAL.white, '#e070c0'][(x / 5) % 4 | 0]!;
+        g.rect(x, V.riverBottom - 5, 1, 3).fill(PAL.greenDark).rect(x - 1, V.riverBottom - 6, 3, 1).fill(c).rect(x, V.riverBottom - 7, 1, 1).fill(c);
+      }
+    }
+    if (has('lanterns')) {
+      for (let x = 10; x < V.w - 6; x += 26) {
+        if (!clear(x)) continue;
+        const y = V.path - 4;
+        g.rect(x, y - 12, 1, 12).fill(PAL.outline).rect(x - 1, y - 15, 3, 3).fill(PAL.goldLight).rect(x - 1, y - 16, 3, 1).fill(PAL.outline);
+        g.circle(x, y - 14, 4).fill({ color: '#fff3b0', alpha: 0.25 });
+      }
+    }
+    if (has('bunting')) {
+      // A sagging string from the market to the tackle stall, pennants hanging off it.
+      const x0 = V.marketX + 16, x1 = V.tackleX - 16, y0 = V.path - 30;
+      const yAt = (x: number) => y0 + Math.sin(((x - x0) / (x1 - x0)) * Math.PI) * 5;
+      for (let x = x0; x < x1; x += 1) g.rect(x, Math.round(yAt(x)), 1, 1).fill(PAL.outline);
+      const cols = [PAL.red, PAL.goldLight, '#2f6fd6', PAL.white];
+      for (let x = x0 + 3, i = 0; x < x1 - 3; x += 7, i++) {
+        const y = Math.round(yAt(x)) + 1;
+        g.poly([x - 2, y, x + 2, y, x, y + 4]).fill(cols[i % cols.length]!);
+      }
+    }
+  }
+
   /** Shadow half-length for a fish of this tier. */
   private shadowSize(tier: number): number {
     return 6 + tier * 2;
@@ -753,6 +811,7 @@ export class Scene {
     this.lighthouse.texture = this.cached(`lighthouse:${game.company}`, () => lighthouseCanvas(game.company));
     this.jetty.visible = game.company;
     if (this.pub) this.pub.texture = this.cached(`pub:${game.flagship}`, () => pubCanvas(game.flagship));
+    this.drawDecor();
     if (game.company) {
       // A beam sweeping slowly out over the water.
       const p = this.lighthouseSpot(), lx = p.x, ly = p.y - 48, a = Math.sin(this.time * 0.6) * 0.9;

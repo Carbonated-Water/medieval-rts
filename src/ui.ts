@@ -2,7 +2,7 @@ import { rodReach, HEAD_STARTS, type HeadStartId, TRAITS, HARBOR_STAFF,
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_ORDER, COMPANY_PRICE, COMPANY_UNLOCK_EARNED, DEV_MULTIPLIER, GROUNDS, HARBOR_UPGRADES,
   MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, PIER_STAFF, HANDS_MAX,
   TRACKS, TRACK_MAX, TRACK_ORDER, WAREHOUSE, type HarborUpgradeId, type TrackId, HAND_NAMES, HAND_SKILL_MAX, LETTERS, RODS, HAND_RODS, FISH, GEAR, PERFECT_PER_LEVEL, SKILLS, STRENGTH_PER_LEVEL, HAGGLE_PER_LEVEL,
-  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, TREE_FISH, type TreeFish, PUB, CREW_ROLES, CREW_ROLE_ORDER, QUIRKS, MATE, MATE_JOB_ORDER, type MateJob, FLAGSHIP_UPS, FLAGSHIP_UP_ORDER, FLAGSHIP_UP_MAX, type FlagshipUpId, LEGENDS, EXOTIC, REGIONS, VOYAGE, GEAR_BAG, GEAR_ITEMS, GEAR_SLOTS, GEAR_TIERS, STATS, STAT_ORDER, SETS, SET_SLOTS, KEEN_EYE, MASTERWORK, FORTUNE_SCALE, LUCK_SCALE, SKILL_TIER_BONUS, NETS, setPieceId, gearById, type SetId, type GearDef, type GearSlot, type GearTier, type StatId,
+  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, TREE_FISH, type TreeFish, PUB, CREW_ROLES, CREW_ROLE_ORDER, QUIRKS, DECOR, MATE, MATE_JOB_ORDER, type MateJob, FLAGSHIP_UPS, FLAGSHIP_UP_ORDER, FLAGSHIP_UP_MAX, type FlagshipUpId, LEGENDS, EXOTIC, REGIONS, VOYAGE, GEAR_BAG, GEAR_ITEMS, GEAR_SLOTS, GEAR_TIERS, STATS, STAT_ORDER, SETS, SET_SLOTS, KEEN_EYE, MASTERWORK, FORTUNE_SCALE, LUCK_SCALE, SKILL_TIER_BONUS, NETS, setPieceId, gearById, type SetId, type GearDef, type GearSlot, type GearTier, type StatId,
 } from './data';
 import { type Boat, type Exotic, type Game, type GearItem, type Sailor, fishById } from './game';
 import * as V from './voyage';
@@ -11,13 +11,13 @@ import { fisherIcon, gearIcon, pixelFishIcon as fishIcon, pixelIcon, type HatSty
 import type { Place } from './scene';
 
 /** One panel per job: the market sells fish, the tackle shop sells gear, the school trains skills. */
-export type Panel = 'pub' | 'flagship' | 'gearshop' | 'character' | 'gearitem' | 'stats' | 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'ledger' | 'boat' | 'tree' | 'retire' | 'lighthouse' | 'exotic' | 'listing' | 'voyage' | 'shipyard' | 'harborup' | 'pier' | 'pierstaff' | 'hand' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
+export type Panel = 'pub' | 'flagship' | 'decor' | 'gearshop' | 'character' | 'gearitem' | 'stats' | 'market' | 'tackle' | 'baitshop' | 'pouch' | 'harbor' | 'ledger' | 'boat' | 'tree' | 'retire' | 'lighthouse' | 'exotic' | 'listing' | 'voyage' | 'shipyard' | 'harborup' | 'pier' | 'pierstaff' | 'hand' | 'training' | 'journal' | 'trophies' | 'inbox' | 'settings';
 
 export type Action =
   | 'cast' | 'reel' | 'close' | 'back' | 'reset' | 'toggleDev' | Panel
   | `gsMode:${'buy' | 'sell'}` | `gpick:${string}` | 'keenEye' | `gbuy:${string}` | `gsel:${'bag' | 'eq'}:${string}`
   | `gequip:${number}` | `gunequip:${GearSlot}` | `gsell:${number}` | 'gsellall' | `charTab:${'gear' | 'bag'}` | `buyN:${'1' | '5' | 'max'}` | 'trainAll' | 'toggleBuzz' | `pubTab:${'board' | 'crew' | 'mate'}` | 'hireMate' | `mate:${MateJob}` | `mateBudget:${number}` | `sign:${number}` | 'pubRefresh' | `crewSail:${string}` | `lhWho:${'you' | 'crew'}` | `fight:${string}` | 'fightDone' | `lhRegion:${'coast' | 'ocean' | 'abyss'}`
-  | 'buyFlagship' | 'flagship' | `flagshipUp:${FlagshipUpId}` | `sail:${string}` | `vsail:${number}` | `vchoose:${number}` | 'vlegend' | 'vfight' | 'vhome'
+  | 'buyFlagship' | 'flagship' | 'decor' | `buyDecor:${string}` | `flagshipUp:${FlagshipUpId}` | `sail:${string}` | `vsail:${number}` | `vchoose:${number}` | 'vlegend' | 'vfight' | 'vhome'
   | `exTab:${'hold' | 'listed' | 'wanted'}` | `exList:${number}` | `exUnlist:${number}` | `exOpen:${number}` | `exSell:${number}:${number}` | `exGive:${number}` | 'exDev' | 'boatPrev' | 'boatNext' | `coTab:${'harbor' | 'ledger' | 'harborup'}`
   | `achTab:${'base' | 'tree'}` | `treeTier:${number}` | `treeSel:${string}` | `unlock:${string}` | `retireTab:${'retire' | 'family'}` | `heir:${number}` | 'heirloom' | `perk:${HeadStartId}` | 'doRetire' | `journalTier:${number}`
   | `reforge:${number}` | `masterwork:${number}` | 'sellAll' | `sellFish:${string}` | `buy:${GearKind}` | `train:${SkillId}` | `skillTip:${SkillId}` | 'claimAll' | `trophy:${string}`
@@ -127,7 +127,7 @@ export class UI {
     if (panel === 'boat' || panel === 'shipyard') return this.coTab;
     if (panel === 'gearitem') return this.gearFrom;
     if (panel === 'stats') return 'character';
-    return ({ hand: 'pier', pierstaff: 'pier', tree: 'settings', retire: 'settings', listing: 'exotic', voyage: 'lighthouse', flagship: 'lighthouse' } as Partial<Record<Panel, Panel>>)[panel ?? 'market'] ?? null;
+    return ({ hand: 'pier', pierstaff: 'pier', tree: 'settings', retire: 'settings', listing: 'exotic', voyage: 'lighthouse', flagship: 'lighthouse', decor: 'settings' } as Partial<Record<Panel, Panel>>)[panel ?? 'market'] ?? null;
   }
   /** Trophy page: the originals, or the Fish Tree's. */
   achTab: 'base' | 'tree' = 'base';
@@ -259,6 +259,7 @@ export class UI {
             : panel === 'tree' ? ['Fish Tree', this.treeHtml(game)]
             : panel === 'lighthouse' ? ['Lighthouse', this.lighthouseHtml(game)]
             : panel === 'flagship' ? ['Flagship', this.flagshipHtml(game)]
+            : panel === 'decor' ? ['Town Decor', this.decorHtml(game)]
             : panel === 'voyage' ? [game.voyage ? V.legendOf(game.voyage).spot : 'Voyage', this.voyageHtml(game)]
             : panel === 'exotic' ? ['Exotic Market', this.exoticHtml(game)]
             : panel === 'listing' ? [this.listingTitle(game), this.listingHtml(game)]
@@ -766,6 +767,14 @@ export class UI {
       <button class="btn plain" data-act="pubRefresh" ${game.money < PUB.refreshPrice ? 'disabled' : ''}>${cash(PUB.refreshPrice)}</button></div>`;
   }
 
+  /** Town decor: looks only, bought once each. */
+  private decorHtml(game: Game): string {
+    const ic: Record<string, IconName> = { flowers: 'bait', lanterns: 'bell', bunting: 'star', golddock: 'anchor', goldlight: 'coin', goldship: 'boat' };
+    return DECOR.map((d) => `<div class="row"><div class="slot">${icon(ic[d.id] ?? 'star')}</div><div class="meta"><b>${d.name}</b><div class="sub"><small>${d.blurb}</small></div></div>
+      ${game.decor.includes(d.id) ? '<span class="maxed">OWNED</span>' : `<button class="btn" data-act="buyDecor:${d.id}" ${game.money < d.price ? 'disabled' : ''}>${cash(d.price)}</button>`}</div>`).join('')
+      + '<p class="note">Looks only. Kept when you retire.</p>';
+  }
+
   /** The First Mate: hire, then a switch per job and how much they may spend. */
   private mateHtml(game: Game): string {
     const jobIcon: Record<MateJob, IconName> = { sail: 'boat', sell: 'coin', sign: 'crew', upgrade: 'anchor' };
@@ -1137,6 +1146,7 @@ export class UI {
     return `<div class="row"><div class="slot">${icon('coin')}</div><div class="meta"><b>This run</b></div>${coin(game.earned, 3)}</div>
       <div class="row"><div class="slot">${icon('pearl')}</div><div class="meta"><b>${game.pearls} Pearls</b><div class="sub"><small>${game.fishTree.length}/${TREE_FISH.length} tree fish · retired ${game.retirements}x</small></div></div>
         <button class="btn plain" data-act="tree">TREE</button><button class="btn" data-act="retire">RETIRE</button></div>
+      ${game.flagship ? `<div class="row"><div class="slot">${icon('star')}</div><div class="meta"><b>Town Decor</b><div class="sub"><small>${game.decor.length}/${DECOR.length} bought</small></div></div><button class="btn plain" data-act="decor">DECORATE</button></div>` : ''}
       ${this.canBuzz ? `<button class="btn wide plain" data-act="toggleBuzz">BUZZ ON BITE: ${this.buzz ? 'ON' : 'OFF'}</button>` : '<p class="note">Buzz on bite: not available on this phone.</p>'}
       <button class="btn wide ${game.dev ? 'red' : 'plain'}" data-act="toggleDev">DEV MODE ${game.dev ? 'ON' : 'OFF'} (x${DEV_MULTIPLIER} PRICES)</button>
       <button class="btn wide red" data-act="reset">START OVER</button>`;
