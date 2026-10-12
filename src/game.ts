@@ -8,7 +8,7 @@ import {
   TOO_STRONG_WEIGHT, VARIANTS, VARIANT_ORDER, WORMS_PER_PICK, WORM_SPAWN_SECONDS, WORM_SPOTS, baitById,
   type AchStat, type AchievementDef, type BaitId, type FishDef, type GearKind, type SkillId, type Tier, type Variant,
   CHUMS, FRENZY_SPEED, ICEBOXES, NETS, GEAR_BAG, GEAR_SELL, DROP_SELL, PUB, CREW_ROLE_ORDER, SAILOR_NAMES, type CrewRole, QUIRKS, QUIRK_ORDER, type QuirkId, MATE, MATE_JOB_ORDER, type MateJob, FLAGSHIP_UP_ORDER, FLAGSHIP_UPS, FLAGSHIP_UP_MAX, flagshipUpCost, type FlagshipUpId, GEAR_SLOTS, GEAR_TIERS, LEGACY_GEAR, STARTER_GEAR, gearById, rodReach, type GearDef, type GearSlot, type StatId, type GearTier,
-  GEAR_ITEMS, SETS, SET_ORDER, SET_SLOTS, SET_TIERS, SET_BONUS_SCALE, setPieceId, DROP_CHANCE, KEEN_EYE, VOYAGE_PIECE, DROP_ROLL, FINE_ROLL, LUCK_SCALE, FORTUNE_SCALE, STAT_CAP, STAT_ORDER, type SetId, type SetEffect, type SetSlot,
+  GEAR_ITEMS, SETS, SET_ORDER, SET_SLOTS, SET_TIERS, SET_BONUS_SCALE, setPieceId, DROP_CHANCE, KEEN_EYE, VOYAGE_PIECE, LEGENDARY_FIND, DROP_ROLL, FINE_ROLL, LUCK_SCALE, FORTUNE_SCALE, STAT_CAP, STAT_ORDER, type SetId, type SetEffect, type SetSlot,
   BILLFISH, SEA_FISH, SHELLFISH, TREE_FISH, pearlsFor, HEAD_STARTS, HEAD_START_CASH, type HeadStartId, TRAITS, TRAIT_ORDER, HEIR_NAMES, type TraitId, treeFishById, type TreeFish, COLLECTORS, EXOTIC, LEGENDS, VOYAGE, type LegendDef, type Region,
 } from './data';
 import * as V from './voyage';
@@ -496,11 +496,33 @@ export class Game {
     return item;
   }
 
-  /** A voyage home: maybe a voyage-only piece (one you don't have yet if any are left). */
-  private voyagePiece(region: Region): GearItem | null {
+  /** Pearls for landing a legend: Crown of the Deep adds half again. */
+  private legendPearls(l: LegendDef): number {
+    const n = V.pearlsFor(l);
+    return this.gearEffects().includes('pearls') ? Math.round(n * 1.5) : n;
+  }
+
+  /**
+   * A voyage home: in the Abyss maybe a Legendary piece you don't own yet,
+   * else maybe a voyage-only set piece (one you don't have yet if any are left).
+   */
+  private voyagePiece(region: Region, legend?: string): GearItem | null {
+    const look = 1 + PUB.lookoutPerStar * (this.crewStars().lookout ?? 0);
+    if (region === 'abyss') {
+      const owned = new Set([...GEAR_SLOTS.map((s) => this.equipped[s]), ...this.gearBag].filter((g): g is GearItem => !!g).map((g) => g.def));
+      const left = GEAR_ITEMS.filter((d) => d.tier === 'legendary' && !owned.has(d.id));
+      if (left.length && this.rng() < (legend === 'theoldone' ? LEGENDARY_FIND.old : LEGENDARY_FIND.abyss) * look) {
+        const item = this.makeGear(left[Math.floor(this.rng() * left.length)]!);
+        if (this.gearBag.length < GEAR_BAG) return this.gearBag.push(item), item;
+        // A full bag: it waits in the hold rather than being sold off; make room by dropping the cheapest found piece.
+        const cheap = this.gearBag.filter((g) => !this.keepOnSellAll(g)).sort((a, b) => this.gearValue(a) - this.gearValue(b))[0];
+        if (cheap) { this.money += this.gearValue(cheap); this.earned += this.gearValue(cheap); this.gearBag = this.gearBag.filter((g) => g !== cheap); this.gearBag.push(item); return item; }
+        return null;
+      }
+    }
     const p = VOYAGE_PIECE[region];
     // A Lookout spots more.
-    if (this.rng() >= Math.min(0.95, p.chance * (1 + PUB.lookoutPerStar * (this.crewStars().lookout ?? 0)))) return null;
+    if (this.rng() >= Math.min(0.95, p.chance * look)) return null;
     const slotOf = (s: SetId) => SET_SLOTS.find((x) => SETS[s].pieces[x].source === 'voyage')!;
     const have = new Set([...GEAR_SLOTS.map((s) => this.equipped[s]), ...this.gearBag].filter((g): g is GearItem => !!g).map((g) => { const d = this.gearDef(g); return `${d.set}-${d.slot}`; }));
     const missing = SET_ORDER.filter((s) => !have.has(`${s}-${slotOf(s)}`));
@@ -694,6 +716,11 @@ export class Game {
     return LEGENDS.filter((x) => x.region === 'abyss' && x.id !== 'theoldone').every((x) => this.landed[x.id]);
   }
 
+  /** Legendary effects you're wearing (each piece's `effect`). */
+  gearEffects(): string[] {
+    return GEAR_SLOTS.map((s) => this.equipped[s]).filter((g): g is GearItem => !!g).map((g) => this.gearDef(g).effect).filter((e): e is string => !!e);
+  }
+
   /** The Flagship is bought, rested (or dev mode) and not already out. */
   canSail(): boolean {
     return this.flagship && !this.voyage && !this.crewTrip && (this.flagshipRest <= 0 || this.dev);
@@ -709,6 +736,11 @@ export class Game {
     this.voyage.hull += this.flagshipUp('hull');
     this.voyage.maxHull = this.voyage.hull;
     this.voyage.haulX = 1 + 0.2 * this.flagshipUp('hold');
+    // Legendary gear: Old Salt's Cap, Kraken Hide; the rest act on the way.
+    const fx = this.gearEffects();
+    if (fx.includes('supply')) this.voyage.supplies++;
+    if (fx.includes('hull')) { this.voyage.hull++; this.voyage.maxHull++; }
+    this.voyage.perks = fx.filter((e) => ['storm', 'wreck', 'firstMove'].includes(e));
     return true;
   }
 
@@ -749,11 +781,11 @@ export class Game {
       this.landed[l.id] = (this.landed[l.id] ?? 0) + 1;
       out.exotic = this.addExotic(l.id, v.kg);
       if (!out.exotic) { out.sold = this.exoticValue(l.id, v.kg ?? l.kg); this.money += out.sold; this.earned += out.sold; this.made.sea += out.sold; }
-      out.pearls = V.pearlsFor(l);
+      out.pearls = this.legendPearls(l);
       this.pearls += out.pearls;
     }
     if (v.result !== 'failed') {
-      out.gear = this.voyagePiece(V.legendOf(v).region);
+      out.gear = this.voyagePiece(V.legendOf(v).region, v.legend);
       out.pearls += this.diverPearl();
     }
     this.voyage = null;
@@ -890,10 +922,10 @@ export class Game {
       this.landed[l.id] = (this.landed[l.id] ?? 0) + 1;
       const kg = Math.round(l.kg * (0.7 + this.rng() * 0.7));
       if (!this.addExotic(l.id, kg)) { out.sold = this.exoticValue(l.id, kg); this.money += out.sold; this.earned += out.sold; this.made.sea += out.sold; }
-      out.pearls = V.pearlsFor(l);
+      out.pearls = this.legendPearls(l);
       this.pearls += out.pearls;
     }
-    out.gear = this.voyagePiece(l.region);
+    out.gear = this.voyagePiece(l.region, l.id);
     out.pearls += this.diverPearl();
     this.crewNews.push(out);
   }

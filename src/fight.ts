@@ -41,8 +41,11 @@ export class Fight {
   private flash = 0;
   private flashNext: number;
 
-  /** `power`: your Strength (1 = none): the fish tires that much faster, and reeling raises tension more slowly. */
-  constructor(readonly fish: LegendDef, private rng: () => number = Math.random, private reel = FIGHT.reel, readonly power = 1) {
+  /**
+   * `power`: your Strength (1 = none): the fish tires that much faster, and reeling raises tension more slowly.
+   * `perks`: legendary gear effects that change fights (runTire, darkGlow, snag, waves).
+   */
+  constructor(readonly fish: LegendDef, private rng: () => number = Math.random, private reel = FIGHT.reel, readonly power = 1, readonly perks: string[] = []) {
     this.next = this.gap();
     this.snagNext = this.span(FIGHT.snagEvery);
     this.flashNext = this.span(FIGHT.flashEvery);
@@ -69,13 +72,14 @@ export class Fight {
     const [g0, g1] = FIGHT.green;
     if (!this.has('waves')) return [g0, g1];
     const shift = Math.sin(this.time * FIGHT.waveSpeed) * FIGHT.waveAmp;
-    const narrow = FIGHT.waveNarrow * (0.5 + 0.5 * Math.sin(this.time * FIGHT.waveRough));
+    // Ghost Treads: the swell narrows the band only half as much.
+    const narrow = FIGHT.waveNarrow * (0.5 + 0.5 * Math.sin(this.time * FIGHT.waveRough)) * (this.perks.includes('waves') ? 0.5 : 1);
     return [g0 + shift + narrow / 2, g1 + shift - narrow / 2];
   }
 
   /** Can you see the bar? Always, except in the dark between the lure's flashes. */
   get lit(): boolean {
-    return !this.has('dark') || this.flash > 0;
+    return !this.has('dark') || this.flash > 0 || this.perks.includes('darkGlow');
   }
 
   /** Where the tension sits: slack (about to lose the hook), low, green (reeling well), high (about to snap). */
@@ -103,7 +107,7 @@ export class Fight {
     if (this.snagged) {
       // Caught on kelp or coral: reeling pulls against the snag (tension climbs slowly) and frees it; let go and the line wears.
       this.tension = Math.max(0, this.tension + (holding ? FIGHT.snagReel : -FIGHT.snagEase) * dt);
-      if (holding) this.free += this.spin * FIGHT.snagFree * dt;
+      if (holding) this.free += this.spin * FIGHT.snagFree * (this.perks.includes('snag') ? 1.5 : 1) * dt;
       else this.wear += FIGHT.snagWear * dt;
       if (this.free >= 1) { this.snagged = false; this.wear = 0; }
     } else {
@@ -117,7 +121,7 @@ export class Fight {
         if (holding) this.tension += (FIGHT.runHold + pull * this.fish.surgePower) * dt;
         else {
           this.tension = Math.max(0, this.tension - FIGHT.runEase * dt);
-          this.stamina -= FIGHT.runTire * dt;
+          this.stamina -= FIGHT.runTire * (this.perks.includes('runTire') ? 1.5 : 1) * dt;
         }
       } else this.tension = Math.max(0, this.tension + (holding ? (FIGHT.reelTension + pull * FIGHT.pullOnReel) / (1 + (this.power - 1) / 2) : pull - FIGHT.ease) * dt);
       // Reeling tires the fish, by how fast the reel spins: best in the green, a little with a loose line, a bit more (but risky) up high.

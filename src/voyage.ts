@@ -22,6 +22,8 @@ export interface VoyageState {
   /** The hull you set out with (Iron Hull adds to it) and the Bigger Hold's haul multiplier. */
   maxHull?: number;
   haulX?: number;
+  /** Legendary gear worn when it set out: 'storm' and 'wreck' never hurt the hull, 'firstMove' makes the first move free. */
+  perks?: string[];
   haul: number;
   /** map: choose where to sail; spot: deal with the spot you reached; fight: at the legend; over: done. */
   stage: 'map' | 'spot' | 'fight' | 'over';
@@ -55,7 +57,7 @@ export const EVENTS: Record<string, EventDef> = {
   storm: {
     text: 'A storm rolls in fast.',
     choices: [{ label: 'PUSH THROUGH', cost: '40%: -1 hull' }, { label: 'WAIT IT OUT', cost: '-1 supply' }],
-    act: (k, v, rng) => (k === 0 ? (rng() < 0.4 ? (hurt(v), 'The waves hammer the hull.') : 'You ride it out.') : (v.supplies--, 'You wait. It passes.')),
+    act: (k, v, rng) => (k === 0 ? (v.perks?.includes('storm') ? 'Your coat sheds the storm.' : rng() < 0.4 ? (hurt(v), 'The waves hammer the hull.') : 'You ride it out.') : (v.supplies--, 'You wait. It passes.')),
   },
   rival: {
     text: 'A rival boat races you to a school of fish.',
@@ -129,8 +131,10 @@ export function canReach(v: VoyageState, i: number): boolean {
 
 /** Sail to a spot of the next row (one supply). */
 export function sail(v: VoyageState, i: number): boolean {
-  if (!canReach(v, i) || v.supplies < 1) return false;
-  v.supplies--;
+  // Sea Legs: the first move costs nothing.
+  const free = v.row < 0 && !!v.perks?.includes('firstMove');
+  if (!canReach(v, i) || (v.supplies < 1 && !free)) return false;
+  if (!free) v.supplies--;
   v.row++;
   v.at = i;
   v.used = false;
@@ -174,7 +178,7 @@ export function choose(v: VoyageState, k: number, rng: Roll): void {
     v.used = true;
   } else if (s.kind === 'wreck') {
     v.used = true;
-    if (rng() < 0.4) { hurt(v); v.note = 'Debris tears the hull. -1 hull.'; }
+    if (!v.perks?.includes('wreck') && rng() < 0.4) { hurt(v); v.note = 'Debris tears the hull. -1 hull.'; }
     else { const n = base(v, rng) * 2; v.haul += n; v.note = `Treasure in the hold: +${money(n)}.`; }
   } else {
     const p = traderPrices(v);

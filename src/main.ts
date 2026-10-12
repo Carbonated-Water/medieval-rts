@@ -224,7 +224,7 @@ function onAction(a: Action): void {
   else if (a === 'gsellall') { const n = game.sellAllGear(); if (n) note.banner(pixelIcon('coin'), 'SOLD ALL', `$${n.toLocaleString()}`, 'plain'); }
   else if (a.startsWith('fight:')) {
     const legend = LEGENDS.find((l) => l.id === a.slice(6));
-    if (legend) { ui.open = null; fightView.start(new Fight(legend, Math.random, undefined, game.fightPower())); }
+    if (legend) { ui.open = null; fightView.start(new Fight(legend, Math.random, undefined, game.fightPower(), game.gearEffects())); }
   } else if (a === 'fightDone') { fightView.close(); ui.open = game.voyage ? 'voyage' : 'lighthouse'; }
   else if (a === 'buyFlagship') { if (game.buyFlagship()) note.banner(pixelIcon('boat'), 'THE FLAGSHIP', 'Ready to sail', 'rare'); }
   else if (a.startsWith('sail:')) { if (game.startVoyage(a.slice(5))) ui.open = 'voyage'; }
@@ -235,7 +235,7 @@ function onAction(a: Action): void {
     // The real thing: the result goes to the voyage.
     voyageFight = true;
     ui.open = null;
-    fightView.start(new Fight(LEGENDS.find((l) => l.id === game.voyage!.legend)!, Math.random, undefined, game.fightPower()));
+    fightView.start(new Fight(LEGENDS.find((l) => l.id === game.voyage!.legend)!, Math.random, undefined, game.fightPower(), game.gearEffects()));
   } else if (a === 'vhome') {
     const out = game.endVoyage();
     if (out?.result === 'caught') note.banner(pixelIcon('trophy'), 'HOME WITH A LEGEND', `+${out.pearls} Pearls${out.sold ? ` · hold full, sold $${out.sold.toLocaleString()}` : ''}`, 'rare');

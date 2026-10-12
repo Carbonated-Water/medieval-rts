@@ -314,7 +314,7 @@ export const GEAR_ITEMS: GearDef[] = [
   { id: 'treasuretreads', slot: 'boots', tier: 'diamond', name: "Treasure Treads", stats: { stride: 70, fortune: 40 }, price: 150000, style: 'boots', colors: ['#f4b41b', '#8a5a2a'] },
   // Legendary: voyages only
   { id: 'leviathansspine', slot: 'rod', tier: 'legendary', name: "Leviathan's Spine", stats: { strength: 80, luck: 50 }, price: 2000000, style: 'ornate', colors: ['#2a1a4a', '#ff8a3a'], effect: 'runTire', blurb: "Letting a run go tires fish 50% faster" },
-  { id: 'abyssallantern', slot: 'rod', tier: 'legendary', name: "Abyssal Lantern", stats: { reflex: 60, luck: 60 }, price: 2000000, style: 'ornate', colors: ['#1a2a3a', '#f0f080'], effect: 'darkGlow', blurb: "In the Abyss the bar never goes fully dark" },
+  { id: 'abyssallantern', slot: 'rod', tier: 'legendary', name: "Abyssal Lantern", stats: { reflex: 60, luck: 60 }, price: 2000000, style: 'ornate', colors: ['#1a2a3a', '#f0f080'], effect: 'darkGlow', blurb: "In the Abyss the bar stays lit" },
   { id: 'oldsaltscap', slot: 'hat', tier: 'legendary', name: "Old Salt's Cap", stats: { luck: 70, fortune: 40 }, price: 2000000, style: 'cap', colors: ['#3a4a6a', '#f4b41b'], effect: 'supply', blurb: "+1 supply on every voyage" },
   { id: 'crownofthedeep', slot: 'hat', tier: 'legendary', name: "Crown of the Deep", stats: { fortune: 90, luck: 40 }, price: 2000000, style: 'crown', colors: ['#f4b41b', '#2cc5f6'], effect: 'pearls', blurb: "+50% Pearls from legends" },
   { id: 'krakenhide', slot: 'shirt', tier: 'legendary', name: "Kraken Hide", stats: { size: 120 }, price: 2000000, style: 'jacket', colors: ['#7a2a5a', '#e080b0'], effect: 'hull', blurb: "+1 hull on every voyage" },
@@ -425,6 +425,11 @@ export const KEEN_EYE = { per: 0.5, cost: [3, 6, 10, 15, 25] };
 export const VOYAGE_PIECE: Record<'coast' | 'ocean' | 'abyss', { chance: number; tier: GearTier }> = {
   coast: { chance: 0.35, tier: 'platinum' }, ocean: { chance: 0.5, tier: 'diamond' }, abyss: { chance: 0.75, tier: 'diamond' },
 };
+/**
+ * Legendary gear: found only on Abyss voyages (yours or your crew's), one you
+ * don't own yet; The Old One's voyages find them more often. A Lookout helps.
+ */
+export const LEGENDARY_FIND = { abyss: 0.06, old: 0.15 };
 /** Drops roll their stats between these (x the shop piece); "fine" at or above FINE_ROLL. */
 export const DROP_ROLL: [number, number] = [0.8, 1.25];
 export const FINE_ROLL = 1.12;

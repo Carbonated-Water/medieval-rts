@@ -4,9 +4,10 @@ import {
   COMPANY_UNLOCK_EARNED, LETTERS, TRACK_GROWTH, TRACK_MAX, TRACK_ORDER, CLOTHES, DEV_MULTIPLIER, FISH, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_MAX, VARIANTS,
   MAX_GROUND_WORMS, START_WORMS, STRENGTH_PER_LEVEL, WORM_SPAWN_SECONDS, skillCost, TREE_FISH, pearlsFor, gearById, LEGENDS, rodReach, HAND_RODS, HEAD_START_CASH,
   SETS, SET_ORDER, SET_SLOTS, SET_TIERS, setPieceId, STAT_CAP, DROP_SELL, DROP_ROLL, KEEN_EYE, PERFECT_ZONE, PERFECT_PER_LEVEL, AUTO_PERFECT_MAX, STRENGTH_FIGHT,
-  PUB, QUIRKS, VOYAGE, MATE, FLAGSHIP_UP_MAX, flagshipUpCost, type CrewRole, type QuirkId,
+  PUB, QUIRKS, VOYAGE, MATE, GEAR_ITEMS, FLAGSHIP_UP_MAX, flagshipUpCost, type CrewRole, type QuirkId,
 } from './data';
 import { Game, fishById, type Line } from './game';
+import { Fight } from './fight';
 
 /** Deterministic RNG for tests. */
 function rng(seed = 1) {
@@ -1562,5 +1563,45 @@ describe('the First Mate', () => {
     tick(g, 10);
     expect(Object.values(g.flagshipUps).reduce((a, b) => a + (b ?? 0), 0)).toBeGreaterThan(0);
     expect(Object.keys(g.crew).length).toBeGreaterThan(2);
+  });
+});
+
+describe('Legendary gear', () => {
+  const legendaries = () => GEAR_ITEMS.filter((d) => d.tier === 'legendary').map((d) => d.id);
+  const wear = (g: Game, id: string) => { const d = gearById(id)!; g.equipped[d.slot] = { id: 900 + legendaries().indexOf(id), def: id, stats: { ...d.stats } }; };
+
+  it('turns up only from Abyss crew voyages, one you do not own yet, until you have them all', () => {
+    const g = new Game({ money: 1e9, company: true, flagship: true, landed: { kelpwyrm: 1, ghostmarlin: 1 }, crew: { captain: { id: 1, name: 'C', role: 'captain', stars: 1 } } }, rng(7));
+    g.dev = true; // 10 s trips
+    const found = new Set<string>();
+    for (let k = 0; k < 600 && found.size < 10; k++) {
+      g.sendCrew('abyssking'); tick(g, 11);
+      for (const r of g.crewNews.splice(0)) if (r.gear && g.gearDef(r.gear).tier === 'legendary') { expect(found.has(r.gear.def)).toBe(false); found.add(r.gear.def); }
+      g.exoticHold = [];
+      g.gearBag = g.gearBag.filter((x) => g.gearDef(x).tier === 'legendary');
+    }
+    expect(found.size).toBe(10);
+    // Coast voyages never find one.
+    const c = new Game({ company: true, flagship: true, crew: { captain: { id: 1, name: 'C', role: 'captain', stars: 1 } } }, rng(8));
+    c.dev = true;
+    for (let k = 0; k < 200; k++) { c.sendCrew('kelpwyrm'); tick(c, 11); for (const r of c.crewNews.splice(0)) expect(r.gear && c.gearDef(r.gear).tier).not.toBe('legendary'); c.exoticHold = []; c.gearBag = []; }
+  });
+
+  it('voyage effects: +1 supply, +1 hull, a free first move', () => {
+    const g = new Game({ company: true, flagship: true }, rng(9));
+    wear(g, 'oldsaltscap'); wear(g, 'krakenhide'); wear(g, 'sealegs');
+    expect(g.startVoyage('kelpwyrm')).toBe(true);
+    expect(g.voyage!.supplies).toBe(VOYAGE.supplies + 1);
+    expect(g.voyage!.hull).toBe(VOYAGE.hull + 1);
+    expect(g.voyageSail(0)).toBe(true);
+    expect(g.voyage!.supplies).toBe(VOYAGE.supplies + 1); // the first move was free
+  });
+
+  it('fight effects: Abyssal Lantern keeps the dark bar lit; Leviathan\'s Spine tires fish faster on a run', () => {
+    const abyss = LEGENDS.find((l) => l.region === 'abyss')!;
+    const lit = new Fight(abyss, rng(4), undefined, 1, ['darkGlow']);
+    for (let t = 0; t < 20; t += 0.1) { lit.update(0.1, false); expect(lit.lit).toBe(true); }
+    const tired = (perks: string[]) => { const f = new Fight(LEGENDS[0]!, rng(5), undefined, 1, perks); f.surge = 5; f.update(1, false); return 1 - f.stamina; };
+    expect(tired(['runTire'])).toBeCloseTo(tired([]) * 1.5, 5);
   });
 });

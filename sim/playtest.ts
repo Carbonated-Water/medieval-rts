@@ -47,7 +47,7 @@ export interface Report {
   milestones: { t: number; run: number; what: string }[];
   snapshots: { t: number; run: number; money: number; earned: number; perMin: number; you: number; hands: number; boats: number; sea: number; taps: number }[];
   /** The late game at the end: crew, Flagship, legends, Pearls. */
-  late?: { seats: number; stars: number; fives: number; ups: number; mate: boolean; legends: number; crewTrips: number; pearls: number };
+  late?: { seats: number; stars: number; fives: number; ups: number; mate: boolean; legends: number; crewTrips: number; pearls: number; legendaries: number };
   taps: Record<TapKind, number>;
   fights: { legend: string; won: boolean; secs: number }[];
   voyages: { t: number; legend: string; result: string; haul: number }[];
@@ -414,7 +414,7 @@ class Bot {
 
   /** The fight, played by a rule: hold in the low/slack zone, let go when high or when it runs (after a reaction delay). */
   fight(l: typeof LEGENDS[number]): boolean {
-    const f = new Fight(l, this.rng, undefined, this.g.fightPower());
+    const f = new Fight(l, this.rng, undefined, this.g.fightPower(), this.g.gearEffects());
     let holding = false, decideIn = 0, secs = 0;
     while (!f.end && secs < 300) {
       if ((decideIn -= 1 / 60) <= 0) {
@@ -496,6 +496,7 @@ class Bot {
       seats: seats.length, stars: seats.reduce((n, r) => n + g.crew[r]!.stars, 0), fives: seats.filter((r) => g.crew[r]!.stars >= 5).length,
       ups: FLAGSHIP_UP_ORDER.reduce((n, id) => n + g.flagshipUp(id), 0), mate: g.mate,
       legends: Object.values(g.landed).reduce((n, k) => n + k, 0), crewTrips: this.crewTrips, pearls: g.pearls,
+      legendaries: [...GEAR_SLOTS.map((s) => g.equipped[s]), ...g.gearBag].filter((x) => !!x && g.gearDef(x).tier === 'legendary').length,
     };
     return this.rep;
   }
@@ -517,7 +518,7 @@ export function print(r: Report): string {
   }
   if (r.late) {
     const l = r.late;
-    out.push('', `LATE GAME: crew ${l.seats}/8 seats, ${l.stars} stars (${l.fives} at 5) · Flagship upgrades ${l.ups}/25 · First Mate ${l.mate ? 'yes' : 'no'} · legends landed ${l.legends} · crew trips ${l.crewTrips} · Pearls ${l.pearls}`);
+    out.push('', `LATE GAME: crew ${l.seats}/8 seats, ${l.stars} stars (${l.fives} at 5) · Flagship upgrades ${l.ups}/25 · First Mate ${l.mate ? 'yes' : 'no'} · legends landed ${l.legends} · crew trips ${l.crewTrips} · Pearls ${l.pearls} · legendary gear ${l.legendaries}/10`);
   }
   if (r.lines.length) {
     out.push('', 'YOUR LINES (how bites ended)');

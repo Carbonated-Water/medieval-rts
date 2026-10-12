@@ -4,6 +4,24 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-12  Legendary gear is a voyage chase; first buy in a minute
+  WHAT: The 10 Legendary pieces drop from Abyss voyages (yours or the
+        crew's): 6% a voyage, 15% for The Old One, x a Lookout's bonus,
+        always one you don't own. Their effects now work: Old Salt's Cap +1
+        supply, Kraken Hide +1 hull, Sea Legs a free first move, Storm
+        Captain's Coat storms never hurt the hull, Mermaid Scale Trousers
+        wreck dives never do, Crown of the Deep +50% Pearls from legends,
+        and in fights Leviathan's Spine (runs tire fish 50% faster),
+        Abyssal Lantern (the dark bar stays lit), Tidewalker Greaves (snags
+        free 50% faster), Ghost Treads (the swell narrows the band half as
+        much). Item card says "Abyss voyage find". Willow Switch $40 (was
+        300), Cane Pole $200 (was 500); a dock nudge says to sell, then buy
+        the rod. Harness LATE GAME line counts legendary gear.
+  WHY:  The user chose to bring the dead legendaries back as a late-game
+        chase, and a first purchase within a minute (it took ~6). Harness:
+        all 10 found about 10h into the late game (3 seeds); first rod at
+        1-2 min; Flagship 2-9 min later than before.
+
 2026-10-12  Polish pass from the tracker
   WHAT: Playtest: --retire N (play one run out), a sea column in the income
         split, a LATE GAME line, the bot hires the First Mate; fixed the

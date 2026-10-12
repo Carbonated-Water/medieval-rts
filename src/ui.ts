@@ -1012,7 +1012,7 @@ export class UI {
         : '<p class="empty">Nothing here. Buy one at the Gear Shop, or find one fishing.</p>';
     }
     const tier = GEAR_TIERS[def.tier];
-    const kind = def.source === 'voyage' ? 'Voyage find' : item.drop ? (item.fine ? 'Fine find' : 'Found fishing') : 'Shop piece';
+    const kind = def.tier === 'legendary' ? 'Abyss voyage find' : def.source === 'voyage' ? 'Voyage find' : item.drop ? (item.fine ? 'Fine find' : 'Found fishing') : 'Shop piece';
     const head = `<div class="rpghead">${this.gearTile(def, item, 'none')}<div><b class="rpgname">${def.name}</b>
       <small style="color:${tier.color}">${tier.name} ${SLOT_NAME[def.slot]}</small>${def.set ? `<small><span class="setchip" style="--sc:${SETS[def.set].color}">${SETS[def.set].name.toUpperCase()} SET</span></small>` : ''}<small>${worn ? 'You are wearing this' : kind}</small></div></div>`;
     const other = worn ? null : game.equipped[def.slot];
