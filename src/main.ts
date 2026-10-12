@@ -91,7 +91,8 @@ canvas.addEventListener('click', (e) => {
   const slot = scene.hitBobber(e.clientX, e.clientY);
   if (slot >= 0) { game.reel(slot); return; }
   const target = scene.hit(e.clientX, e.clientY);
-  if (target === 'dock' && scene.place === 'dock') return; // already there; don't put the lines away
+  // Already on the dock: tapping the river casts (or reels a bite), the same as the big button.
+  if (target === 'dock' && scene.place === 'dock') { if (!scene.walking) onAction(primaryAction()); return; }
   if (target !== 'dock' && target === scene.place && !scene.walking) { scene.onArrive(target); return; } // already standing here: open it
   scene.walkTo(target, e.clientX);
 });

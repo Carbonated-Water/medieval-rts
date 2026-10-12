@@ -73,7 +73,7 @@ export class Notices {
 
   /** Into the Log only: nothing shows on screen. */
   quiet(icon: string, html: string, tone: Tone = 'plain'): void {
-    this.remember({ icon, html, tone, at: performance.now(), count: 1 });
+    this.remember({ icon, html, tone, at: performance.now(), count: 1 }, tone === 'rare');
   }
 
   /** A plaque under the top bar for special moments; queued one at a time. */
@@ -113,10 +113,11 @@ export class Notices {
     this.unread = 0;
   }
 
-  private remember(e: Entry): void {
+  /** Into the Log; the bell's count only goes up for rare finds that never showed on screen. */
+  private remember(e: Entry, missed = false): void {
     this.history.unshift(e);
     this.history.length = Math.min(this.history.length, HISTORY);
-    this.unread++;
+    if (missed) this.unread++;
   }
 }
 
