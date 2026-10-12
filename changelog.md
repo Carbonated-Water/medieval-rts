@@ -4,6 +4,20 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-12  Focus pass: shops open one at a time
+  WHAT: A new game opens only the Market. The Gear Shop opens with your
+        first sale ($20 earned), the Bait Shop at $60 (or when you're down
+        to 3 worms), the Tackle Shop at $250, the Fishing School at $600;
+        each opening gets a NOW OPEN banner. Shops not open yet are greyed
+        out with a "?" sign; tapping one says what opens it ("EARN $250 TO
+        OPEN") instead of walking there. Top bar buttons appear once they
+        have something: gear with the Gear Shop, the journal after a catch,
+        trophies once one is won, the log once something's in it. Opened
+        shops are kept on retire; saves from before get everything open.
+  WHY:  The user's pick from the board: a new player saw every system at
+        once (five buildings, five top buttons). Now they meet them in
+        order, each when it becomes useful.
+
 2026-10-12  Money sinks for the late game
   WHAT: Flagship upgrades go to 10 levels (x3 a level; Swift Sails now
         x0.88 rest / x0.94 crew trips a level so it never hits zero).

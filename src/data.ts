@@ -435,6 +435,20 @@ export const REFORGE = {
   base: { bronze: 2_000, silver: 20_000, gold: 250_000, platinum: 4_000_000, diamond: 40_000_000, legendary: 0 } as Record<GearTier, number>,
   step: 1.6,
 };
+/**
+ * The focus pass: shops open one at a time as you earn (lifetime earnings
+ * this run, or a reason sooner), so a new player meets them in order. Once
+ * open, a shop stays open for good (kept on retire). The Market is always open.
+ */
+export type ShopId = 'gear' | 'bait' | 'tackle' | 'school';
+export const SHOP_ORDER: ShopId[] = ['gear', 'bait', 'tackle', 'school'];
+export const SHOP_OPEN: Record<ShopId, { earned: number; name: string; hint: string }> = {
+  gear: { earned: 20, name: 'Gear Shop', hint: 'Sell your first fish' },
+  bait: { earned: 60, name: 'Bait Shop', hint: 'Earn $60' },
+  tackle: { earned: 250, name: 'Tackle Shop', hint: 'Earn $250' },
+  school: { earned: 600, name: 'Fishing School', hint: 'Earn $600' },
+};
+
 /** Town decor (bought from the menu once the Flagship is yours): looks only, no stats. Kept on retire. */
 export type DecorId = 'flowers' | 'lanterns' | 'bunting' | 'golddock' | 'goldlight' | 'goldship';
 export const DECOR: { id: DecorId; name: string; blurb: string; price: number }[] = [

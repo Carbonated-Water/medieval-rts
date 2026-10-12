@@ -2,7 +2,7 @@ import { rodReach, HEAD_STARTS, type HeadStartId, TRAITS, HARBOR_STAFF,
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_ORDER, COMPANY_PRICE, COMPANY_UNLOCK_EARNED, DEV_MULTIPLIER, GROUNDS, HARBOR_UPGRADES,
   MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, PIER_STAFF, HANDS_MAX,
   TRACKS, TRACK_MAX, TRACK_ORDER, WAREHOUSE, type HarborUpgradeId, type TrackId, HAND_NAMES, HAND_SKILL_MAX, LETTERS, RODS, HAND_RODS, FISH, GEAR, PERFECT_PER_LEVEL, SKILLS, STRENGTH_PER_LEVEL, HAGGLE_PER_LEVEL,
-  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, TREE_FISH, type TreeFish, PUB, CREW_ROLES, CREW_ROLE_ORDER, QUIRKS, DECOR, MATE, MATE_JOB_ORDER, type MateJob, FLAGSHIP_UPS, FLAGSHIP_UP_ORDER, FLAGSHIP_UP_MAX, type FlagshipUpId, LEGENDS, EXOTIC, REGIONS, VOYAGE, GEAR_BAG, GEAR_ITEMS, GEAR_SLOTS, GEAR_TIERS, STATS, STAT_ORDER, SETS, SET_SLOTS, KEEN_EYE, MASTERWORK, FORTUNE_SCALE, LUCK_SCALE, SKILL_TIER_BONUS, NETS, setPieceId, gearById, type SetId, type GearDef, type GearSlot, type GearTier, type StatId,
+  TIERS, VARIANTS, VARIANT_ORDER, type AchStat, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, TREE_FISH, type TreeFish, PUB, CREW_ROLES, CREW_ROLE_ORDER, QUIRKS, DECOR, SHOP_OPEN, MATE, MATE_JOB_ORDER, type MateJob, FLAGSHIP_UPS, FLAGSHIP_UP_ORDER, FLAGSHIP_UP_MAX, type FlagshipUpId, LEGENDS, EXOTIC, REGIONS, VOYAGE, GEAR_BAG, GEAR_ITEMS, GEAR_SLOTS, GEAR_TIERS, STATS, STAT_ORDER, SETS, SET_SLOTS, KEEN_EYE, MASTERWORK, FORTUNE_SCALE, LUCK_SCALE, SKILL_TIER_BONUS, NETS, setPieceId, gearById, type SetId, type GearDef, type GearSlot, type GearTier, type StatId,
 } from './data';
 import { type Boat, type Exotic, type Game, type GearItem, type Sailor, fishById } from './game';
 import * as V from './voyage';
@@ -205,10 +205,11 @@ export class UI {
     this.set('top', this.top,
       `<div class="wallet"><div class="plaque purse">${icon('coin')}${num(game.money)}</div>${this.ratesHtml(game)}</div>` +
       (game.dev ? `<span class="dev">DEV x${DEV_MULTIPLIER}</span>` : '') + '<span class="grow"></span>' +
-      `<button class="slot" data-act="character" aria-label="character">${icon('shirt')}</button>` +
-      `<button class="slot" data-act="journal" aria-label="journal">${icon('book')}</button>` +
-      `<button class="slot" data-act="trophies" aria-label="achievements">${icon('trophy')}${badge(ready)}</button>` +
-      `<button class="slot" data-act="inbox" aria-label="log">${icon('bell')}${badge(unread)}</button>` +
+      // Buttons appear once they have something in them: gear once the Gear Shop opens, the journal after a catch, trophies once one is won, the log once something's in it.
+      (game.shopOpen('gear') ? `<button class="slot" data-act="character" aria-label="character">${icon('shirt')}</button>` : '') +
+      (Object.keys(game.journal).length ? `<button class="slot" data-act="journal" aria-label="journal">${icon('book')}</button>` : '') +
+      (ready || game.claimed.length ? `<button class="slot" data-act="trophies" aria-label="achievements">${icon('trophy')}${badge(ready)}</button>` : '') +
+      (this.notices.history.length ? `<button class="slot" data-act="inbox" aria-label="log">${icon('bell')}${badge(unread)}</button>` : '') +
       `<button class="slot" data-act="settings" aria-label="settings">${icon('menu')}</button>`);
     this.set('action', this.action, this.actionHtml(game, place, walking));
     this.set('sheet', this.sheet, this.open ? this.panelHtml(this.open, game) : '');
@@ -220,9 +221,10 @@ export class UI {
       ? `<div class="plaque bag"><span>${icon('fish', 3)}${game.bag.length}</span>${coin(game.bagValue(), 3)}</div>` : '';
     if (walking) return bag;
     if (place === 'market') return `${bag}<button class="btn big" data-act="market">SELL FISH</button>`;
-    if (place === 'tackle') return `${bag}<button class="btn big" data-act="tackle">BUY GEAR</button>`;
-    if (place === 'school') return `${bag}<button class="btn big" data-act="training">TRAIN</button>`;
-    if (place === 'bait') return `${bag}<button class="btn big" data-act="baitshop">BUY BAIT</button>`;
+    const shut = (id: 'tackle' | 'school' | 'bait') => `${bag}<div class="plaque hint">${SHOP_OPEN[id].name}: ${SHOP_OPEN[id].hint.toLowerCase()} to open</div>`;
+    if (place === 'tackle') return game.shopOpen('tackle') ? `${bag}<button class="btn big" data-act="tackle">BUY GEAR</button>` : shut('tackle');
+    if (place === 'school') return game.shopOpen('school') ? `${bag}<button class="btn big" data-act="training">TRAIN</button>` : shut('school');
+    if (place === 'bait') return game.shopOpen('bait') ? `${bag}<button class="btn big" data-act="baitshop">BUY BAIT</button>` : shut('bait');
     if (place !== 'dock') return `${bag}<div class="plaque hint">Tap the river to fish</div>`;
     const active = game.activeBait;
     const pouch = `<button class="slot pouch" data-act="pouch" aria-label="bait">${icon(BAIT_ICON[active ?? game.baitSel])}<i class="badge count">${active ? game.baitCount(active) : 0}</i></button>`;

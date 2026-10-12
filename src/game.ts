@@ -8,7 +8,7 @@ import {
   TOO_STRONG_WEIGHT, VARIANTS, VARIANT_ORDER, WORMS_PER_PICK, WORM_SPAWN_SECONDS, WORM_SPOTS, baitById,
   type AchStat, type AchievementDef, type BaitId, type FishDef, type GearKind, type SkillId, type Tier, type Variant,
   CHUMS, FRENZY_SPEED, ICEBOXES, NETS, GEAR_BAG, GEAR_SELL, DROP_SELL, PUB, CREW_ROLE_ORDER, SAILOR_NAMES, type CrewRole, QUIRKS, QUIRK_ORDER, type QuirkId, MATE, MATE_JOB_ORDER, type MateJob, FLAGSHIP_UP_ORDER, FLAGSHIP_UPS, FLAGSHIP_UP_MAX, SAILS_REST, SAILS_TRIP, flagshipUpCost, type FlagshipUpId, GEAR_SLOTS, GEAR_TIERS, LEGACY_GEAR, STARTER_GEAR, gearById, rodReach, type GearDef, type GearSlot, type StatId, type GearTier,
-  GEAR_ITEMS, SETS, SET_ORDER, SET_SLOTS, SET_TIERS, SET_BONUS_SCALE, setPieceId, DROP_CHANCE, KEEN_EYE, VOYAGE_PIECE, LEGENDARY_FIND, REFORGE, MASTERWORK, DECOR, type DecorId, DROP_ROLL, FINE_ROLL, LUCK_SCALE, FORTUNE_SCALE, STAT_CAP, STAT_ORDER, type SetId, type SetEffect, type SetSlot,
+  GEAR_ITEMS, SETS, SET_ORDER, SET_SLOTS, SET_TIERS, SET_BONUS_SCALE, setPieceId, DROP_CHANCE, KEEN_EYE, VOYAGE_PIECE, LEGENDARY_FIND, REFORGE, MASTERWORK, DECOR, type DecorId, SHOP_ORDER, SHOP_OPEN, type ShopId, DROP_ROLL, FINE_ROLL, LUCK_SCALE, FORTUNE_SCALE, STAT_CAP, STAT_ORDER, type SetId, type SetEffect, type SetSlot,
   BILLFISH, SEA_FISH, SHELLFISH, TREE_FISH, pearlsFor, HEAD_STARTS, HEAD_START_CASH, type HeadStartId, TRAITS, TRAIT_ORDER, HEIR_NAMES, type TraitId, treeFishById, type TreeFish, COLLECTORS, EXOTIC, LEGENDS, VOYAGE, type LegendDef, type Region,
 } from './data';
 import * as V from './voyage';
@@ -92,6 +92,8 @@ export interface SaveData {
   flagshipUps?: Partial<Record<FlagshipUpId, number>>;
   /** Town decor bought (kept on retire). */
   decor?: DecorId[];
+  /** Shops opened so far (kept on retire); undefined in saves from before the focus pass. */
+  opened?: ShopId[];
   voyage?: V.VoyageState | null;
   /** The Pub: your crew, the board of sailors, its clock, a crew voyage under way. */
   crew?: Partial<Record<CrewRole, Sailor>>;
@@ -270,6 +272,9 @@ export class Game {
   flagshipRest = 0;
   flagshipUps: Partial<Record<FlagshipUpId, number>> = {};
   decor: DecorId[] = [];
+  opened: ShopId[] = [];
+  /** Shops that just opened, for the screen to announce; not saved. */
+  openNews: ShopId[] = [];
   voyage: V.VoyageState | null = null;
   crew: Partial<Record<CrewRole, Sailor>> = {};
   pubBoard: Sailor[] = [];
@@ -354,6 +359,9 @@ export class Game {
     this.rod = clamp(this.rod, 0, RODS.length - 1);
     this.holders = clamp(this.holders, 0, HOLDERS.length - 1);
     this.syncLines();
+    // Saves from before the focus pass: every shop they could reach is open (no news).
+    if (save && !save.opened) this.opened = this.earned > 0 || this.company || (save.retirements ?? 0) > 0 ? [...SHOP_ORDER] : [];
+    this.openShops(false);
     this.auto = clamp(this.auto, 0, AUTO.length - 1);
     this.net = clamp(this.net, 0, NETS.length - 1);
     this.chum = clamp(this.chum, 0, CHUMS.length - 1);
@@ -533,6 +541,23 @@ export class Game {
     const pool = missing.length ? missing : SET_ORDER;
     const set = pool[Math.floor(this.rng() * pool.length)]!;
     return this.findPiece(set, slotOf(set), p.tier, false);
+  }
+
+  // ---------- the focus pass: shops open one at a time ----------
+
+  shopOpen(id: ShopId): boolean {
+    return this.opened.includes(id);
+  }
+
+  /** Open any shop whose time has come (the Bait Shop early if you're nearly out of worms). */
+  private openShops(news = true): void {
+    for (const id of SHOP_ORDER) {
+      if (this.opened.includes(id)) continue;
+      const due = this.earned >= SHOP_OPEN[id].earned || (id === 'bait' && this.earned > 0 && this.baitCount('worm') <= 3);
+      if (!due) continue;
+      this.opened = [...this.opened, id];
+      if (news) this.openNews.push(id);
+    }
   }
 
   // ---------- money sinks: town decor, Reforge, Masterwork ----------
@@ -1201,7 +1226,7 @@ export class Game {
     for (const slot of GEAR_SLOTS) { const def = STARTER_GEAR[slot]; equipped[slot] = def ? { id: id++, def, stats: { ...gearById(def)!.stats } } : null; }
     if (kept) equipped[this.gearDef(kept).slot] = { ...kept, id: id++ };
     return {
-      pearls: this.pearls + gain, fishTree: [...this.fishTree], retirements: this.retirements + 1, seaSeen: [...this.seaSeen], landed: { ...this.landed }, decor: [...this.decor],
+      pearls: this.pearls + gain, fishTree: [...this.fishTree], retirements: this.retirements + 1, seaSeen: [...this.seaSeen], landed: { ...this.landed }, decor: [...this.decor], opened: [...this.opened],
       journal: this.journal, claimed: [...this.claimed], dev: this.dev, perks: [...this.perks], keenEye: this.keenEye, newRun: true,
       heir: next, family, equipped, nextGearId: id,
     };
@@ -1453,6 +1478,7 @@ export class Game {
     this.tickPub(dt);
     this.tickCrew(dt);
     this.tickMate(dt);
+    this.openShops();
     this.lines.forEach((line, i) => {
       if (line.type === 'idle') return;
       line.t += dt;
@@ -2292,7 +2318,7 @@ export class Game {
       pearls: this.pearls, fishTree: this.fishTree, retirements: this.retirements, seaSeen: this.seaSeen, perks: this.perks, keenEye: this.keenEye, tenth: this.tenth, heir: this.heir, family: this.family, heirChoices: this.heirChoices, runBest: this.runBest,
       exoticHold: this.exoticHold, listings: this.listings, wanted: this.wanted, nextExoticId: this.nextExoticId,
       equipped: this.equipped, gearBag: this.gearBag, nextGearId: this.nextGearId, net: this.net, chum: this.chum, icebox: this.icebox,
-      flagship: this.flagship, flagshipRest: this.flagshipRest, flagshipUps: this.flagshipUps, decor: this.decor, voyage: this.voyage, landed: this.landed,
+      flagship: this.flagship, flagshipRest: this.flagshipRest, flagshipUps: this.flagshipUps, decor: this.decor, opened: this.opened, voyage: this.voyage, landed: this.landed,
       crew: this.crew, pubBoard: this.pubBoard, pubClock: this.pubClock, nextSailorId: this.nextSailorId, crewTrip: this.crewTrip, mate: this.mate, mateOn: this.mateOn, mateBudget: this.mateBudget, crewLegend: this.crewLegend,
       hands: this.hands.map((h) => ({ ...h, line: { type: 'idle' as const }, react: null })), handRods: 2, crate: this.crate,
     };

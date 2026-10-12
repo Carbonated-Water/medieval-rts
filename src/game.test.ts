@@ -1648,3 +1648,29 @@ describe('Town decor', () => {
     expect(save?.decor).toEqual(['flowers']);
   });
 });
+
+describe('the focus pass: shops open one at a time', () => {
+  it('a new game opens nothing but the Market; shops open in order as you earn, with news', () => {
+    const g = new Game({}, rng(1));
+    expect(g.opened).toEqual([]);
+    g.earned = 20; g.tick(0.1);
+    expect(g.opened).toEqual(['gear']);
+    expect(g.openNews).toEqual(['gear']);
+    g.earned = 700; g.tick(0.1);
+    expect(g.opened).toEqual(['gear', 'bait', 'tackle', 'school']);
+  });
+
+  it('opens the Bait Shop early when you are nearly out of worms', () => {
+    const g = new Game({ earned: 10, baits: { worm: 3 } }, rng(2));
+    g.opened = []; g.tick(0.1);
+    expect(g.shopOpen('bait')).toBe(true);
+  });
+
+  it('old saves get every shop at once (no news), and opened shops survive retiring', () => {
+    const old = new Game({ earned: 5000, money: 100 }, rng(3));
+    expect(old.opened).toHaveLength(4);
+    expect(old.openNews).toEqual([]);
+    old.earned = 1e13;
+    expect(old.retire(0)?.opened).toHaveLength(4);
+  });
+});

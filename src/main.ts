@@ -1,4 +1,4 @@
-import { HEAD_STARTS, type HeadStartId, ACHIEVEMENTS, BOATS, DEV_MULTIPLIER, HAND_NAMES, HARBOR_UPGRADES, LETTERS, TRACKS, type GroundId, type HarborUpgradeId, type TrackId, RODS, SKILLS, VARIANTS, baitById, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, LEGENDS, gearById, type GearSlot, DECOR, FLAGSHIP_UPS, type FlagshipUpId, type MateJob } from './data';
+import { HEAD_STARTS, type HeadStartId, ACHIEVEMENTS, BOATS, DEV_MULTIPLIER, HAND_NAMES, HARBOR_UPGRADES, LETTERS, TRACKS, type GroundId, type HarborUpgradeId, type TrackId, RODS, SKILLS, VARIANTS, baitById, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, LEGENDS, gearById, type GearSlot, DECOR, SHOP_OPEN, type ShopId, FLAGSHIP_UPS, type FlagshipUpId, type MateJob } from './data';
 import { Game, type GearItem, fishById, type Line, type SaveData } from './game';
 import { Fight } from './fight';
 import { FightView } from './fightui';
@@ -61,7 +61,17 @@ setInterval(() => { if (game.company) dirty = true; save(); }, 2000); // an open
 addEventListener('pagehide', save);
 
 // Arriving at a shop opens it: the market only if there's something to sell.
+/** A place on the path and the shop behind it (the Market is always open). */
+const SHOP_AT: Partial<Record<string, ShopId>> = { tackle: 'tackle', school: 'school', bait: 'bait' };
+/** A shop not open yet: say what opens it, where you tapped. */
+function shut(id: ShopId | undefined, x: number, y: number): boolean {
+  if (!id || game.shopOpen(id)) return false;
+  note.float(`${SHOP_OPEN[id].hint.toUpperCase()} TO OPEN`, Math.min(Math.max(x, 110), innerWidth - 110), y, 'plain');
+  return true;
+}
+
 scene.onArrive = (p) => {
+  if (SHOP_AT[p] && !game.shopOpen(SHOP_AT[p]!)) return;
   if (p === 'market') ui.open = 'market';
   if (p === 'tackle') ui.open = 'tackle';
   if (p === 'school') ui.open = 'training';
@@ -73,7 +83,9 @@ canvas.addEventListener('click', (e) => {
   // The harbor across the river opens its panel from anywhere.
   if (scene.hitBobber(e.clientX, e.clientY) >= 0) { game.reel(scene.hitBobber(e.clientX, e.clientY)); return; }
   if (scene.hitJetty(e.clientX, e.clientY)) { ui.open = 'exotic'; return; }
-  if (scene.hitGearShop(e.clientX, e.clientY)) { ui.open = 'gearshop'; return; }
+  if (scene.hitGearShop(e.clientX, e.clientY)) { if (!shut('gear', e.clientX, e.clientY)) ui.open = 'gearshop'; return; }
+  // A shop that isn't open yet: a hint instead of a walk.
+  if (shut(SHOP_AT[scene.hit(e.clientX, e.clientY)], e.clientX, e.clientY)) return;
   if (scene.hitPub(e.clientX, e.clientY)) { ui.open = 'pub'; return; }
   // Your fisher opens the Character screen, unless you're tapping the shop you stand in front of.
   const shopTap = ['market', 'tackle', 'school', 'bait'].includes(scene.hit(e.clientX, e.clientY));
@@ -111,7 +123,8 @@ addEventListener('keydown', (e) => {
     if (scene.place === 'dock' && !ui.open) onAction(primaryAction());
   }
   const shop = scene.place === 'school' ? 'training' : scene.place === 'bait' ? 'baitshop' : scene.place === 'market' || scene.place === 'tackle' ? scene.place : null;
-  if (e.code === 'KeyE' && shop) onAction(ui.open ? 'close' : shop);
+  const locked = !!SHOP_AT[scene.place ?? ''] && !game.shopOpen(SHOP_AT[scene.place ?? '']!);
+  if (e.code === 'KeyE' && shop && !locked) onAction(ui.open ? 'close' : shop);
   if (e.code === 'Escape') onAction(ui.parentOf(ui.open) ? 'back' : 'close');
 });
 addEventListener('keyup', (e) => held.delete(e.code));
@@ -473,6 +486,8 @@ function tackleNews(): void {
   if (game.frenzyNews) { game.frenzyNews = false; note.banner(pixelIcon('bait'), 'FRENZY!', 'Bites come fast', 'rare'); }
   // The First Mate's work: a line each in the pickup log.
   for (const m of game.mateNews.splice(0)) note.log(`mate-${m.kind}-${m.text}`, pixelIcon(({ sail: 'boat', sell: 'coin', sign: 'crew', upgrade: 'anchor' } as const)[m.kind]), `<b>First Mate</b> ${m.text}`, m.kind === 'sell' ? 'good' : 'plain');
+  // Shops opening, one at a time.
+  for (const id of game.openNews.splice(0)) note.banner(pixelIcon('star'), 'NOW OPEN', SHOP_OPEN[id].name, 'rare');
   for (const r of game.crewNews.splice(0)) {
     const l = LEGENDS.find((x) => x.id === r.legend)!;
     note.banner(pixelIcon(r.caught ? 'trophy' : 'boat'), r.caught ? `CREW BROUGHT ${l.name.toUpperCase()}` : 'CREW HOME', `Haul ${r.haul.toLocaleString()}${r.caught ? '' : ' · the legend got away'}${r.pearls ? ` · +${r.pearls} Pearl${r.pearls > 1 ? 's' : ''}` : ''}${r.rough ? ' · rough seas' : ''}`, r.caught ? 'rare' : 'plain');

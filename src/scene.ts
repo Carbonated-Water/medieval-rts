@@ -117,6 +117,10 @@ export class Scene {
   private decorKey = '';
   private dockPlanks: TilingSprite | null = null;
   private moored = new Sprite();
+  /** Shop sprites by place, for greying out the ones not open yet; their "?" signs. */
+  private shopSprites: Partial<Record<'gear' | 'bait' | 'tackle' | 'school', Sprite>> = {};
+  private lockFx = new Graphics();
+  private lockKey = '';
   private ship = new Sprite();
   private boatSprites: Sprite[] = [];
   private warehouse = new Sprite();
@@ -321,11 +325,16 @@ export class Scene {
       return s;
     };
     shop('market', () => stallCanvas('MARKET', [PAL.red, PAL.white], PAL.redDark, 'fish'), V.marketX, V.path - 2, 1);
-    shop('tackle', () => stallCanvas('TACKLE', [PAL.waterDeep, PAL.sky], PAL.waterDeeper, 'tackle'), V.tackleX, V.path - 2, 1);
-    shop('school', schoolCanvas, V.schoolX, V.path + 12, 0);
-    shop('baitshop', baitShopCanvas, V.baitX, V.path + 12, 0);
-    shop('gearshop', gearShopCanvas, this.gearShopX(), V.path + 12, 0);
+    this.shopSprites = {
+      tackle: shop('tackle', () => stallCanvas('TACKLE', [PAL.waterDeep, PAL.sky], PAL.waterDeeper, 'tackle'), V.tackleX, V.path - 2, 1),
+      school: shop('school', schoolCanvas, V.schoolX, V.path + 12, 0),
+      bait: shop('baitshop', baitShopCanvas, V.baitX, V.path + 12, 0),
+      gear: shop('gearshop', gearShopCanvas, this.gearShopX(), V.path + 12, 0),
+    };
     this.pub = shop('pub', pubCanvas, this.pubX(), V.path + 12, 0);
+    // "?" signs on shops not open yet.
+    this.lockKey = '';
+    this.lockFx = add(new Graphics());
     // Town decor sits over the bank and the path.
     this.decorKey = '';
     this.decorFx = add(new Graphics());
@@ -752,6 +761,26 @@ export class Scene {
     });
   }
 
+  /** Shops not open yet: greyed out, a "?" sign over each (redrawn when one opens). */
+  private drawLocks(): void {
+    const game = this.game;
+    const key = (['gear', 'bait', 'tackle', 'school'] as const).map((id) => (game.shopOpen(id) ? 1 : 0)).join('');
+    if (key === this.lockKey) return;
+    this.lockKey = key;
+    const g = this.lockFx.clear();
+    for (const id of ['gear', 'bait', 'tackle', 'school'] as const) {
+      const s = this.shopSprites[id];
+      if (!s) continue;
+      const open = game.shopOpen(id);
+      s.tint = open ? 0xffffff : 0x6a6a72;
+      if (open) continue;
+      // A little plank sign with a "?" in the middle of the building.
+      const h = s.texture.height, x = Math.round(s.x), y = Math.round(s.anchor.y === 1 ? s.y - h / 2 : s.y + h / 2);
+      g.rect(x - 5, y - 6, 11, 11).fill(PAL.outline).rect(x - 4, y - 5, 9, 9).fill(PAL.sand);
+      g.rect(x - 2, y - 3, 4, 1).fill(PAL.outline).rect(x + 1, y - 2, 1, 2).fill(PAL.outline).rect(x - 1, y, 2, 1).fill(PAL.outline).rect(x - 1, y + 2, 2, 1).fill(PAL.outline);
+    }
+  }
+
   /**
    * Town decor: flowers on the bank, lanterns on the path, bunting between
    * the stalls (drawn once per change); gold tints on the dock, lighthouse
@@ -812,6 +841,7 @@ export class Scene {
     this.jetty.visible = game.company;
     if (this.pub) this.pub.texture = this.cached(`pub:${game.flagship}`, () => pubCanvas(game.flagship));
     this.drawDecor();
+    this.drawLocks();
     if (game.company) {
       // A beam sweeping slowly out over the water.
       const p = this.lighthouseSpot(), lx = p.x, ly = p.y - 48, a = Math.sin(this.time * 0.6) * 0.9;
