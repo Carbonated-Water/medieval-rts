@@ -9,7 +9,7 @@ One entry per change: WHAT + WHY.
         bobber) and the fish sells for double, "PERFECT!" float. Zone 0.25s
         + 0.015s a Reflexes level, x (1 + Reflex%); the Autofisher reels
         PERFECT on zone/2s of bites (max 80%). Strength still holds
-        too-strong fish, and now gives fight power (Fight's \`power\`): the
+        too-strong fish, and now gives fight power: the
         legend tires faster and reeling raises tension more slowly; the fight
         shows "STRENGTH: PULL +X%". Stats screen (tap TOTAL on the Character
         screen, now one line with STATS >): every stat with what it does for
