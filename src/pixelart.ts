@@ -214,7 +214,7 @@ export function fisherCanvas(o: Outfit, pose: Pose): HTMLCanvasElement {
 }
 
 /** Hat styles (gear). */
-export type HatStyle = 'straw' | 'cap' | 'bucket' | 'beanie' | 'helmet' | 'hood' | 'crown' | 'bandana' | 'bicorne' | 'goggles';
+export type HatStyle = 'straw' | 'cap' | 'bucket' | 'beanie' | 'helmet' | 'hood' | 'crown' | 'bandana' | 'bicorne' | 'goggles' | 'jester' | 'tricorne' | 'diving';
 /** A hat on the fisher's head (body coordinates: the head is x 3..8, y 3..6). */
 function drawHat(r: (x: number, y: number, w: number, h: number, c: string) => void, h: { style: HatStyle; color: string; trim: string }): void {
   const c = h.color, t = h.trim;
@@ -229,6 +229,11 @@ function drawHat(r: (x: number, y: number, w: number, h: number, c: string) => v
     case 'bandana': r(3, 1, 6, 2, c); r(4, 2, 1, 1, t); r(7, 2, 1, 1, t); r(2, 2, 1, 2, c); break;
     case 'bicorne': r(1, 1, 10, 2, c); r(4, 0, 4, 1, c); r(5, 1, 2, 1, t); break;
     case 'goggles': r(3, 1, 6, 2, c); r(3, 3, 6, 1, t); r(7, 3, 2, 1, PAL.waterLight); break;
+    // Two floppy points, one in each colour, with bells.
+    case 'jester': r(3, 1, 3, 2, c); r(6, 1, 3, 2, t); r(1, 0, 2, 2, c); r(9, 0, 2, 2, t); r(0, 2, 1, 1, PAL.white); r(11, 2, 1, 1, PAL.white); break;
+    case 'tricorne': r(1, 2, 10, 1, c); r(2, 1, 8, 1, c); r(4, 0, 4, 1, c); r(1, 1, 1, 1, t); r(10, 1, 1, 1, t); break;
+    // A brass diving helmet with its window.
+    case 'diving': r(2, 0, 8, 7, c); r(4, 2, 5, 3, t); r(5, 2, 1, 1, PAL.white); break;
   }
 }
 
@@ -260,6 +265,14 @@ const GEAR_MASKS: Record<string, string[]> = {
   'shirt:coat': ['....ac....ca....', '..aaaaccccaaaa..', '.aaaaaacaaaaaaa.', '.aaaaacaaaaaaaa.', '.baaaaacaaaaaab.', '.b.aaaacaaaaa.b.', '...aaaacaaaaa...', '...aaaacaaaaa...', '...aaaacaaaaa...', '...bbbbbbbbbb...'],
   'shirt:vest': ['....aa....aa....', '...aaaw..waaa...', '...aaaa..aaaa...', '...acca..acca...', '...aaaa..aaaa...', '...acca..acca...', '...aaaa..aaaa...', '...bbbb..bbbb...'],
   'shirt:suit': ['....cc....cc....', '..cccaaaaaaccc..', '.ccccaaaaaacccc.', '.cc.aaaaaaaa.cc.', '....aaaawaaa....', '....aaaaaaaa....', '...aaaaaaaaaa...', '...aaaaaaaaaa...', '...bbbbbbbbbb...'],
+  'hat:jester': ['.w............w.', '.aa..........cc.', '..aaa......ccc..', '...aaaa..cccc...', '...aaaaaccccc...', '...aaaaaccccc...', '...bbbbbbbbbb...'],
+  'hat:tricorne': ['................', '.......aa.......', '.a...aaaaaa...a.', '.aa.aaaaaaaa.aa.', '..aaaaaaaaaaaa..', '..cccccccccccc..', '...bbbbbbbbbb...'],
+  'hat:diving': ['.....aaaaaa.....', '...aaaaaaaaaa...', '..aaacccccccaa..', '..aacwccccccaa..', '..aacccccccaaa..', '..aaaaaaaaaaaa..', '.bbbbbbbbbbbbbb.'],
+  'charm:bell': ['.....k....k.....', '......k..k......', '.......cc.......', '......aaaa......', '.....aawaaa.....', '.....aaaaaa.....', '....aaaaaaaa....', '....bbbbbbbb....', '.......cc.......'],
+  'charm:coin': ['.....k....k.....', '......k..k......', '.....aaaaaa.....', '....aawaaaaa....', '....aacccaaa....', '....aaacaaaa....', '....acccaaaa....', '.....bbbbbb.....'],
+  'charm:beads': ['....a......a....', '...a........a...', '...a........a...', '....a......a....', '.....a....a.....', '......acca......', '.......cc.......', '.......cc.......', '......cccc......'],
+  'charm:fish': ['.....k....k.....', '......k..k......', '.......kk.......', '....aaaaa...a...', '...aawaaaa.aa...', '...aaaaaaaaaa...', '...bbbbbb..bb...', '....bbbbb...b...'],
+  'charm:eye': ['.....k....k.....', '......k..k......', '.....aaaaaa.....', '....aaccccaa....', '....acwcccca....', '....acccccca....', '....aaccccaa....', '.....bbbbbb.....'],
   'pants:shorts': ['...aaaaaaaaaa...', '...cccccccccc...', '...aaaaaaaaaa...', '...aaaaaaaaaa...', '...aaaa..aaaa...', '...bbbb..bbbb...'],
   'pants:trousers': ['...aaaaaaaaaa...', '...cccccccccc...', '...aaaaaaaaaa...', '...aaaa..aaaa...', '...aaaa..aaaa...', '...aaaa..aaaa...', '...aaaa..aaaa...', '...aaaa..aaaa...', '...bbbb..bbbb...'],
   'pants:overalls': ['...c........c...', '...c.aaaaaa.c...', '...aaaawaaaaa...', '...aaaaaaaaaa...', '...aaaaaaaaaa...', '...aaaa..aaaa...', '...aaaa..aaaa...', '...aaaa..aaaa...', '...bbbb..bbbb...'],
@@ -288,7 +301,7 @@ export function gearCanvas(slot: GearSlot, style: string, main: string, accent: 
     const mask = GEAR_MASKS[`${slot}:${style}`] ?? GEAR_MASKS['hat:straw']!;
     const top = Math.floor((18 - mask.length) / 2);
     mask.forEach((row, y) => [...row].forEach((ch, x) => {
-      const col = ch === 'a' ? main : ch === 'b' ? shadeOf : ch === 'c' ? accent : ch === 'w' ? PAL.white : null;
+      const col = ch === 'a' ? main : ch === 'b' ? shadeOf : ch === 'c' ? accent : ch === 'w' ? PAL.white : ch === 'k' ? '#6b4526' : null;
       if (col) px(ctx, 1 + x, top + y, col);
     }));
   }));

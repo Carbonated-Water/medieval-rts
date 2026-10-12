@@ -187,8 +187,8 @@ export const GEAR: Record<GearKind, { title: string; levels: { name: string; pri
 
 // ---------- gear: what you wear and fish with ----------
 
-export type GearSlot = 'rod' | 'hat' | 'shirt' | 'pants' | 'boots';
-export const GEAR_SLOTS: GearSlot[] = ['rod', 'hat', 'shirt', 'pants', 'boots'];
+export type GearSlot = 'rod' | 'hat' | 'shirt' | 'pants' | 'boots' | 'charm';
+export const GEAR_SLOTS: GearSlot[] = ['rod', 'hat', 'shirt', 'pants', 'boots', 'charm'];
 export type GearTier = 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond' | 'legendary';
 /** Tiers: a rod's tier is the rarest fish tier it lands (Legendary rods land everything too). */
 export const GEAR_TIERS: Record<GearTier, { name: string; color: string; rank: number; fishTier: Tier }> = {
@@ -201,7 +201,7 @@ export const GEAR_TIERS: Record<GearTier, { name: string; color: string; rank: n
 };
 export const GEAR_TIER_ORDER: GearTier[] = ['bronze', 'silver', 'gold', 'platinum', 'diamond', 'legendary'];
 /** Gear stats, all percentages. */
-export type StatId = 'size' | 'luck' | 'patience' | 'reflex' | 'strength' | 'fortune' | 'stride';
+export type StatId = 'size' | 'luck' | 'patience' | 'reflex' | 'strength' | 'fortune' | 'stride' | 'crew' | 'twin' | 'scavenge' | 'thrift';
 export const STATS: Record<StatId, { name: string; blurb: string }> = {
   size: { name: 'Size', blurb: 'Bigger fish, worth more' },
   luck: { name: 'Luck', blurb: 'Rarer fish bite more often' },
@@ -210,14 +210,26 @@ export const STATS: Record<StatId, { name: string; blurb: string }> = {
   strength: { name: 'Strength', blurb: 'Land fish too strong for your rod' },
   fortune: { name: 'Fortune', blurb: 'Giant, Golden and Shiny more often' },
   stride: { name: 'Stride', blurb: 'Walk faster' },
+  crew: { name: 'Crew', blurb: 'Your fishermen get bites sooner' },
+  twin: { name: 'Twin', blurb: 'Chance to land two fish' },
+  scavenge: { name: 'Scavenge', blurb: 'Fish drop gear more often' },
+  thrift: { name: 'Thrift', blurb: 'Chance a cast uses no bait' },
 };
-export const STAT_ORDER: StatId[] = ['size', 'luck', 'patience', 'reflex', 'strength', 'fortune', 'stride'];
+export const STAT_ORDER: StatId[] = ['size', 'luck', 'patience', 'reflex', 'strength', 'fortune', 'twin', 'crew', 'scavenge', 'thrift', 'stride'];
+/** Luck counts this much toward rarer tiers (it compounds per tier, so a little goes a long way). */
+export const LUCK_SCALE = 0.25;
+/** Fortune: each 100% multiplies the Giant, Golden and Shiny chances by this much more. */
+export const FORTUNE_SCALE = 3;
+/** Twin and Thrift are chances: capped so they never become certain. */
+export const STAT_CAP: Partial<Record<StatId, number>> = { twin: 75, thrift: 75 };
 /** A piece of gear as the shop sells it. Legendary pieces (voyages only) add a unique `effect`. */
 export interface GearDef {
   id: string; slot: GearSlot; tier: GearTier; name: string; stats: Partial<Record<StatId, number>>; price: number;
   /** Look: style of its slot and two colours (main, accent). */
   style: string; colors: [string, string];
   effect?: string; blurb?: string;
+  /** A set piece: which set, and where it comes from (shop, fish drops, or voyages only). */
+  set?: SetId; source?: PieceSource;
 }
 export const GEAR_ITEMS: GearDef[] = [
   // rod
@@ -312,6 +324,111 @@ export const GEAR_ITEMS: GearDef[] = [
   { id: 'sealegs', slot: 'boots', tier: 'legendary', name: "Sea Legs", stats: { stride: 150, patience: 30 }, price: 2000000, style: 'tall', colors: ['#1a3a5a', '#fee481'], effect: 'firstMove', blurb: "The first move of each voyage is free" },
   { id: 'ghosttreads', slot: 'boots', tier: 'legendary', name: "Ghost Treads", stats: { stride: 120, fortune: 50 }, price: 2000000, style: 'shoes', colors: ['#e0e8f0', '#7ad8ff'], effect: 'waves', blurb: "The ocean’s green band is wider" },
 ];
+
+// ---------- gear sets ----------
+
+/**
+ * Sets: five pieces (hat, shirt, pants, boots, charm), each sold or found at
+ * every tier. Wearing 2, 3, 4 or 5 pieces of one set (any tiers) adds its
+ * bonuses; the bonus numbers scale with the lowest tier you wear. Two pieces
+ * of each set are in the shop, two only drop from fish, one only comes home
+ * from voyages.
+ */
+export type SetId = 'fishmonger' | 'jester' | 'monk' | 'pirate' | 'abyss';
+export type PieceSource = 'shop' | 'drop' | 'voyage';
+export type SetSlot = Exclude<GearSlot, 'rod'>;
+export const SET_SLOTS: SetSlot[] = ['hat', 'shirt', 'pants', 'boots', 'charm'];
+/** The full-set effects. */
+export type SetEffect = 'tenth' | 'wild' | 'calm' | 'plunder' | 'deep';
+export interface SetPiece { name: string; style: string; colors: [string, string]; /** share of the tier's stat budget */ stats: Partial<Record<StatId, number>>; source: PieceSource }
+export interface SetDef {
+  name: string; color: string;
+  /** Bonuses at 2, 3 and 4 pieces (at Gold; scaled by tier), then the 5-piece effect. */
+  bonus: [Partial<Record<StatId, number>>, Partial<Record<StatId, number>>, Partial<Record<StatId, number>>];
+  effect: SetEffect; effectText: string;
+  pieces: Record<SetSlot, SetPiece>;
+}
+export const SETS: Record<SetId, SetDef> = {
+  fishmonger: {
+    name: 'Fishmonger', color: '#2f6fd6', bonus: [{ size: 15 }, { twin: 10 }, { size: 30 }], effect: 'tenth', effectText: 'Every 10th catch sells double',
+    pieces: {
+      hat: { name: "Fishmonger's Cap", style: 'cap', colors: ['#e8e8f0', '#2f6fd6'], stats: { size: 0.6, twin: 0.2 }, source: 'shop' },
+      shirt: { name: 'Market Apron', style: 'vest', colors: ['#e8e8f0', '#2f6fd6'], stats: { size: 0.8 }, source: 'shop' },
+      pants: { name: 'Market Trousers', style: 'trousers', colors: ['#3a4a6a', '#2f6fd6'], stats: { size: 0.5, patience: 0.3 }, source: 'drop' },
+      boots: { name: 'Fish Market Clogs', style: 'shoes', colors: ['#f0c020', '#8a6a38'], stats: { stride: 0.6, size: 0.3 }, source: 'drop' },
+      charm: { name: 'Golden Scale', style: 'fish', colors: ['#f4b41b', '#2f6fd6'], stats: { twin: 0.4, size: 0.3 }, source: 'voyage' },
+    },
+  },
+  jester: {
+    name: 'Jester', color: '#a352e0', bonus: [{ fortune: 20 }, { twin: 10 }, { fortune: 40 }], effect: 'wild', effectText: 'Wild Card: Fortune rolls twice',
+    pieces: {
+      hat: { name: "Jester's Cap", style: 'jester', colors: ['#a352e0', '#f4b41b'], stats: { fortune: 0.8, twin: 0.15 }, source: 'shop' },
+      shirt: { name: 'Motley Doublet', style: 'sweater', colors: ['#f4b41b', '#a352e0'], stats: { fortune: 0.5, reflex: 0.4 }, source: 'drop' },
+      pants: { name: 'Harlequin Hose', style: 'trousers', colors: ['#a352e0', '#f4b41b'], stats: { fortune: 0.7, luck: 0.2 }, source: 'shop' },
+      boots: { name: 'Curly Slippers', style: 'shoes', colors: ['#a352e0', '#f4b41b'], stats: { stride: 0.5, fortune: 0.4 }, source: 'voyage' },
+      charm: { name: "Fool's Bell", style: 'bell', colors: ['#f4b41b', '#a352e0'], stats: { fortune: 0.5, twin: 0.3 }, source: 'drop' },
+    },
+  },
+  monk: {
+    name: 'Monk', color: '#e07a20', bonus: [{ patience: 20 }, { thrift: 25 }, { crew: 25 }], effect: 'calm', effectText: 'Your fishermen never miss a bite',
+    pieces: {
+      hat: { name: "Monk's Hood", style: 'hood', colors: ['#e07a20', '#8a3a20'], stats: { patience: 0.5, crew: 0.4 }, source: 'shop' },
+      shirt: { name: 'Saffron Robe', style: 'coat', colors: ['#e07a20', '#8a3a20'], stats: { patience: 0.8 }, source: 'voyage' },
+      pants: { name: 'Temple Wraps', style: 'trousers', colors: ['#c86a1a', '#f0d8a0'], stats: { patience: 0.5, thrift: 0.5 }, source: 'drop' },
+      boots: { name: 'Straw Sandals', style: 'sandals', colors: ['#c8a060', '#8a3a20'], stats: { stride: 0.5, crew: 0.4 }, source: 'shop' },
+      charm: { name: 'Prayer Beads', style: 'beads', colors: ['#6b4526', '#e07a20'], stats: { crew: 0.6, thrift: 0.4 }, source: 'drop' },
+    },
+  },
+  pirate: {
+    name: 'Pirate', color: '#dd442c', bonus: [{ scavenge: 20 }, { crew: 15 }, { scavenge: 40 }], effect: 'plunder', effectText: '+1 voyage supply, boats haul 25% more',
+    pieces: {
+      hat: { name: 'Tricorne', style: 'tricorne', colors: ['#2a2a3a', '#f4b41b'], stats: { scavenge: 0.6, luck: 0.3 }, source: 'voyage' },
+      shirt: { name: 'Buccaneer Coat', style: 'coat', colors: ['#dd442c', '#2a2a3a'], stats: { strength: 0.6, crew: 0.3 }, source: 'shop' },
+      pants: { name: 'Sailcloth Breeches', style: 'trousers', colors: ['#e8e0c8', '#2a2a3a'], stats: { scavenge: 0.5, strength: 0.3 }, source: 'drop' },
+      boots: { name: 'Sea Boots', style: 'tall', colors: ['#2a2a3a', '#dd442c'], stats: { stride: 0.6, scavenge: 0.3 }, source: 'shop' },
+      charm: { name: 'Doubloon', style: 'coin', colors: ['#f4b41b', '#c08010'], stats: { scavenge: 0.6, crew: 0.3 }, source: 'drop' },
+    },
+  },
+  abyss: {
+    name: 'Abyss', color: '#2cc5f6', bonus: [{ strength: 20 }, { luck: 15 }, { reflex: 30 }], effect: 'deep', effectText: 'Legendary fish bite 50% more',
+    pieces: {
+      hat: { name: 'Diving Helmet', style: 'diving', colors: ['#c08040', '#7ad8ff'], stats: { luck: 0.6, reflex: 0.3 }, source: 'drop' },
+      shirt: { name: 'Abyssal Suit', style: 'suit', colors: ['#1a2a4a', '#2cc5f6'], stats: { strength: 0.7, luck: 0.2 }, source: 'shop' },
+      pants: { name: 'Deep Waders', style: 'waders', colors: ['#1a2a4a', '#2cc5f6'], stats: { reflex: 0.6, strength: 0.3 }, source: 'shop' },
+      boots: { name: 'Lead Boots', style: 'tall', colors: ['#3a4050', '#2cc5f6'], stats: { stride: 0.5, reflex: 0.4 }, source: 'drop' },
+      charm: { name: 'Anglerfish Eye', style: 'eye', colors: ['#1a2a4a', '#f0f080'], stats: { luck: 0.7 }, source: 'voyage' },
+    },
+  },
+};
+export const SET_ORDER = Object.keys(SETS) as SetId[];
+/** Set tiers: Bronze to Diamond. */
+export const SET_TIERS: GearTier[] = ['bronze', 'silver', 'gold', 'platinum', 'diamond'];
+/** A set piece's stat points at each tier (shared out by its stat shares), and its shop price. */
+export const SET_BUDGET: Record<GearTier, number> = { bronze: 10, silver: 20, gold: 35, platinum: 55, diamond: 80, legendary: 80 };
+export const SET_PRICE: Record<GearTier, number> = { bronze: 150, silver: 900, gold: 6000, platinum: 30000, diamond: 150000, legendary: 150000 };
+const SLOT_PRICE: Record<SetSlot, number> = { hat: 1, shirt: 1.2, pants: 1.1, boots: 0.9, charm: 1.3 };
+/** Set bonuses scale with the lowest tier among the set pieces you wear. */
+export const SET_BONUS_SCALE: Record<GearTier, number> = { bronze: 0.4, silver: 0.6, gold: 1, platinum: 1.5, diamond: 2.2, legendary: 2.2 };
+export const setPieceId = (set: SetId, slot: SetSlot, tier: GearTier) => `${set}-${slot}-${tier}`;
+GEAR_ITEMS.push(...SET_ORDER.flatMap((set) => SET_SLOTS.flatMap((slot) => SET_TIERS.map((tier): GearDef => {
+  const p = SETS[set].pieces[slot];
+  const stats: Partial<Record<StatId, number>> = {};
+  for (const [k, share] of Object.entries(p.stats)) stats[k as StatId] = Math.max(1, Math.round(SET_BUDGET[tier] * share!));
+  return { id: setPieceId(set, slot, tier), slot, tier, name: p.name, stats, price: Math.round((SET_PRICE[tier] * SLOT_PRICE[slot]) / 10) * 10, style: p.style, colors: p.colors, set, source: p.source };
+}))));
+
+/** Gear drops: the chance a fish you land drops a set piece (Scavenge and Keen Eye add to it). */
+export const DROP_CHANCE = 0.006;
+/** Keen Eye (Fish Tree, Pearls): each level makes drops this much more common. Kept on retiring. */
+export const KEEN_EYE = { per: 0.5, cost: [3, 6, 10, 15, 25] };
+/** Voyages: the chance a voyage (yours or your crew's) brings home a voyage-only piece, and its tier. */
+export const VOYAGE_PIECE: Record<'coast' | 'ocean' | 'abyss', { chance: number; tier: GearTier }> = {
+  coast: { chance: 0.35, tier: 'platinum' }, ocean: { chance: 0.5, tier: 'diamond' }, abyss: { chance: 0.75, tier: 'diamond' },
+};
+/** Drops roll their stats between these (x the shop piece); "fine" at or above FINE_ROLL. */
+export const DROP_ROLL: [number, number] = [0.8, 1.25];
+export const FINE_ROLL = 1.12;
+
 export const gearById = (id: string) => GEAR_ITEMS.find((g) => g.id === id);
 /**
  * How far a rod reaches into the next fish tier: the rods of a tier, cheapest
@@ -343,6 +460,8 @@ export const HAND_RODS: HandRodDef[] = (() => {
 export const GEAR_BAG = 24;
 /** Selling pays this share of the shop price (more for better-rolled drops). */
 export const GEAR_SELL = 0.4;
+/** Found pieces (drops, voyage finds) sell for less: they are for wearing, not for money. */
+export const DROP_SELL = 0.1;
 /** What a new run starts wearing. */
 export const STARTER_GEAR: Partial<Record<GearSlot, string>> = { rod: 'twigrod', hat: 'strawhat', shirt: 'oldtshirt', pants: 'rolledjeans' };
 /** Old saves: rod, clothes and boots levels become these pieces. */

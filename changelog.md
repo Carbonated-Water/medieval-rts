@@ -4,6 +4,37 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-12  Gear sets, four new stats, gear drops, shopkeeper Gear Shop
+  WHAT: Five sets (Fishmonger, Jester, Monk, Pirate, Abyss), each a hat,
+        shirt, pants, boots and a new Charm slot, at every tier Bronze to
+        Diamond (SETS, generated into GEAR_ITEMS). Bonuses at 2/3/4 pieces
+        (scaled by the lowest tier worn) and a 5-piece effect: every 10th
+        catch sells double / Fortune rolls twice / fishermen never miss /
+        +1 voyage supply and boats haul 25% more / Legendary fish bite 50%
+        more. Per set: 2 pieces in the shop, 2 only drop from your catches
+        (0.6% base, x Scavenge, x Keen Eye), 1 only from voyages (yours or
+        the crew's, 35-75% by region, one you lack first). New stats: Crew
+        (your fishermen bite sooner), Twin (adds to the Landing Net double),
+        Scavenge, Thrift (cast without using bait); Twin and Thrift cap at
+        75%. Luck now counts 1/4 toward rarer tiers (LUCK_SCALE), Fortune 3x
+        (FORTUNE_SCALE). Gear Shop is a trade window: shopkeeper, a grid of
+        wares (your rod, the next two, the shop pieces at your rod's tier),
+        the picked one against what you wear, BUY. Character screen: slots
+        either side of the doll, a set tracker (pieces, bonuses lit, where to
+        find what's missing). Keen Eye in the Fish Tree START tab (5 levels,
+        Pearls, kept on retiring). Found pieces sell for 10% (DROP_SELL), so
+        drops are for wearing, not money. New art: jester hat, tricorne,
+        diving helmet, five charms; the Pants tab's bag icon is gone. Old
+        plain clothes still work but aren't sold. Stats are cached while
+        worn gear is unchanged (the sim was 8x slower without it).
+  WHY:  The user found buying only Luck and Fortune was the right way to
+        play (Luck compounds per tier; Fortune actually paid ~1/7 of Size per
+        point) and asked for more stats, themed sets with a full-set boost,
+        voyage-only pieces to complete sets, and a Pearl upgrade for drops.
+        Playtest (seed 1/2): run 1 Flagship 4h28/4h24 (was 4h19/4h00, the
+        Luck cut); run 2 Flagship ~2h after retiring (was ~3h), since the
+        heirloom, Keen Eye and found gear carry the next generation (#1).
+
 2026-10-11  Generations: retiring hands the rod to an heir
   WHAT: Retire screen: RETIRE / FAMILY tabs. RETIRE: the Pearls this run pays,
         three heirs to pick from (rolled once per run, saved, so no

@@ -14,11 +14,14 @@
  */
 import {
   AUTO, BAITS, BERTHS, BITE_WAIT, BOATS, BOAT_ORDER, COMPANY_PRICE, GEAR_ITEMS, GEAR_SLOTS, GEAR_TIERS, HARBOR_UPGRADES, HOLDERS,
-  LEGENDS, PIER_STAFF, SKILLS, TREE_FISH, VOYAGE, rodReach, HEAD_STARTS, type GearKind, type HarborUpgradeId, type SkillId,
+  LEGENDS, PIER_STAFF, SKILLS, TREE_FISH, VOYAGE, rodReach, HEAD_STARTS, type GearDef, type GearKind, type HarborUpgradeId, type SkillId,
 } from '../src/data';
 import { Game } from '../src/game';
 import { Fight } from '../src/fight';
 import * as V from '../src/voyage';
+
+/** A piece's stat points, all stats counted alike. */
+const points = (stats: Partial<Record<string, number>>) => Object.values(stats).reduce((n: number, v) => n + (v ?? 0), 0);
 
 export interface Options { hours: number; seed: number; errand: number; runs: number; quiet?: boolean }
 
@@ -74,6 +77,9 @@ class Bot {
   }
 
   tap(k: TapKind, n = 1) { this.taps[k] += n; }
+
+  drops = 0;
+  setsSeen = new Set<string>();
 
   mark(what: string) {
     if (this.seen.has(`${this.run}:${what}`)) return;
@@ -143,6 +149,19 @@ class Bot {
     this.tap('other', 1); // walk back
   }
 
+  /** Gear found fishing: put on any piece with more stat points than the one in its slot; count drops and sets. */
+  wearDrops() {
+    const g = this.g;
+    if (!g.dropNews.length) return;
+    for (const d of g.dropNews.splice(0)) {
+      this.drops++;
+      if ([1, 10, 25, 50, 100].includes(this.drops)) this.mark(`drops ${this.drops}`);
+      const def = g.gearDef(d.item), cur = g.equipped[def.slot];
+      if (!d.sold && points(d.item.stats) > (cur ? points(cur.stats) : -1) && g.equipGear(d.item.id)) this.tap('other', 2);
+    }
+    for (const [set, w] of Object.entries(g.setsWorn())) for (const n of [2, 3, 4, 5]) if (w!.n >= n && !this.setsSeen.has(`${set}${n}`)) { this.setsSeen.add(`${set}${n}`); this.mark(`set ${set} ${n}`); }
+  }
+
   /** The next rod tier up from the one you hold, if any. */
   nextRod() {
     const tiers = Object.keys(GEAR_TIERS), cur = this.g.gearOf('rod')!, rank = (d: typeof cur) => tiers.indexOf(d.tier) + rodReach(d);
@@ -171,16 +190,14 @@ class Bot {
         return true;
       }
     }
-    // Gear Shop: a better rod (higher tier first), then better pieces.
-    for (const slot of GEAR_SLOTS) {
-      const cur = g.gearOf(slot);
-      const score = (d: typeof GEAR_ITEMS[number]) => (slot === 'rod' ? Object.keys(GEAR_TIERS).indexOf(d.tier) * 1000 + rodReach(d) * 900 : 0) + Object.values(d.stats).reduce((s, v) => s + (v ?? 0), 0);
-      const have = cur ? score(cur) : -1;
-      const pick = GEAR_ITEMS.filter((d) => d.slot === slot && d.tier !== 'legendary' && score(d) > have && this.can(d.price, slot === 'rod' ? 0.6 : 0.25))
-        .sort((a, b) => score(b) - score(a))[0];
-      if (pick && g.buyGearPiece(pick.id)) {
+    // Gear Shop (what it stocks): a better rod, then pieces with more stat points than what you wear.
+    const rank = (d: GearDef) => Object.keys(GEAR_TIERS).indexOf(d.tier) * 1000 + rodReach(d) * 900;
+    for (const d of g.shopStock()) {
+      const cur = g.equipped[d.slot];
+      const better = d.slot === 'rod' ? rank(d) > rank(g.gearOf('rod')!) : points(d.stats) > (cur ? points(cur.stats) : -1);
+      if (better && this.can(d.price, d.slot === 'rod' ? 0.6 : 0.25) && g.buyGearPiece(d.id)) {
         this.tap('shop', 3); stop();
-        if (slot === 'rod') { this.mark(`rod ${pick.tier}`); this.mark(pick.name); }
+        if (d.slot === 'rod') { this.mark(`rod ${d.tier}`); this.mark(d.name); }
         return true;
       }
     }
@@ -198,7 +215,9 @@ class Bot {
     const n = this.can(b.price * 100, 0.2) ? 100 : 20;
     if (b.price > 0 && g.baitCount(b.id) < 40 && this.can(b.price * n, 0.3) && g.buyBait(b.id, n)) { g.selectBait(b.id); this.tap('shop', 2); stop(); return true; }
     if (g.baitSel !== b.id && g.baitCount(b.id) > 0) g.selectBait(b.id);
-    // Pearls: head starts first (cheapest), then the Fish Tree.
+    // Pearls: Keen Eye while it's cheap, head starts (cheapest first), then the Fish Tree.
+    const eye = g.keenEyeCost();
+    if (eye !== null && eye <= 6 && g.pearls >= eye && g.buyKeenEye()) { this.tap('other', 3); this.mark(`keen eye ${g.keenEye}`); return true; }
     const perk = HEAD_STARTS.filter((p) => !g.perks.includes(p.id) && g.pearls >= p.cost).sort((a, b) => a.cost - b.cost)[0];
     if (perk && g.buyPerk(perk.id)) { this.tap('other', 3); this.mark(`head start: ${perk.name}`); return true; }
     const fish = TREE_FISH.filter((f) => g.canUnlock(f.id)).sort((a, b) => a.cost - b.cost)[0];
@@ -418,6 +437,7 @@ class Bot {
     while (this.t < end) {
       this.g.tick(DT);
       this.fish();
+      this.wearDrops();
       this.t += DT;
       if (this.t >= this.nextErrand && this.away <= 0) {
         this.nextErrand = this.t + this.o.errand;

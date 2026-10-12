@@ -1,5 +1,5 @@
-import { HEAD_STARTS, type HeadStartId, ACHIEVEMENTS, BOATS, DEV_MULTIPLIER, HAND_NAMES, HARBOR_UPGRADES, LETTERS, TRACKS, type GroundId, type HarborUpgradeId, type TrackId, RODS, SKILLS, VARIANTS, baitById, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, LEGENDS, gearById, type GearSlot, type GearTier } from './data';
-import { Game, fishById, type Line, type SaveData } from './game';
+import { HEAD_STARTS, type HeadStartId, ACHIEVEMENTS, BOATS, DEV_MULTIPLIER, HAND_NAMES, HARBOR_UPGRADES, LETTERS, TRACKS, type GroundId, type HarborUpgradeId, type TrackId, RODS, SKILLS, VARIANTS, baitById, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, LEGENDS, gearById, type GearSlot } from './data';
+import { Game, type GearItem, fishById, type Line, type SaveData } from './game';
 import { Fight } from './fight';
 import { FightView } from './fightui';
 import { Scene, WORM_SPOT_X } from './scene';
@@ -202,8 +202,8 @@ function onAction(a: Action): void {
   else if (a === 'pubRefresh') game.refreshBoard();
   else if (a.startsWith('crewSail:')) { if (game.sendCrew(a.slice(9))) { note.banner(pixelIcon('boat'), 'CREW SAILED', LEGENDS.find((l) => l.id === a.slice(9))!.spot, 'plain'); ui.open = null; } }
   else if (a.startsWith('charTab:')) ui.charTab = a.slice(8) as 'gear' | 'bag';
-  else if (a.startsWith('gsSlot:')) ui.gsSlot = a.slice(7) as GearSlot;
-  else if (a.startsWith('gsTier:')) ui.gsTier = a.slice(7) as GearTier;
+  else if (a.startsWith('gpick:')) ui.gsPick = a.slice(6);
+  else if (a === 'keenEye') { if (game.buyKeenEye()) note.banner(pixelIcon('pearl'), 'KEEN EYE', `Level ${game.keenEye}`, 'rare'); }
   else if (a.startsWith('gbuy:')) {
     const r = game.buyGearPiece(a.slice(5));
     if (r) note.banner(gearIcon(gearById(a.slice(5))!), 'EQUIPPED', gearById(a.slice(5))!.name + (r.sold ? ` · bag full, old one sold $${r.sold.toLocaleString()}` : ''), 'rare');
@@ -232,7 +232,8 @@ function onAction(a: Action): void {
   } else if (a === 'vhome') {
     const out = game.endVoyage();
     if (out?.result === 'caught') note.banner(pixelIcon('trophy'), 'HOME WITH A LEGEND', `+${out.pearls} Pearls${out.sold ? ` · hold full, sold $${out.sold.toLocaleString()}` : ''}`, 'rare');
-    else if (out) note.banner(pixelIcon('boat'), 'HOME', out.haul ? `Haul $${out.haul.toLocaleString()}` : 'Empty-handed', 'plain');
+    else if (out) note.banner(pixelIcon('boat'), 'HOME', out.haul ? `Haul ${out.haul.toLocaleString()}` : 'Empty-handed', 'plain');
+    if (out?.gear) voyageFind(out.gear);
     ui.open = 'lighthouse';
   }
   else if (a.startsWith('exTab:')) ui.exTab = a.slice(6) as 'hold' | 'listed' | 'wanted';
@@ -443,12 +444,24 @@ function placeBanner(): void {
   if (y !== bannerTop) { bannerTop = y; document.documentElement.style.setProperty('--banner-top', `${y}px`); }
 }
 
+/** A voyage brought home a voyage-only set piece. */
+function voyageFind(item: GearItem): void {
+  const def = game.gearDef(item);
+  note.banner(gearIcon(def), 'VOYAGE FIND', `${def.name}${game.gearBag.includes(item) ? '' : ' (bag full, sold)'}`, 'rare');
+}
+
 /** Tackle news: a frenzy starts (Chum Bucket), the Landing Net brings in a second fish. */
 function tackleNews(): void {
   if (game.frenzyNews) { game.frenzyNews = false; note.banner(pixelIcon('bait'), 'FRENZY!', 'Bites come fast', 'rare'); }
   for (const r of game.crewNews.splice(0)) {
     const l = LEGENDS.find((x) => x.id === r.legend)!;
     note.banner(pixelIcon(r.caught ? 'trophy' : 'boat'), r.caught ? `CREW BROUGHT ${l.name.toUpperCase()}` : 'CREW HOME', `Haul ${r.haul.toLocaleString()}${r.caught ? ` · +${r.pearls} Pearls` : ' · the legend got away'}${r.rough ? ' · rough seas' : ''}`, r.caught ? 'rare' : 'plain');
+    if (r.gear) voyageFind(r.gear);
+  }
+  // Gear found fishing: a line in the pickup log (gold for a fine roll; "sold" when the bag was full).
+  for (const d of game.dropNews.splice(0)) {
+    const def = game.gearDef(d.item);
+    note.log(`drop-${def.id}`, gearIcon(def), `<b>${def.name}</b>${d.sold ? ' sold' : ''}`, d.item.fine ? 'rare' : 'good');
   }
   for (; game.doubleNews > 0; game.doubleNews--) { const at = scene.fisherScreen(); note.float('DOUBLE!', at.x, at.y - 30, 'rare'); }
 }

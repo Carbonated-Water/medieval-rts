@@ -7,7 +7,8 @@ import {
   MIN_BITE_WAIT, REEL_WINDOW, REFLEX_PER_LEVEL, RODS, HAND_RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, START_WORMS, STRENGTH_PER_LEVEL, TIERS,
   TOO_STRONG_WEIGHT, VARIANTS, VARIANT_ORDER, WORMS_PER_PICK, WORM_SPAWN_SECONDS, WORM_SPOTS, baitById,
   type AchStat, type AchievementDef, type BaitId, type FishDef, type GearKind, type SkillId, type Tier, type Variant,
-  CHUMS, FRENZY_SPEED, ICEBOXES, NETS, GEAR_BAG, GEAR_SELL, PUB, CREW_ROLE_ORDER, SAILOR_NAMES, type CrewRole, GEAR_SLOTS, GEAR_TIERS, LEGACY_GEAR, STARTER_GEAR, gearById, rodReach, type GearDef, type GearSlot, type StatId,
+  CHUMS, FRENZY_SPEED, ICEBOXES, NETS, GEAR_BAG, GEAR_SELL, DROP_SELL, PUB, CREW_ROLE_ORDER, SAILOR_NAMES, type CrewRole, GEAR_SLOTS, GEAR_TIERS, LEGACY_GEAR, STARTER_GEAR, gearById, rodReach, type GearDef, type GearSlot, type StatId, type GearTier,
+  GEAR_ITEMS, SETS, SET_ORDER, SET_SLOTS, SET_TIERS, SET_BONUS_SCALE, setPieceId, DROP_CHANCE, KEEN_EYE, VOYAGE_PIECE, DROP_ROLL, FINE_ROLL, LUCK_SCALE, FORTUNE_SCALE, STAT_CAP, STAT_ORDER, type SetId, type SetEffect, type SetSlot,
   BILLFISH, SEA_FISH, SHELLFISH, TREE_FISH, pearlsFor, HEAD_STARTS, HEAD_START_CASH, type HeadStartId, TRAITS, TRAIT_ORDER, HEIR_NAMES, type TraitId, treeFishById, type TreeFish, COLLECTORS, EXOTIC, LEGENDS, VOYAGE, type LegendDef, type Region,
 } from './data';
 import * as V from './voyage';
@@ -69,6 +70,9 @@ export interface SaveData {
   runBest?: { fish: string; kg: number; value: number } | null;
   /** Head starts bought with Pearls (kept on retiring). */
   perks?: HeadStartId[];
+  /** Keen Eye level (Pearls; more gear drops; kept on retiring) and the Fishmonger's catch count. */
+  keenEye?: number;
+  tenth?: number;
   /** Set by retire(): apply the head starts when this save is loaded. Not saved. */
   newRun?: boolean;
   /** Sea species your boats have ever landed (the sea's journal); survives retiring. */
@@ -171,7 +175,7 @@ export interface Sailor { id: number; name: string; role: CrewRole; stars: numbe
 /** A crew voyage under way: the legend it's after, time, and the crew's stars when they sailed. */
 export interface CrewTrip { legend: string; t: number; dur: number; crew: Partial<Record<CrewRole, number>> }
 /** A crew home: haul paid (after their cut), rough seas, the legend or not. */
-export interface CrewResult { legend: string; haul: number; cut: number; rough: boolean; caught: boolean; pearls: number; sold: number }
+export interface CrewResult { legend: string; haul: number; cut: number; rough: boolean; caught: boolean; pearls: number; sold: number; gear?: GearItem | null }
 
 /** A fisher of the family: a name and the trait they were born with (none for the first). */
 export interface Heir { name: string; trait: TraitId | null }
@@ -244,7 +248,12 @@ export class Game {
   frenzyLeft = 0;
   frenzyNews = false;
   doubleNews = 0;
-  equipped: Record<GearSlot, GearItem | null> = { rod: null, hat: null, shirt: null, pants: null, boots: null };
+  equipped: Record<GearSlot, GearItem | null> = { rod: null, hat: null, shirt: null, pants: null, boots: null, charm: null };
+  keenEye = 0;
+  tenth = 0;
+  /** Gear found fishing, for the screen (and what it sold for when the bag was full). */
+  dropNews: { item: GearItem; sold: number }[] = [];
+  private statCache: { worn: (GearItem | null)[]; trait: TraitId | null; stats: Record<StatId, number>; sets: Partial<Record<SetId, { n: number; tier: GearTier }>> } | null = null;
   gearBag: GearItem[] = [];
   nextGearId = 1;
   flagship = false;
@@ -333,7 +342,8 @@ export class Game {
     this.clothes = clamp(this.clothes, 0, CLOTHES.length - 1);
     this.boots = clamp(this.boots, 0, BOOTS.length - 1);
     for (const id of Object.keys(SKILLS) as SkillId[]) this.setLevel(id, clamp(this.level(id), SKILLS[id].start, SKILLS[id].max));
-    this.equipped = { rod: null, hat: null, shirt: null, pants: null, boots: null, ...(save?.equipped ?? {}) };
+    this.equipped = { rod: null, hat: null, shirt: null, pants: null, boots: null, charm: null, ...(save?.equipped ?? {}) } as Record<GearSlot, GearItem | null>;
+    this.keenEye = clamp(this.keenEye ?? 0, 0, KEEN_EYE.cost.length);
     if (!save?.equipped) {
       // Before gear: the rod, clothes and boots you'd bought become the matching pieces.
       const legacy: Partial<Record<GearSlot, string | null>> = { ...STARTER_GEAR, rod: LEGACY_GEAR.rod[this.rod], shirt: LEGACY_GEAR.clothes[this.clothes], boots: LEGACY_GEAR.boots[this.boots] };
@@ -386,23 +396,131 @@ export class Game {
     };
   }
 
-  /** A stat summed over everything you're wearing (percent). */
+  /** A stat (percent): what you wear, your trait, your set bonuses. */
   gearStat(s: StatId): number {
-    return GEAR_SLOTS.reduce((n, slot) => n + (this.equipped[slot]?.stats[s] ?? 0), 0) + (this.heir.trait ? TRAITS[this.heir.trait].stats?.[s] ?? 0 : 0);
+    return this.statsFor()[s];
   }
 
-  /** What a piece sells for: a share of its shop price, more for a better roll (at least $5). */
+  /** All your stats; with `wear`, as if you wore that instead. */
+  statsFor(wear: Record<GearSlot, GearItem | null> = this.equipped): Record<StatId, number> {
+    // What you wear is asked for on every bite weight: reuse the last answer while nothing worn has changed.
+    const c = this.statCache, mine = wear === this.equipped;
+    if (mine && c && c.trait === this.heir.trait && GEAR_SLOTS.every((s, i) => c.worn[i] === wear[s])) return c.stats;
+    const out = Object.fromEntries(STAT_ORDER.map((s) => [s, 0])) as Record<StatId, number>;
+    const add = (stats: Partial<Record<StatId, number>> | undefined, k = 1) => { for (const [s, v] of Object.entries(stats ?? {})) out[s as StatId] += Math.round((v ?? 0) * k); };
+    for (const slot of GEAR_SLOTS) add(wear[slot]?.stats);
+    if (this.heir.trait) add(TRAITS[this.heir.trait].stats);
+    for (const [set, w] of Object.entries(this.setsWorn(wear)) as [SetId, { n: number; tier: GearTier }][]) for (const b of SETS[set].bonus.slice(0, Math.max(0, Math.min(w.n, 4) - 1))) add(b, SET_BONUS_SCALE[w.tier]);
+    for (const [s, cap] of Object.entries(STAT_CAP)) out[s as StatId] = Math.min(out[s as StatId], cap!);
+    if (mine) this.statCache = { worn: GEAR_SLOTS.map((s) => wear[s]), trait: this.heir.trait, stats: out, sets: this.setsWorn(wear) };
+    return out;
+  }
+
+  /** How many pieces of each set you wear, and the lowest tier among them (it scales the bonuses). */
+  setsWorn(wear: Record<GearSlot, GearItem | null> = this.equipped): Partial<Record<SetId, { n: number; tier: GearTier }>> {
+    const out: Partial<Record<SetId, { n: number; tier: GearTier }>> = {};
+    for (const slot of GEAR_SLOTS) {
+      const it = wear[slot], def = it ? this.gearDef(it) : null;
+      if (!def?.set) continue;
+      const w = out[def.set];
+      out[def.set] = { n: (w?.n ?? 0) + 1, tier: w && GEAR_TIERS[w.tier].rank < GEAR_TIERS[def.tier].rank ? w.tier : def.tier };
+    }
+    return out;
+  }
+
+  /** A full set's effect is on (all five pieces worn). */
+  setEffect(e: SetEffect): boolean {
+    const set = SET_ORDER.find((s) => SETS[s].effect === e)!;
+    this.statsFor();
+    return (this.statCache!.sets[set]?.n ?? 0) >= 5;
+  }
+
+  /** A set's bonuses at n pieces worn, at a tier: each bonus's stats, scaled. */
+  setBonus(set: SetId, tier: GearTier): Partial<Record<StatId, number>>[] {
+    return SETS[set].bonus.map((b) => Object.fromEntries(Object.entries(b).map(([s, v]) => [s, Math.round(v! * SET_BONUS_SCALE[tier])])));
+  }
+
+  // ---------- gear drops ----------
+
+  /** The chance a fish you land drops a set piece. */
+  dropChance(): number {
+    return DROP_CHANCE * (1 + KEEN_EYE.per * this.keenEye) * (1 + this.gearStat('scavenge') / 100);
+  }
+
+  /** Keen Eye: Pearls for more gear drops (kept on retiring). */
+  keenEyeCost(): number | null {
+    return KEEN_EYE.cost[this.keenEye] ?? null;
+  }
+
+  buyKeenEye(): boolean {
+    const c = this.keenEyeCost();
+    if (c === null || this.pearls < c) return false;
+    this.pearls -= c;
+    this.keenEye++;
+    return true;
+  }
+
+  /** Maybe a set piece drops from a fish you landed: a random set, any piece but its voyage one, at the fish's tier. */
+  private rollDrop(tier: Tier): void {
+    if (this.rng() >= this.dropChance()) return;
+    const set = SET_ORDER[Math.floor(this.rng() * SET_ORDER.length)]!;
+    const slots = SET_SLOTS.filter((s) => SETS[set].pieces[s].source !== 'voyage');
+    this.findPiece(set, slots[Math.floor(this.rng() * slots.length)]!, SET_TIERS[tier - 1]!);
+  }
+
+  /** A found piece: its stats rolled around the shop's, into the bag (sold if the bag is full). */
+  private findPiece(set: SetId, slot: SetSlot, tier: GearTier, news = true): GearItem {
+    const def = gearById(setPieceId(set, slot, tier))!;
+    const roll = DROP_ROLL[0] + this.rng() * (DROP_ROLL[1] - DROP_ROLL[0]);
+    const stats = Object.fromEntries(Object.entries(def.stats).map(([s, v]) => [s, Math.max(1, Math.round(v! * roll))]));
+    const item = this.makeGear(def, stats, { drop: true, ...(roll >= FINE_ROLL ? { fine: true } : {}) });
+    let sold = 0;
+    if (this.gearBag.length < GEAR_BAG) this.gearBag.push(item);
+    else { sold = this.gearValue(item); this.money += sold; this.earned += sold; }
+    if (news) this.dropNews.push({ item, sold });
+    return item;
+  }
+
+  /** A voyage home: maybe a voyage-only piece (one you don't have yet if any are left). */
+  private voyagePiece(region: Region): GearItem | null {
+    const p = VOYAGE_PIECE[region];
+    if (this.rng() >= p.chance) return null;
+    const slotOf = (s: SetId) => SET_SLOTS.find((x) => SETS[s].pieces[x].source === 'voyage')!;
+    const have = new Set([...GEAR_SLOTS.map((s) => this.equipped[s]), ...this.gearBag].filter((g): g is GearItem => !!g).map((g) => { const d = this.gearDef(g); return `${d.set}-${d.slot}`; }));
+    const missing = SET_ORDER.filter((s) => !have.has(`${s}-${slotOf(s)}`));
+    const pool = missing.length ? missing : SET_ORDER;
+    const set = pool[Math.floor(this.rng() * pool.length)]!;
+    return this.findPiece(set, slotOf(set), p.tier, false);
+  }
+
+  /** Kept by SELL ALL: Legendaries and voyage pieces. */
+  keepOnSellAll(g: GearItem): boolean {
+    const d = this.gearDef(g);
+    return d.tier === 'legendary' || d.source === 'voyage';
+  }
+
+  /** The Gear Shop's wares: your rod and the next two up, then the set pieces it sells at your rod's tier. */
+  shopStock(): GearDef[] {
+    const rank = (d: GearDef) => GEAR_TIERS[d.tier].rank * 10 + rodReach(d) * 3;
+    const rods = GEAR_ITEMS.filter((d) => d.slot === 'rod' && d.tier !== 'legendary').sort((a, b) => rank(a) - rank(b) || a.price - b.price);
+    const at = Math.max(0, rods.findIndex((d) => d.id === this.gearOf('rod')!.id));
+    const tier = SET_TIERS[Math.min(SET_TIERS.length, GEAR_TIERS[this.gearOf('rod')!.tier].rank) - 1]!;
+    const pieces = SET_ORDER.flatMap((set) => SET_SLOTS.filter((s) => SETS[set].pieces[s].source === 'shop').map((s) => gearById(setPieceId(set, s, tier))!));
+    return [...rods.slice(at, at + 3), ...pieces];
+  }
+
+  /** What a piece sells for: a share of its shop price (less for found pieces), more for a better roll (at least $5). */
   gearValue(item: GearItem): number {
     const def = this.gearDef(item);
     const base = Object.values(def.stats).reduce((a, b) => a + (b ?? 0), 0);
     const mine = Object.values(item.stats).reduce((a, b) => a + (b ?? 0), 0);
-    return Math.max(5, Math.round((def.price * GEAR_SELL * (base ? mine / base : 1)) / 5) * 5);
+    return Math.max(5, Math.round((def.price * (item.drop ? DROP_SELL : GEAR_SELL) * (base ? mine / base : 1)) / 5) * 5);
   }
 
   /** Buy a piece from the shop and put it on; what you wore goes to the bag (sold if the bag is full). */
   buyGearPiece(id: string): { sold: number } | null {
     const def = gearById(id);
-    if (!def || def.tier === 'legendary' || this.money < def.price) return null;
+    if (!def || def.tier === 'legendary' || (def.source && def.source !== 'shop') || this.money < def.price) return null;
     this.money -= def.price;
     return this.wear(this.makeGear(def));
   }
@@ -449,7 +567,7 @@ export class Game {
 
   /** Sell everything in the bag except Legendary pieces. */
   sellAllGear(): number {
-    const keep = this.gearBag.filter((g) => this.gearDef(g).tier === 'legendary');
+    const keep = this.gearBag.filter((g) => this.keepOnSellAll(g));
     const n = this.gearBag.filter((g) => !keep.includes(g)).reduce((s, g) => s + this.gearValue(g), 0);
     this.gearBag = keep;
     this.money += n;
@@ -546,6 +664,7 @@ export class Game {
     const l = LEGENDS.find((x) => x.id === legend);
     if (!l || !this.canSail() || !this.legendOpen(l)) return false;
     this.voyage = V.newVoyage(legend, this.rng);
+    if (this.setEffect('plunder')) this.voyage.supplies++;
     return true;
   }
 
@@ -574,10 +693,10 @@ export class Game {
    * its value if the hold is full), counts for unlocks and pays Pearls. The
    * Flagship rests.
    */
-  endVoyage(): { haul: number; exotic: Exotic | null; sold: number; pearls: number; result: V.VoyageState['result'] } | null {
+  endVoyage(): { haul: number; exotic: Exotic | null; sold: number; pearls: number; result: V.VoyageState['result']; gear: GearItem | null } | null {
     const v = this.voyage;
     if (!v || v.stage !== 'over') return null;
-    const out = { haul: v.haul, exotic: null as Exotic | null, sold: 0, pearls: 0, result: v.result };
+    const out = { haul: v.haul, exotic: null as Exotic | null, sold: 0, pearls: 0, result: v.result, gear: null as GearItem | null };
     this.money += v.haul;
     this.earned += v.haul;
     if (v.result === 'caught') {
@@ -588,6 +707,7 @@ export class Game {
       out.pearls = V.pearlsFor(l);
       this.pearls += out.pearls;
     }
+    if (v.result !== 'failed') out.gear = this.voyagePiece(V.legendOf(v).region);
     this.voyage = null;
     this.flagshipRest = VOYAGE.rest;
     return out;
@@ -692,6 +812,7 @@ export class Game {
       out.pearls = V.pearlsFor(l);
       this.pearls += out.pearls;
     }
+    out.gear = this.voyagePiece(l.region);
     this.crewNews.push(out);
   }
 
@@ -836,7 +957,7 @@ export class Game {
     if (kept) equipped[this.gearDef(kept).slot] = { ...kept, id: id++ };
     return {
       pearls: this.pearls + gain, fishTree: [...this.fishTree], retirements: this.retirements + 1, seaSeen: [...this.seaSeen], landed: { ...this.landed },
-      journal: this.journal, claimed: [...this.claimed], dev: this.dev, perks: [...this.perks], newRun: true,
+      journal: this.journal, claimed: [...this.claimed], dev: this.dev, perks: [...this.perks], keenEye: this.keenEye, newRun: true,
       heir: next, family, equipped, nextGearId: id,
     };
   }
@@ -873,8 +994,9 @@ export class Game {
   }
 
   /** Bite weight: tier base × rarity × step^(tier-1); fishing level and bait both add to the step. */
-  private weight(f: FishDef, skill: number, bait: BaitId, rodTier: Tier = this.rodTier, reach = rodTier === this.rodTier ? this.rodReach : 0): number {
-    const step = 1 + SKILL_TIER_BONUS * (skill - 1) + baitById(bait).lure + this.gearStat('luck') / 100;
+  private weight(f: FishDef, skill: number, bait: BaitId, rodTier: Tier = this.rodTier, reach = rodTier === this.rodTier ? this.rodReach : 0, plain = false): number {
+    const step = 1 + SKILL_TIER_BONUS * (skill - 1) + baitById(bait).lure + (this.gearStat('luck') / 100) * LUCK_SCALE;
+    if (!plain && f.tier === 5 && this.setEffect('deep')) return 1.5 * this.weight(f, skill, bait, rodTier, reach, true);
     // Too-strong fish bite at a steady share of the rod's top tier: levels and bait don't make snaps more common.
     // A rod reaching into the next tier draws that tier part of the way to its full share (geometrically, so each rod is a similar step).
     const share = tierShare(FISH, this.riverFish(), f);
@@ -910,7 +1032,7 @@ export class Game {
     const [lo, hi] = BITE_WAIT;
     // Your own lines: the rod's tier and Patience; a hired hand's: its rod level.
     const mine = rod === undefined, level = mine ? Math.min(4, GEAR_TIERS[this.gearOf('rod')!.tier].rank - 1) : rod;
-    const wait = ((lo + this.rng() * (hi - lo)) * baitById(bait).wait * (1 - 0.06 * level)) / (mine ? (1 + this.gearStat('patience') / 100) * (this.frenzyLeft > 0 ? FRENZY_SPEED : 1) : 1);
+    const wait = ((lo + this.rng() * (hi - lo)) * baitById(bait).wait * (1 - 0.06 * level)) / (mine ? (1 + this.gearStat('patience') / 100) * (this.frenzyLeft > 0 ? FRENZY_SPEED : 1) : 1 + this.gearStat('crew') / 100);
     return Math.max(MIN_BITE_WAIT, wait);
   }
 
@@ -943,7 +1065,7 @@ export class Game {
   /** Take one bait for a cast. */
   private takeBait(): BaitId | null {
     const id = this.activeBait;
-    if (id) this.baits[id] = this.baitCount(id) - 1;
+    if (id && !(this.rng() < this.gearStat('thrift') / 100)) this.baits[id] = this.baitCount(id) - 1;
     return id;
   }
 
@@ -1044,7 +1166,7 @@ export class Game {
       else {
         this.lines[i] = { type: 'result', t: 0, outcome: 'caught', fish: line.fish, caught: this.land(line.fish, false, line.bait), strong };
         // The Landing Net sometimes brings in a second one.
-        if (this.rng() < NETS[this.net]!.chance) { this.land(line.fish, false, line.bait); this.doubleNews++; }
+        if (this.rng() < Math.min(0.9, NETS[this.net]!.chance + this.gearStat('twin') / 100)) { this.land(line.fish, false, line.bait); this.doubleNews++; }
       }
     }
   }
@@ -1126,11 +1248,14 @@ export class Game {
   /** A fish is landed (by you, or by a hired hand into the pier crate): variant, weight, price, journal. */
   private land(fish: FishDef, byHand = false, bait: BaitId = 'worm'): Catch {
     // Your gear: Fortune for variants, Size for weight (hired hands don't wear yours).
-    const variant = this.rollVariant(byHand ? 1 : 1 + this.gearStat('fortune') / 100);
+    const boost = byHand ? 1 : 1 + (FORTUNE_SCALE * this.gearStat('fortune')) / 100;
+    let variant = this.rollVariant(boost);
+    if (!byHand && this.setEffect('wild')) { const again = this.rollVariant(boost); if (again && (!variant || VARIANT_ORDER.indexOf(again) < VARIANT_ORDER.indexOf(variant))) variant = again; }
     const v = variant ? VARIANTS[variant] : { size: 1, value: 1 };
     const ratio = (0.6 + this.rng() * 0.8) * (byHand ? 1 : 1 + this.gearStat('size') / 100) * v.size * baitById(bait).size;
     const kg = Math.round(fish.kg * ratio * 100) / 100;
-    const value = Math.max(1, Math.round(fish.price * ratio * v.value));
+    const tenth = !byHand && this.setEffect('tenth') && ++this.tenth % 10 === 0;
+    const value = Math.max(1, Math.round(fish.price * ratio * v.value * (tenth ? 2 : 1)));
     const c: Catch = { id: this.nextId++, fish: fish.id, kg, value, ...(variant ? { variant } : {}) };
     (byHand ? this.crate : this.bag).push(c);
     this.made[byHand ? 'hands' : 'you'] += this.priceOf(c);
@@ -1139,6 +1264,7 @@ export class Game {
     if (variant) variants[variant] = (variants[variant] ?? 0) + 1;
     this.journal[fish.id] = { count: j.count + 1, bestKg: Math.max(j.bestKg, kg), ...(Object.keys(variants).length ? { variants } : {}) };
     if (!byHand && (!this.runBest || value > this.runBest.value)) this.runBest = { fish: fish.id, kg, value };
+    if (!byHand) this.rollDrop(fish.tier);
     return c;
   }
 
@@ -1400,7 +1526,7 @@ export class Game {
     const luck = 1 - STORM_LOSS * storm + SCHOOL_CHANCE * (1 - storm);
     const sighting = GROUNDS.indexOf(ground) >= 2 ? SIGHTING_CHANCE * 3 * pool[pool.length - 1]!.price * worth : 0;
     const raw = this.haulSize(x) * avg * luck + sighting;
-    const keep = (1 + HAGGLE_PER_LEVEL * this.haggling) * (this.dev ? DEV_MULTIPLIER : 1)
+    const keep = (1 + HAGGLE_PER_LEVEL * this.haggling) * (this.dev ? DEV_MULTIPLIER : 1) * (this.setEffect('plunder') ? 1.25 : 1)
       * (x.tracks.captain > 0 ? 1 - CAPTAIN_WAGE : 1) * (this.harbor.master ? 1 - HARBOR_UPGRADES.master.fee : 1);
     return (raw * keep) / (this.tripSeconds(x) / 60);
   }
@@ -1490,7 +1616,7 @@ export class Game {
   haulValue(b: Boat, fee = 0): number {
     const raw = (b.haul ?? []).reduce((s, h) => s + h.value, 0);
     const wage = b.tracks.captain > 0 ? CAPTAIN_WAGE : 0;
-    return Math.round(raw * (1 + HAGGLE_PER_LEVEL * this.haggling) * (this.dev ? DEV_MULTIPLIER : 1) * (1 - wage) * (1 - fee));
+    return Math.round(raw * (1 + HAGGLE_PER_LEVEL * this.haggling) * (this.dev ? DEV_MULTIPLIER : 1) * (1 - wage) * (1 - fee) * (this.setEffect('plunder') ? 1.25 : 1));
   }
 
   /** Sell a boat's haul straight from the harbor. Returns the money. */
@@ -1835,7 +1961,7 @@ export class Game {
         const slow = Math.max(HAND_REACT[0], HAND_REACT[1] - HAND_REACT_PER_LEVEL * (h.skill - 1));
         h.react = HAND_REACT[0] + this.rng() * (slow - HAND_REACT[0]);
       } else if (line.type === 'bite' && line.t >= (h.react ?? 0)) {
-        if (h.react! > line.window) h.line = { type: 'result', t: 0, outcome: 'escaped', fish: line.fish };
+        if (h.react! > line.window && !this.setEffect('calm')) h.line = { type: 'result', t: 0, outcome: 'escaped', fish: line.fish };
         else if (line.tooStrong && !(line.fish.tier === tier + 1 && this.rng() < HAND_RODS[h.rod]!.reach)) h.line = { type: 'result', t: 0, outcome: 'snapped', fish: line.fish };
         else h.line = { type: 'result', t: 0, outcome: 'caught', fish: line.fish, caught: this.land(line.fish, true, line.bait) };
         h.react = null;
@@ -1901,7 +2027,7 @@ export class Game {
       company: this.company, letters: this.letters, boats: this.boats,
       berths: this.berths, harbor: { ...this.harbor }, warehouse: this.warehouse, savedAt: Date.now(),
       pierSections: this.pierSections, managerBudget: this.managerBudget, shipBudget: this.shipBudget,
-      pearls: this.pearls, fishTree: this.fishTree, retirements: this.retirements, seaSeen: this.seaSeen, perks: this.perks, heir: this.heir, family: this.family, heirChoices: this.heirChoices, runBest: this.runBest,
+      pearls: this.pearls, fishTree: this.fishTree, retirements: this.retirements, seaSeen: this.seaSeen, perks: this.perks, keenEye: this.keenEye, tenth: this.tenth, heir: this.heir, family: this.family, heirChoices: this.heirChoices, runBest: this.runBest,
       exoticHold: this.exoticHold, listings: this.listings, wanted: this.wanted, nextExoticId: this.nextExoticId,
       equipped: this.equipped, gearBag: this.gearBag, nextGearId: this.nextGearId, net: this.net, chum: this.chum, icebox: this.icebox,
       flagship: this.flagship, flagshipRest: this.flagshipRest, voyage: this.voyage, landed: this.landed,

@@ -3,6 +3,7 @@ import {
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_REPEAT, BOOTS, CAPTAIN_WAGE, COMPANY_PRICE, CREW_BASE, GROUNDS, HANDS_MAX, handCost, PIER_SPOTS, PIER_SECTIONS, SELLER_BAG, SHELLFISH,
   COMPANY_UNLOCK_EARNED, LETTERS, TRACK_GROWTH, TRACK_MAX, TRACK_ORDER, CLOTHES, DEV_MULTIPLIER, FISH, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_MAX, VARIANTS,
   MAX_GROUND_WORMS, START_WORMS, STRENGTH_PER_LEVEL, WORM_SPAWN_SECONDS, skillCost, TREE_FISH, pearlsFor, gearById, LEGENDS, rodReach, HAND_RODS, HEAD_START_CASH,
+  SETS, SET_ORDER, SET_SLOTS, SET_TIERS, setPieceId, STAT_CAP, DROP_SELL, DROP_ROLL, KEEN_EYE,
 } from './data';
 import { Game, fishById, type Line } from './game';
 
@@ -1320,5 +1321,93 @@ describe('generations', () => {
     for (let k = 0; k < 20; k++) { waitForBite(g); g.reel(); }
     expect(g.runBest).not.toBeNull();
     expect(g.runBest!.value).toBe(Math.max(...g.bag.map((c) => c.value)));
+  });
+});
+
+describe('gear sets, drops and the new stats', () => {
+  const piece = (g: Game, id: string, extra: object = {}) => ({ id: g.nextGearId++, def: id, stats: { ...gearById(id)!.stats }, ...extra });
+  const wear = (g: Game, ...ids: string[]) => { for (const id of ids) g.equipped[gearById(id)!.slot] = piece(g, id); };
+
+  it('every set has five pieces at five tiers: two in the shop, two found fishing, one from voyages', () => {
+    for (const set of SET_ORDER) {
+      const sources = SET_SLOTS.map((s) => SETS[set].pieces[s].source).sort();
+      expect(sources).toEqual(['drop', 'drop', 'shop', 'shop', 'voyage']);
+      for (const s of SET_SLOTS) for (const t of SET_TIERS) expect(gearById(setPieceId(set, s, t))).toBeTruthy();
+    }
+  });
+
+  it('set bonuses add at 2, 3 and 4 pieces, scaled by the lowest tier worn; all 5 turn on the effect', () => {
+    const g = new Game({});
+    const before = g.gearStat('fortune');
+    wear(g, 'jester-hat-gold', 'jester-pants-gold');
+    const pieces = (gearById('jester-hat-gold')!.stats.fortune ?? 0) + (gearById('jester-pants-gold')!.stats.fortune ?? 0);
+    expect(g.gearStat('fortune') - before).toBe(pieces + 20); // 2 pieces at Gold: Fortune +20
+    wear(g, 'jester-pants-silver');
+    expect(g.setsWorn().jester).toEqual({ n: 2, tier: 'silver' });
+    expect(g.setBonus('jester', 'silver')[0]).toEqual({ fortune: 12 }); // scaled down by the Silver piece
+    expect(g.setEffect('wild')).toBe(false);
+    wear(g, 'jester-shirt-gold', 'jester-boots-gold', 'jester-charm-gold');
+    expect(g.setEffect('wild')).toBe(true);
+  });
+
+  it('Twin and Thrift are capped chances', () => {
+    const g = new Game({});
+    wear(g, 'fishmonger-hat-diamond', 'fishmonger-charm-diamond', 'jester-hat-diamond');
+    g.equipped.shirt = { id: 900, def: 'oldtshirt', stats: { twin: 200 } };
+    expect(g.gearStat('twin')).toBe(STAT_CAP.twin);
+  });
+
+  it('Thrift: a cast sometimes uses no bait', () => {
+    const g = new Game({}, () => 0);
+    g.equipped.shirt = { id: 900, def: 'oldtshirt', stats: { thrift: 50 } };
+    const worms = g.baitCount('worm');
+    g.cast();
+    expect(g.baitCount('worm')).toBe(worms);
+  });
+
+  it('fish drop set pieces at their tier; a full bag sells them for a small share', () => {
+    const g = new Game({}, () => 0); // every roll lands: a drop each catch
+    const fish = FISH.find((f) => f.tier === 2)!;
+    (g as unknown as { land: (f: typeof fish) => void }).land(fish);
+    expect(g.gearBag).toHaveLength(1);
+    const def = g.gearDef(g.gearBag[0]!);
+    expect(def.set).toBeTruthy();
+    expect(def.source).not.toBe('voyage');
+    expect(def.tier).toBe('silver');
+    expect(g.gearBag[0]!.drop).toBe(true);
+    while (g.gearBag.length < 24) g.gearBag.push(piece(g, 'strawhat'));
+    const money = g.money;
+    (g as unknown as { land: (f: typeof fish) => void }).land(fish);
+    const sold = g.dropNews.at(-1)!.sold;
+    expect(sold).toBeGreaterThan(0);
+    expect(sold).toBeLessThanOrEqual(Math.round(def.price * DROP_SELL * DROP_ROLL[1]) + 5);
+    expect(g.money - money).toBeGreaterThanOrEqual(sold);
+  });
+
+  it('Keen Eye costs Pearls, makes drops more common and stays after retiring', () => {
+    const g = new Game({ pearls: 10, earned: 1e9 });
+    const base = g.dropChance();
+    expect(g.buyKeenEye()).toBe(true);
+    expect(g.pearls).toBe(10 - KEEN_EYE.cost[0]!);
+    expect(g.dropChance()).toBeCloseTo(base * (1 + KEEN_EYE.per));
+    expect(new Game(g.retire()!).keenEye).toBe(1);
+  });
+
+  it('the Gear Shop stocks your rod, the next two, and the shop pieces of each set at your rod tier', () => {
+    const g = new Game({ money: 1e9 });
+    const stock = g.shopStock();
+    expect(stock[0]!.id).toBe('twigrod');
+    expect(stock.slice(0, 3).every((d) => d.slot === 'rod')).toBe(true);
+    const pieces = stock.slice(3);
+    expect(pieces).toHaveLength(SET_ORDER.length * 2);
+    expect(pieces.every((d) => d.source === 'shop' && d.tier === 'bronze')).toBe(true);
+    expect(g.buyGearPiece('jester-boots-gold')).toBeNull(); // voyages only
+    expect(g.buyGearPiece('jester-shirt-gold')).toBeNull(); // found fishing only
+    expect(g.buyGearPiece('jester-hat-gold')).toBeTruthy();
+  });
+
+  it('old saves without a charm slot load with it empty', () => {
+    const g = new Game({ equipped: { rod: { id: 1, def: 'twigrod', stats: {} } } });
+    expect(g.equipped.charm).toBeNull();
   });
 });
