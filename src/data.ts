@@ -234,8 +234,8 @@ export interface GearDef {
 export const GEAR_ITEMS: GearDef[] = [
   // rod
   { id: 'twigrod', slot: 'rod', tier: 'bronze', name: "Twig Rod", stats: { reflex: 5, luck: 5 }, price: 0, style: 'stick', colors: ['#8a6038', '#5a3a20'] },
-  { id: 'willowswitch', slot: 'rod', tier: 'bronze', name: "Willow Switch", stats: { strength: 10 }, price: 300, style: 'stick', colors: ['#a08a50', '#6a5a30'] },
-  { id: 'canepole', slot: 'rod', tier: 'bronze', name: "Cane Pole", stats: { luck: 10 }, price: 500, style: 'cane', colors: ['#c8b070', '#8a6a38'] },
+  { id: 'willowswitch', slot: 'rod', tier: 'bronze', name: "Willow Switch", stats: { strength: 10 }, price: 40, style: 'stick', colors: ['#a08a50', '#6a5a30'] },
+  { id: 'canepole', slot: 'rod', tier: 'bronze', name: "Cane Pole", stats: { luck: 10 }, price: 200, style: 'cane', colors: ['#c8b070', '#8a6a38'] },
   { id: 'bamboorod', slot: 'rod', tier: 'silver', name: "Bamboo Rod", stats: { reflex: 10, luck: 10 }, price: 1000, style: 'cane', colors: ['#c8b060', '#7a5a30'] },
   { id: 'ashrod', slot: 'rod', tier: 'silver', name: "Ash Rod", stats: { strength: 20 }, price: 1500, style: 'split', colors: ['#d8c8a0', '#6b4526'] },
   { id: 'springsteelrod', slot: 'rod', tier: 'silver', name: "Spring Steel Rod", stats: { reflex: 15, strength: 5 }, price: 2500, style: 'split', colors: ['#a8b0b8', '#434a5f'] },

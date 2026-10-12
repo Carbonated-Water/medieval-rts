@@ -517,3 +517,4 @@ body.fighting .banner, body.fighting #notes { visibility: hidden; }
   #sheet .setbox { gap: 1px; padding: 4px 6px; }
   #sheet .setbox .bon { font-size: 13px; }
 }
+#action .hint.nudge { font-size: 24px; padding: 4px 10px; background: #fee481; }

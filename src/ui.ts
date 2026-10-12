@@ -226,7 +226,11 @@ export class UI {
     if (place !== 'dock') return `${bag}<div class="plaque hint">Tap the river to fish</div>`;
     const active = game.activeBait;
     const pouch = `<button class="slot pouch" data-act="pouch" aria-label="bait">${icon(BAIT_ICON[active ?? game.baitSel])}<i class="badge count">${active ? game.baitCount(active) : 0}</i></button>`;
-    const row = (btn: string) => `${bag}<div class="dockrow">${pouch}${btn}</div>`;
+    // Still on the starter rod with enough for the next one: point the way (sell first, then the Gear Shop).
+    const next = game.gearOf('rod')!.id === 'twigrod' ? gearById('willowswitch')! : null;
+    const nudge = !next ? '' : game.money >= next.price ? `<div class="plaque hint nudge">New rod at the Gear Shop: ${next.name}</div>`
+      : game.money + game.bagValue() >= next.price ? '<div class="plaque hint nudge">Sell your fish at the Market for a new rod</div>' : '';
+    const row = (btn: string) => `${nudge}${bag}<div class="dockrow">${pouch}${btn}</div>`;
     const biting = game.lines.filter((l) => l.type === 'bite').length;
     const out = game.lines.filter((l) => l.type === 'idle' || l.type === 'result').length;
     if (biting) return row(`<button class="btn big red bite" data-act="reel">REEL!${biting > 1 ? ` x${biting}` : ''}</button>`);
