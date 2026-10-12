@@ -8,7 +8,7 @@ import {
   TOO_STRONG_WEIGHT, VARIANTS, VARIANT_ORDER, WORMS_PER_PICK, WORM_SPAWN_SECONDS, WORM_SPOTS, baitById,
   type AchStat, type AchievementDef, type BaitId, type FishDef, type GearKind, type SkillId, type Tier, type Variant,
   CHUMS, FRENZY_SPEED, ICEBOXES, NETS, GEAR_BAG, GEAR_SELL, PUB, CREW_ROLE_ORDER, SAILOR_NAMES, type CrewRole, GEAR_SLOTS, GEAR_TIERS, LEGACY_GEAR, STARTER_GEAR, gearById, rodReach, type GearDef, type GearSlot, type StatId,
-  BILLFISH, SEA_FISH, SHELLFISH, TREE_FISH, pearlsFor, treeFishById, type TreeFish, COLLECTORS, EXOTIC, LEGENDS, VOYAGE, type LegendDef, type Region,
+  BILLFISH, SEA_FISH, SHELLFISH, TREE_FISH, pearlsFor, HEAD_STARTS, HEAD_START_CASH, type HeadStartId, treeFishById, type TreeFish, COLLECTORS, EXOTIC, LEGENDS, VOYAGE, type LegendDef, type Region,
 } from './data';
 import * as V from './voyage';
 
@@ -62,6 +62,10 @@ export interface SaveData {
   pearls?: number;
   fishTree?: string[];
   retirements?: number;
+  /** Head starts bought with Pearls (kept on retiring). */
+  perks?: HeadStartId[];
+  /** Set by retire(): apply the head starts when this save is loaded. Not saved. */
+  newRun?: boolean;
   /** Sea species your boats have ever landed (the sea's journal); survives retiring. */
   seaSeen?: string[];
   /** Gear: what you're wearing (by slot) and the bag of pieces you aren't. */
@@ -216,6 +220,7 @@ export class Game {
   pearls = 0;
   fishTree: string[] = [];
   retirements = 0;
+  perks: HeadStartId[] = [];
   seaSeen: string[] = [];
   net = 0;
   chum = 0;
@@ -300,6 +305,7 @@ export class Game {
     // Saves from the five-rod ladder: each old rod is the first of its tier on the new one.
     if (save?.hands?.length && !save.handRods) for (const h of this.hands) h.rod *= 3;
     for (const h of this.hands) { h.line = { type: 'idle' }; h.react = null; h.rod = clamp(h.rod, 0, HAND_RODS.length - 1); }
+    this.perks = (this.perks ?? []).filter((id) => HEAD_STARTS.some((p) => p.id === id));
     // Saves already past the reveal skip the earlier letters and get just the last one.
     if (!this.company && this.earned >= COMPANY_UNLOCK_EARNED) this.letters = Math.max(this.letters, LETTERS.length - 1);
     this.rod = clamp(this.rod, 0, RODS.length - 1);
@@ -319,6 +325,9 @@ export class Game {
       for (const slot of GEAR_SLOTS) { const id = legacy[slot]; this.equipped[slot] = id ? this.makeGear(gearById(id)!) : null; }
     }
     if (!this.equipped.rod) this.equipped.rod = this.makeGear(gearById(STARTER_GEAR.rod!)!);
+    // A new run after retiring: the head starts bought with Pearls.
+    if (save?.newRun) for (const id of this.perks) this.applyPerk(id);
+    delete (this as { newRun?: boolean }).newRun;
   }
 
   /** The rarest fish tier your rod lands. */
@@ -767,6 +776,27 @@ export class Game {
     }
   }
 
+  /** Buy a head start with Pearls; it applies at once and every run after. */
+  buyPerk(id: HeadStartId): boolean {
+    const p = HEAD_STARTS.find((x) => x.id === id);
+    if (!p || this.perks.includes(id) || this.pearls < p.cost) return false;
+    this.pearls -= p.cost;
+    this.perks.push(id);
+    this.applyPerk(id);
+    return true;
+  }
+
+  /** A head start, applied now: never takes away something better. */
+  private applyPerk(id: HeadStartId): void {
+    if (id === 'lines') { this.holders = Math.max(this.holders, 2); this.syncLines(); }
+    else if (id === 'auto') this.auto = Math.max(this.auto, 2);
+    else if (id === 'cash') this.money += HEAD_START_CASH;
+    else if (id === 'rod') {
+      const rod = gearById('fiberglassrod')!;
+      if (GEAR_TIERS[this.gearOf('rod')!.tier].rank < GEAR_TIERS[rod.tier].rank) this.wear(this.makeGear(rod));
+    }
+  }
+
   /** Pearls you'd get for retiring now. */
   pearlsOnRetire(): number {
     return pearlsFor(this.earned);
@@ -782,7 +812,7 @@ export class Game {
     if (gain < 1) return null;
     return {
       pearls: this.pearls + gain, fishTree: [...this.fishTree], retirements: this.retirements + 1, seaSeen: [...this.seaSeen], landed: { ...this.landed },
-      journal: this.journal, claimed: [...this.claimed], dev: this.dev,
+      journal: this.journal, claimed: [...this.claimed], dev: this.dev, perks: [...this.perks], newRun: true,
     };
   }
 
@@ -1831,7 +1861,7 @@ export class Game {
       company: this.company, letters: this.letters, boats: this.boats,
       berths: this.berths, harbor: { ...this.harbor }, warehouse: this.warehouse, savedAt: Date.now(),
       pierSections: this.pierSections, managerBudget: this.managerBudget, shipBudget: this.shipBudget,
-      pearls: this.pearls, fishTree: this.fishTree, retirements: this.retirements, seaSeen: this.seaSeen,
+      pearls: this.pearls, fishTree: this.fishTree, retirements: this.retirements, seaSeen: this.seaSeen, perks: this.perks,
       exoticHold: this.exoticHold, listings: this.listings, wanted: this.wanted, nextExoticId: this.nextExoticId,
       equipped: this.equipped, gearBag: this.gearBag, nextGearId: this.nextGearId, net: this.net, chum: this.chum, icebox: this.icebox,
       flagship: this.flagship, flagshipRest: this.flagshipRest, voyage: this.voyage, landed: this.landed,

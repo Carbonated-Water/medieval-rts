@@ -14,7 +14,7 @@
  */
 import {
   AUTO, BAITS, BERTHS, BITE_WAIT, BOATS, BOAT_ORDER, COMPANY_PRICE, GEAR_ITEMS, GEAR_SLOTS, GEAR_TIERS, HARBOR_UPGRADES, HOLDERS,
-  LEGENDS, PIER_STAFF, SKILLS, TREE_FISH, VOYAGE, rodReach, type GearKind, type HarborUpgradeId, type SkillId,
+  LEGENDS, PIER_STAFF, SKILLS, TREE_FISH, VOYAGE, rodReach, HEAD_STARTS, type GearKind, type HarborUpgradeId, type SkillId,
 } from '../src/data';
 import { Game } from '../src/game';
 import { Fight } from '../src/fight';
@@ -198,6 +198,11 @@ class Bot {
     const n = this.can(b.price * 100, 0.2) ? 100 : 20;
     if (b.price > 0 && g.baitCount(b.id) < 40 && this.can(b.price * n, 0.3) && g.buyBait(b.id, n)) { g.selectBait(b.id); this.tap('shop', 2); stop(); return true; }
     if (g.baitSel !== b.id && g.baitCount(b.id) > 0) g.selectBait(b.id);
+    // Pearls: head starts first (cheapest), then the Fish Tree.
+    const perk = HEAD_STARTS.filter((p) => !g.perks.includes(p.id) && g.pearls >= p.cost).sort((a, b) => a.cost - b.cost)[0];
+    if (perk && g.buyPerk(perk.id)) { this.tap('other', 3); this.mark(`head start: ${perk.name}`); return true; }
+    const fish = TREE_FISH.filter((f) => g.canUnlock(f.id)).sort((a, b) => a.cost - b.cost)[0];
+    if (fish && g.unlockFish(fish.id)) { this.tap('other', 2); this.mark(`tree ${g.fishTree.length}`); return true; }
     // The Fishing Company.
     if (!g.company) {
       if (g.companyRevealed) this.mark('company for sale');
@@ -208,9 +213,6 @@ class Bot {
     if (this.pier(stop)) return true;
     // The Flagship.
     if (!g.flagship && this.can(VOYAGE.flagship, 0.7) && g.buyFlagship()) { this.tap('voyage', 2); stop(); this.mark('flagship'); return true; }
-    // The Fish Tree (Pearls).
-    const fish = TREE_FISH.filter((f) => g.canUnlock(f.id)).sort((a, b) => a.cost - b.cost)[0];
-    if (fish && g.unlockFish(fish.id)) { this.tap('other', 2); this.mark(`tree ${g.fishTree.length}`); return true; }
     return false;
   }
 
@@ -374,9 +376,11 @@ class Bot {
   maybeRetire() {
     const g = this.g, gain = g.pearlsOnRetire(), runFor = this.t - this.runStart;
     // Worth it once the run pays at least 5 Pearls and half again what you have.
-    if (runFor < 1800 || g.voyage || gain < Math.max(5, g.pearls * 1.5)) return;
+    // Pearls owned so far, counting the ones spent on the tree and head starts.
+    const owned = g.pearls + g.fishTree.reduce((n, id) => n + (TREE_FISH.find((f) => f.id === id)?.cost ?? 0), 0) + g.perks.reduce((n, id) => n + HEAD_STARTS.find((p) => p.id === id)!.cost, 0);
+    if (runFor < 1800 || g.voyage || gain < Math.max(5, owned * 1.5)) return;
     // Not before trying a voyage, unless the run has gone on a long time.
-    if (!this.rep.voyages.some((v) => v.t >= this.runStart) && runFor < 8 * 3600) return;
+    if (!this.rep.voyages.some((v) => v.t > this.runStart) && runFor < 8 * 3600) return;
     const save = g.retire();
     if (!save) return;
     this.rep.retires.push({ t: this.t, pearls: gain, earned: g.earned });

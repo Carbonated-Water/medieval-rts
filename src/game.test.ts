@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_REPEAT, BOOTS, CAPTAIN_WAGE, COMPANY_PRICE, CREW_BASE, GROUNDS, HANDS_MAX, handCost, PIER_SPOTS, PIER_SECTIONS, SELLER_BAG, SHELLFISH,
   COMPANY_UNLOCK_EARNED, LETTERS, TRACK_GROWTH, TRACK_MAX, TRACK_ORDER, CLOTHES, DEV_MULTIPLIER, FISH, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_MAX, VARIANTS,
-  MAX_GROUND_WORMS, START_WORMS, STRENGTH_PER_LEVEL, WORM_SPAWN_SECONDS, skillCost, TREE_FISH, pearlsFor, gearById, LEGENDS, rodReach, HAND_RODS,
+  MAX_GROUND_WORMS, START_WORMS, STRENGTH_PER_LEVEL, WORM_SPAWN_SECONDS, skillCost, TREE_FISH, pearlsFor, gearById, LEGENDS, rodReach, HAND_RODS, HEAD_START_CASH,
 } from './data';
 import { Game, fishById, type Line } from './game';
 
@@ -318,8 +318,9 @@ describe('market', () => {
     g.train('haggling');
     waitForBite(g);
     g.reel();
-    const copy = new Game(JSON.parse(JSON.stringify(g.save())));
-    expect(copy.save()).toEqual(g.save());
+    const { savedAt: _a, ...saved } = g.save();
+    const { savedAt: _b, ...again } = new Game(JSON.parse(JSON.stringify(g.save()))).save();
+    expect(again).toEqual(saved);
   });
 });
 
@@ -950,11 +951,11 @@ describe('pier staff', () => {
 describe('prestige: Pearls and the Fish Tree', () => {
   const ev = (g: Game) => g.odds(25, 'gold').filter((o) => !o.tooStrong).reduce((s, o) => s + o.p * o.fish.price, 0);
 
-  it('retiring gives sqrt(earned / 1M) Pearls and keeps only Pearls, the tree, the journal and achievements', () => {
+  it('retiring gives sqrt(earned / 250k) Pearls and keeps only Pearls, the tree, the journal and achievements', () => {
     const g = new Game({ money: 5e6, earned: 4e8, company: true, rod: 4, skill: 20, pearls: 3, fishTree: ['sunfish'], journal: { minnow: { count: 9, bestKg: 0.1 } }, claimed: ['catch1'] }, rng(3));
-    expect(pearlsFor(4e8)).toBe(20);
+    expect(pearlsFor(4e8)).toBe(40);
     const next = new Game(g.retire()!, rng(4));
-    expect(next.pearls).toBe(23);
+    expect(next.pearls).toBe(43);
     expect(next.fishTree).toEqual(['sunfish']);
     expect(next.retirements).toBe(1);
     expect(next.journal.minnow!.count).toBe(9);
@@ -962,7 +963,26 @@ describe('prestige: Pearls and the Fish Tree', () => {
     expect(next.money).toBeLessThan(1000);
     expect(next.company).toBe(false);
     expect(next.rod).toBe(0);
-    expect(new Game({ earned: 5e5 }).retire()).toBeNull();
+    expect(new Game({ earned: 2e5 }).retire()).toBeNull();
+  });
+
+  it('head starts: bought once with Pearls, they apply now and at the start of every run', () => {
+    const g = new Game({ pearls: 40, earned: 4e8 }, rng(3));
+    expect(g.buyPerk('lines')).toBe(true);
+    expect(g.buyPerk('lines')).toBe(false); // once
+    expect(g.lineCount).toBe(3);
+    expect(g.buyPerk('auto') && g.buyPerk('rod')).toBe(true);
+    expect(g.pearls).toBe(40 - 5 - 8 - 12);
+    expect(g.buyPerk('cash')).toBe(true);
+    expect(g.buyPerk('cash')).toBe(false); // not enough Pearls... and owned
+    const next = new Game(g.retire()!, rng(4));
+    expect(next.lineCount).toBe(3);
+    expect(next.auto).toBe(2);
+    expect(next.gearOf('rod')!.id).toBe('fiberglassrod');
+    expect(next.money).toBeGreaterThanOrEqual(HEAD_START_CASH);
+    expect(next.perks).toEqual(['lines', 'auto', 'rod', 'cash']);
+    // A reload is not a new run: no second $5,000.
+    expect(new Game(next.save()).money).toBe(next.money);
   });
 
   it('the tree opens tier by tier: any one fish of a tier opens the next; branches need their parent', () => {

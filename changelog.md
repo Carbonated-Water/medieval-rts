@@ -4,6 +4,21 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-11  Head starts; Retire pays more, voyages pay fewer Pearls (#1, #18)
+  WHAT: Fish Tree gets a first tab (star): four head starts bought once with
+        Pearls that apply at once and at the start of every run after
+        (3 lines 5, Autofisher II 8, Fiberglass Rod 12, $25,000 15; kept on
+        retiring; retire() flags the save newRun so they apply on load only
+        then). PEARL_UNIT 1M -> 250k (first Retire ~23 Pearls), tree roots
+        cost 15 -> 10, voyage Pearls 3/6/12/40 -> 1/2/4/15. Pearls still never
+        change prices (the user kept that rule over a held-Pearl sales bonus).
+        Fixed a flaky save round-trip test (savedAt). Bot: buys head starts
+        and tree fish before the company, retire rule counts spent Pearls.
+  WHY:  Run 2 was only faster thanks to the one-time $25k Retire achievement;
+        run 3 was as slow as run 1 (run 1 also gets ~$10-15k of first-time
+        achievement cash). Now the company comes 2.4-2.9x sooner in runs 2-3
+        (54m and 44m vs 2h08). Voyage Pearls no longer make retiring pointless.
+
 2026-10-11  Fishermen get the same 13 rods (#2)
   WHAT: HAND_RODS: a fisherman's rod ladder is the shop's rods, three per
         tier (Twig Rod to Mythril Rod), with the same reach into the next

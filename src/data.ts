@@ -515,7 +515,16 @@ export const BOAT_REPEAT = 0.5;
 // ---------- prestige: retire for Pearls, unlock new fish ----------
 
 /** You can retire once a run has earned enough for one Pearl. Pearls = floor(sqrt(run earnings / PEARL_UNIT)). */
-export const PEARL_UNIT = 1_000_000;
+export const PEARL_UNIT = 250_000;
+/** Head starts: bought once with Pearls in the Fish Tree, they apply at once and at the start of every run after. */
+export type HeadStartId = 'lines' | 'auto' | 'rod' | 'cash';
+export const HEAD_STARTS: { id: HeadStartId; name: string; cost: number }[] = [
+  { id: 'lines', name: '3 lines', cost: 5 },
+  { id: 'auto', name: 'Autofisher II', cost: 8 },
+  { id: 'rod', name: 'Fiberglass Rod', cost: 12 },
+  { id: 'cash', name: '$25,000', cost: 15 },
+];
+export const HEAD_START_CASH = 25000;
 export const pearlsFor = (earned: number) => Math.floor(Math.sqrt(Math.max(0, earned) / PEARL_UNIT));
 
 /**
@@ -536,12 +545,12 @@ export interface TreeFish extends FishDef {
 }
 export const TREE_FISH: TreeFish[] = [
   // Common
-  { id: 'sunfish', name: 'Pumpkinseed', tier: 1, price: 20, kg: 0.3, rarity: 1.1, colors: ['#d08a30', '#f8d070', '#3a8ab0'], shape: 1.8, side: 'river', slot: 0, cost: 15 },
+  { id: 'sunfish', name: 'Pumpkinseed', tier: 1, price: 20, kg: 0.3, rarity: 1.1, colors: ['#d08a30', '#f8d070', '#3a8ab0'], shape: 1.8, side: 'river', slot: 0, cost: 10 },
   { id: 'roach', name: 'Roach', tier: 1, price: 25, kg: 0.4, rarity: 1, colors: ['#8a9aa8', '#eef0f0', '#d04030'], shape: 2.8, side: 'river', slot: 1, cost: 20, parent: 'sunfish' },
   { id: 'dace', name: 'Dace', tier: 1, price: 25, kg: 0.2, rarity: 1, colors: ['#9ab0b8', '#f0f4f4', '#6a8088'], shape: 3.4, side: 'river', slot: 2, cost: 20, parent: 'sunfish' },
   { id: 'rudd', name: 'Rudd', tier: 1, price: 30, kg: 0.6, rarity: 0.9, colors: ['#b0a050', '#f4e8b0', '#e04020'], shape: 2.6, side: 'river', slot: 3, cost: 20, parent: 'roach' },
   { id: 'goldshiner', name: 'Golden Shiner', tier: 1, price: 35, kg: 0.2, rarity: 0.8, colors: ['#e0b040', '#fff0a0', '#c08020'], shape: 3.2, side: 'river', slot: 4, cost: 20, parent: 'dace' },
-  { id: 'sardine', name: 'Sardine', tier: 1, price: 750, kg: 0.1, rarity: 1.2, colors: ['#6a8aa8', '#eef2f6', '#3a5a78'], shape: 3.8, side: 'sea', boat: 'net', ground: 'coast', slot: 0, cost: 15 },
+  { id: 'sardine', name: 'Sardine', tier: 1, price: 750, kg: 0.1, rarity: 1.2, colors: ['#6a8aa8', '#eef2f6', '#3a5a78'], shape: 3.8, side: 'sea', boat: 'net', ground: 'coast', slot: 0, cost: 10 },
   { id: 'sprat', name: 'Sprat', tier: 1, price: 800, kg: 0.1, rarity: 1.1, colors: ['#90a0a8', '#f4f6f6', '#607078'], shape: 3.6, side: 'sea', boat: 'net', ground: 'coast', slot: 1, cost: 20, parent: 'sardine' },
   { id: 'rockcrab', name: 'Rock Crab', tier: 1, price: 900, kg: 0.6, rarity: 1.1, colors: ['#a04a30', '#f0c8a8', '#702818'], shape: 1.6, look: 'crab', side: 'sea', boat: 'lobster', ground: 'coast', slot: 2, cost: 20, parent: 'sardine' },
   { id: 'prawn', name: 'Tiger Prawn', tier: 1, price: 1050, kg: 0.2, rarity: 1, colors: ['#e08050', '#ffe0c0', '#603020'], shape: 2.6, look: 'lobster', side: 'sea', boat: 'lobster', ground: 'reef', slot: 3, cost: 20, parent: 'sprat' },
@@ -699,7 +708,7 @@ export const VOYAGE = {
   supplies: 5,
   hull: 3,
   haul: { coast: 1_500_000, ocean: 4_000_000, abyss: 10_000_000 } as Record<Region, number>,
-  pearls: { coast: 3, ocean: 6, abyss: 12, old: 40 },
+  pearls: { coast: 1, ocean: 2, abyss: 4, old: 15 },
 };
 
 /** The Pub: sailors you sign to crew the Flagship on voyages without you. */

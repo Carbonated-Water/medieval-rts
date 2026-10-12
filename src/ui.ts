@@ -1,4 +1,4 @@
-import { rodReach, HARBOR_STAFF,
+import { rodReach, HEAD_STARTS, type HeadStartId, HARBOR_STAFF,
   ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_ORDER, COMPANY_PRICE, COMPANY_UNLOCK_EARNED, DEV_MULTIPLIER, GROUNDS, HARBOR_UPGRADES,
   MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, PIER_STAFF, HANDS_MAX,
   TRACKS, TRACK_MAX, TRACK_ORDER, WAREHOUSE, type HarborUpgradeId, type TrackId, HAND_NAMES, HAND_SKILL_MAX, LETTERS, RODS, HAND_RODS, FISH, GEAR, REFLEX_PER_LEVEL, SKILLS, STRENGTH_PER_LEVEL, HAGGLE_PER_LEVEL,
@@ -19,7 +19,7 @@ export type Action =
   | `gequip:${number}` | `gunequip:${GearSlot}` | `gsell:${number}` | 'gsellall' | `charTab:${'gear' | 'bag'}` | `buyN:${'1' | '5' | 'max'}` | 'trainAll' | 'toggleBuzz' | `pubTab:${'board' | 'crew'}` | `sign:${number}` | 'pubRefresh' | `crewSail:${string}` | `lhWho:${'you' | 'crew'}` | `fight:${string}` | 'fightDone' | `lhRegion:${'coast' | 'ocean' | 'abyss'}`
   | 'buyFlagship' | `sail:${string}` | `vsail:${number}` | `vchoose:${number}` | 'vlegend' | 'vfight' | 'vhome'
   | `exTab:${'hold' | 'listed' | 'wanted'}` | `exList:${number}` | `exUnlist:${number}` | `exOpen:${number}` | `exSell:${number}:${number}` | `exGive:${number}` | 'exDev' | 'boatPrev' | 'boatNext' | `coTab:${'harbor' | 'ledger' | 'harborup'}`
-  | `achTab:${'base' | 'tree'}` | `treeTier:${number}` | `treeSel:${string}` | `unlock:${string}` | 'doRetire' | `journalTier:${number}`
+  | `achTab:${'base' | 'tree'}` | `treeTier:${number}` | `treeSel:${string}` | `unlock:${string}` | `perk:${HeadStartId}` | 'doRetire' | `journalTier:${number}`
   | 'sellAll' | `sellFish:${string}` | `buy:${GearKind}` | `train:${SkillId}` | 'claimAll' | `trophy:${string}`
   | `bait:${BaitId}` | `buyBait:${BaitId}:${number}`
   | 'buyCompany' | `buyBoat:${BoatType}` | `boat:${number}` | `send:${number}` | `collect:${number}` | `crew:${number}` | `net:${number}`
@@ -120,7 +120,8 @@ export class UI {
   /** Upgrade track shown in the boat panel's detail strip. */
   trackSel: TrackId = 'hull';
   /** Fish Tree page: which tier is showing, which fish is selected. Journal: which tier. */
-  treeTier: Tier = 1;
+  /** The Fish Tree tab: a tier of fish, or 0 for the head starts. */
+  treeTier: Tier | 0 = 1;
   treeSel = '';
   journalTier: Tier = 1;
   /** Money made per second by source, averaged over the last minute (set by main). */
@@ -638,8 +639,14 @@ export class UI {
    */
   private treeHtml(game: Game): string {
     const t = this.treeTier;
-    const pearls = `<div class="row tight"><div class="slot">${icon('pearl')}</div><div class="meta"><b>${game.pearls} Pearls</b><div class="sub"><small>Spend them on new fish</small></div></div></div>`;
-    const tabs = `<div class="tiers">${([1, 2, 3, 4, 5] as Tier[]).map((k) => `<button class="tab${k === t ? ' on' : ''}${game.treeTierOpen(k) ? '' : ' shut'}" style="--c:${TIERS[k].color}" data-act="treeTier:${k}">${game.treeTierOpen(k) ? ROMAN[k] : icon('lock', 2)}</button>`).join('')}</div>`;
+    const pearls = `<div class="row tight"><div class="slot">${icon('pearl')}</div><div class="meta"><b>${game.pearls} Pearls</b><div class="sub"><small>${t === 0 ? 'Head starts for every new run' : 'Spend them on new fish'}</small></div></div></div>`;
+    const tabs = `<div class="tiers six"><button class="tab${t === 0 ? ' on' : ''}" style="--c:#7a5a3a" data-act="treeTier:0" aria-label="head starts">${icon('star', 2)}</button>${([1, 2, 3, 4, 5] as Tier[]).map((k) => `<button class="tab${k === t ? ' on' : ''}${game.treeTierOpen(k) ? '' : ' shut'}" style="--c:${TIERS[k].color}" data-act="treeTier:${k}">${game.treeTierOpen(k) ? ROMAN[k] : icon('lock', 2)}</button>`).join('')}</div>`;
+    if (t === 0) {
+      // Head starts: bought once, then every run begins with them.
+      const ic: Record<HeadStartId, IconName> = { lines: 'holder', auto: 'auto', rod: 'rod', cash: 'coin' };
+      return pearls + tabs + HEAD_STARTS.map((p) => `<div class="row"><div class="slot">${icon(ic[p.id])}</div><div class="meta"><b>${p.name}</b><div class="sub"><small>${game.perks.includes(p.id) ? 'Every run' : 'Every new run'}</small></div></div>
+        ${game.perks.includes(p.id) ? '<span class="maxed">OWNED</span>' : `<button class="btn" data-act="perk:${p.id}" ${game.pearls < p.cost ? 'disabled' : ''}>${icon('pearl', 2)} ${p.cost}</button>`}</div>`).join('');
+    }
     const fish = TREE_FISH.filter((f) => f.tier === t);
     const at = (f: TreeFish) => ({ x: (f.side === 'river' ? 0 : 50) + POS[f.slot]!.x / 2, y: POS[f.slot]!.y });
     const lines = fish.filter((f) => f.parent).map((f) => {

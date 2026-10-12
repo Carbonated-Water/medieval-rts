@@ -103,6 +103,7 @@ body.fighting .banner, body.fighting #notes { visibility: hidden; }
 /* Gear. */
 #sheet .tiers.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 #sheet .tiers.five .tab { height: 30px; font: 16px/1 'Kenney Mini'; }
+#sheet .tiers.six { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 #sheet .gtile { position: relative; width: 44px; height: 44px; flex: none; display: grid; place-items: center; padding: 0; border: 0; background: var(--parch-light);
   box-shadow: inset 0 0 0 3px var(--t, var(--parch-dark)), 0 0 0 2px var(--outline); }
 #sheet .gtile img { width: 36px; height: 36px; image-rendering: pixelated; }

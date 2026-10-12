@@ -1,4 +1,4 @@
-import { ACHIEVEMENTS, BOATS, DEV_MULTIPLIER, HAND_NAMES, HARBOR_UPGRADES, LETTERS, TRACKS, type GroundId, type HarborUpgradeId, type TrackId, RODS, SKILLS, VARIANTS, baitById, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, LEGENDS, gearById, type GearSlot, type GearTier } from './data';
+import { HEAD_STARTS, type HeadStartId, ACHIEVEMENTS, BOATS, DEV_MULTIPLIER, HAND_NAMES, HARBOR_UPGRADES, LETTERS, TRACKS, type GroundId, type HarborUpgradeId, type TrackId, RODS, SKILLS, VARIANTS, baitById, type BaitId, type BoatType, type GearKind, type SkillId, type Tier, LEGENDS, gearById, type GearSlot, type GearTier } from './data';
 import { Game, fishById, type Line, type SaveData } from './game';
 import { Fight } from './fight';
 import { FightView } from './fightui';
@@ -276,7 +276,11 @@ function onAction(a: Action): void {
   } else if (a === 'toggleDev') {
     game.dev = !game.dev;
     note.banner(pixelIcon('coin'), 'DEV MODE', game.dev ? `On, prices x${DEV_MULTIPLIER}` : 'Off', 'plain');
-  } else if (a.startsWith('treeTier:')) { const t = Number(a.slice(9)) as Tier; ui.treeTier = t; ui.treeSel = ''; }
+  } else if (a.startsWith('treeTier:')) { const t = Number(a.slice(9)) as Tier | 0; ui.treeTier = t; ui.treeSel = ''; }
+  else if (a.startsWith('perk:')) {
+    const id = a.slice(5) as HeadStartId, p = HEAD_STARTS.find((x) => x.id === id);
+    if (p && game.buyPerk(id)) note.banner(pixelIcon('pearl'), 'HEAD START', p.name, 'rare');
+  }
   else if (a.startsWith('treeSel:')) ui.treeSel = a.slice(8);
   else if (a.startsWith('journalTier:')) ui.journalTier = Number(a.slice(12)) as Tier;
   else if (a.startsWith('unlock:')) {
@@ -284,7 +288,7 @@ function onAction(a: Action): void {
     if (game.unlockFish(id)) note.banner(fishIcon(f, false, 48, 28), 'UNLOCKED', f.name, 'rare');
   } else if (a === 'doRetire') {
     const gain = game.pearlsOnRetire();
-    if (gain >= 1 && confirm(`Retire and start a new run with +${gain} Pearls? Your money, gear, skills, boats and pier reset. You keep Pearls, the Fish Tree, your journal and achievements.`)) {
+    if (gain >= 1 && confirm(`Retire and start a new run with +${gain} Pearls? Your money, gear, skills, boats and pier reset. You keep Pearls, the Fish Tree and head starts, your journal and achievements.`)) {
       const next = game.retire();
       if (next) {
         wiping = true; // nothing may save the old run over the new one
