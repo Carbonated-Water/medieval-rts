@@ -268,6 +268,9 @@ function onAction(a: Action): void {
     const kind = a.slice(4) as GearKind;
     const next = game.nextGear(kind);
     if (next && game.buyGear(kind)) note.banner(pixelIcon(GEAR_ICON[kind]), 'BOUGHT', next.name);
+  } else if (a.startsWith('skillTip:')) {
+    const id = a.slice(9) as SkillId;
+    ui.skillTip = ui.skillTip === id ? null : id;
   } else if (a.startsWith('train:')) {
     const id = a.slice(6) as SkillId;
     if (game.train(id)) note.banner(pixelIcon(SKILL_ICON[id]), 'TRAINED', `${SKILLS[id].name} ${game.level(id)}`);

@@ -439,3 +439,10 @@ body.fighting .banner, body.fighting #notes { visibility: hidden; }
 #sheet .srow span { font: 16px/1 'Kenney Mini'; color: var(--ink); }
 #sheet .srow small { grid-column: 1 / -1; font: 12px/1 'Kenney Mini'; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-soft); }
 #sheet .srow.zero b, #sheet .srow.zero span { color: var(--ink-soft); }
+
+/* School: tap a skill's row for what it does. */
+#sheet .row.tappable { cursor: pointer; }
+#sheet .row .slot .q { position: absolute; right: -4px; bottom: -4px; width: 14px; height: 14px; display: grid; place-items: center; font: 12px/1 'Kenney Mini'; font-style: normal; color: #fff; background: #2f6fd6; box-shadow: 0 0 0 2px var(--outline); }
+#sheet .row.open { box-shadow: inset 0 0 0 2px #2f6fd6; }
+#sheet .tip { position: relative; margin: 2px 6px 4px; padding: 6px 8px; font: 14px/1.2 'Kenney Mini'; color: var(--ink); background: var(--parch-light); box-shadow: 0 0 0 2px var(--outline), 0 3px 0 rgba(46, 31, 18, 0.35); }
+#sheet .tip:before { content: ''; position: absolute; left: 22px; top: -10px; border: 4px solid transparent; border-bottom-color: var(--outline); }

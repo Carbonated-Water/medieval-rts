@@ -20,7 +20,7 @@ export type Action =
   | 'buyFlagship' | `sail:${string}` | `vsail:${number}` | `vchoose:${number}` | 'vlegend' | 'vfight' | 'vhome'
   | `exTab:${'hold' | 'listed' | 'wanted'}` | `exList:${number}` | `exUnlist:${number}` | `exOpen:${number}` | `exSell:${number}:${number}` | `exGive:${number}` | 'exDev' | 'boatPrev' | 'boatNext' | `coTab:${'harbor' | 'ledger' | 'harborup'}`
   | `achTab:${'base' | 'tree'}` | `treeTier:${number}` | `treeSel:${string}` | `unlock:${string}` | `retireTab:${'retire' | 'family'}` | `heir:${number}` | 'heirloom' | `perk:${HeadStartId}` | 'doRetire' | `journalTier:${number}`
-  | 'sellAll' | `sellFish:${string}` | `buy:${GearKind}` | `train:${SkillId}` | 'claimAll' | `trophy:${string}`
+  | 'sellAll' | `sellFish:${string}` | `buy:${GearKind}` | `train:${SkillId}` | `skillTip:${SkillId}` | 'claimAll' | `trophy:${string}`
   | `bait:${BaitId}` | `buyBait:${BaitId}:${number}`
   | 'buyCompany' | `buyBoat:${BoatType}` | `boat:${number}` | `send:${number}` | `collect:${number}` | `crew:${number}` | `net:${number}`
   | 'sendAll' | 'collectAll' | `ground:${number}:${string}` | `track:${TrackId}` | `upgrade:${number}:${TrackId}`
@@ -35,9 +35,15 @@ const ROMAN: Record<Tier, string> = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V'
 /** Where each slot of a tree side sits in its half of the sky (percent): root at the bottom, two branches, two tips. */
 const POS = [{ x: 50, y: 84 }, { x: 24, y: 52 }, { x: 76, y: 52 }, { x: 24, y: 18 }, { x: 76, y: 18 }];
 
-/** Each gear slot's icon (tabs and empty slots). */
 /** Seconds as m:ss. */
 const clock = (s: number) => { const n = Math.max(0, Math.ceil(s)); return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`; };
+/** What each School skill does (the "?" on its row). */
+const SKILL_TIP: Record<SkillId, string> = {
+  fishing: "Rarer fish bite more often. The number is how often your rod's best tier bites, now and after the next level.",
+  reflexes: "When a fish bites, a gold ring shrinks on the bobber. Reel before it's gone for a PERFECT catch: double value. Each level makes the ring last longer, and your Autofisher hits PERFECT more often.",
+  haggling: `Everything you sell pays ${Math.round(HAGGLE_PER_LEVEL * 100)}% more per level: your fish, the crate and boat hauls.`,
+  strength: `A fish one tier too strong for your rod snaps the line. Each level holds ${Math.round(STRENGTH_PER_LEVEL * 100)}% more of them, and you pull harder in legend fights.`,
+};
 const SLOT_NAME: Record<GearSlot, string> = { rod: 'rod', hat: 'hat', shirt: 'shirt', pants: 'pants', boots: 'boots', charm: 'charm' };
 /** An empty slot's outline: the slot's plain shape in grey. */
 const SLOT_GHOST: Record<GearSlot, string> = { rod: 'stick', hat: 'straw', shirt: 'tee', pants: 'trousers', boots: 'boots', charm: 'coin' };
@@ -574,15 +580,19 @@ export class UI {
     return `<button class="btn" data-act="${act}" ${money < c.cost ? 'disabled' : ''}>${c.levels > 1 ? `<small>x${c.levels}</small> ` : ''}${coin(c.cost)}</button>`;
   }
 
-  /** Raises the fisher's skills, nothing else. */
+  /** The School skill whose "?" is open (what it does, under its row). */
+  skillTip: SkillId | null = null;
+
+  /** Raises the fisher's skills, nothing else. Tap a row (not its button) for what the skill does. */
   private schoolHtml(game: Game): string {
     return (['fishing', 'reflexes', 'haggling', 'strength'] as SkillId[]).map((id) => {
-      const def = SKILLS[id], lvl = game.level(id), cost = game.nextSkillCost(id);
+      const def = SKILLS[id], lvl = game.level(id), cost = game.nextSkillCost(id), open = this.skillTip === id;
       const btn = cost === null ? '<span class="maxed">MAX</span>'
         : `<button class="btn" data-act="train:${id}" ${game.money < cost ? 'disabled' : ''}>${coin(cost)}</button>`;
-      return `<div class="row"><div class="slot">${icon(SKILL_ICON[id])}</div><div class="meta">
+      return `<div class="row tappable${open ? ' open' : ''}" data-act="skillTip:${id}"><div class="slot">${icon(SKILL_ICON[id])}<i class="q">?</i></div><div class="meta">
         <b>${def.name} <span class="small">LV ${lvl}</span></b>
-        <div class="sub"><small>${this.skillEffect(game, id, lvl, cost !== null)}</small></div></div>${btn}</div>`;
+        <div class="sub"><small>${this.skillEffect(game, id, lvl, cost !== null)}</small></div></div>${btn}</div>`
+        + (open ? `<div class="tip">${SKILL_TIP[id]}</div>` : '');
     }).join('');
   }
 

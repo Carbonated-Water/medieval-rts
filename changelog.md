@@ -4,6 +4,16 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-12  School: tap a skill for what it does
+  WHAT: Each School row has a blue ? on its icon; tapping the row (not its
+        price) opens a parchment tip under it saying what the skill does
+        (Fishing: rarer bites and what its number means; Reflexes: the gold
+        PERFECT ring; Haggling: +5% on everything sold; Strength: holds
+        too-strong fish, pulls harder in fights). One open at a time; tap
+        again to close.
+  WHY:  The user asked for a tooltip saying what each skill does: the rows
+        showed numbers ("Hold 4% > 8%") without saying what they meant.
+
 2026-10-12  Reflex is PERFECT reels, Strength pulls in fights, a Stats screen
   WHAT: PERFECT: reel in the first part of a bite (a gold ring shrinks on the
         bobber) and the fish sells for double, "PERFECT!" float. Zone 0.25s
