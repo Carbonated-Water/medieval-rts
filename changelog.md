@@ -4,6 +4,19 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-12  Less noise on the phone screen
+  WHAT: Boats coming home (back in port, storm, lucky school, trophy,
+        auto-sold) no longer show a banner or log line; they go into the
+        bell's history only. Same for crew trips home without a legend,
+        First Mate work, the Fish Seller and achievements (the trophy
+        badge counts those). Banners from a panel (BOUGHT, TRAINED...)
+        show only while it's open and are dropped when you close it,
+        instead of queueing over the river. The money board is one line,
+        "Income $X/s" (the split is in the Ledger), and its "$" is back
+        (lost in the last change).
+  WHY:  The user: the screen was too congested on mobile to tap
+        properly, and they don't need news when ships come back to port.
+
 2026-10-12  Crew cheer, pier with the Fishing Co., catch float, rod prices
   WHAT: Crew cheer: once you own the Fishing Co., every fish you reel in by
         hand (two for a PERFECT) adds +2% to boat hauls, the pier crate,

@@ -189,13 +189,12 @@ export class UI {
     const r = this.rates;
     // Nothing to show on a brand-new game.
     if (!r || (!game.earned && !r.you)) return '';
-    const rows: [string, number][] = [['You', r.you]];
-    if (game.hands.length) rows.push(['Fishermen', r.hands]);
-    if (game.boats.length) rows.push(['Boats', r.boats]);
+    // One line, the total: where it comes from is in the Ledger.
+    const rows: [string, number][] = [['Income', r.you + r.hands + r.boats]];
     const fmt = (n: number) => (n < 10 ? n.toFixed(1) : kmb(Math.round(n)));
     // Crew cheer from fish you reel yourself, while it lasts.
     const cheer = game.cheerBoost() > 1 ? `<span>Cheer</span><b class="cheer">+${Math.round((game.cheerBoost() - 1) * 100)}%</b>` : '';
-    return `<div class="plaque rates">${rows.map(([k, v]) => `<span>${k}</span><b>${fmt(v)}/s</b>`).join('')}${cheer}</div>`;
+    return `<div class="plaque rates">${rows.map(([k, v]) => `<span>${k}</span><b>$${fmt(v)}/s</b>`).join('')}${cheer}</div>`;
   }
 
   update(_dt: number, game: Game, place: Place | null, walking: boolean): void {

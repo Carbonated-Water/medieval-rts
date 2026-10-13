@@ -23,7 +23,10 @@ export class Notices {
   private logEl: HTMLElement;
   private bannerEl: HTMLElement;
   private lines: { key: string; el: HTMLElement; entry: Entry; until: number }[] = [];
-  private banners: { icon: string; label: string; title: string; tone: Tone }[] = [];
+  private banners: { icon: string; label: string; title: string; tone: Tone; inPanel: boolean }[] = [];
+  /** Is a panel open (set each frame)? Banners from a panel (BOUGHT, TRAINED...) only show while it's open. */
+  panelOpen = false;
+  private showingInPanel = false;
   private bannerUntil = 0;
 
   constructor(private root: HTMLElement) {
@@ -79,7 +82,7 @@ export class Notices {
   /** A plaque under the top bar for special moments; queued one at a time. */
   banner(icon: string, label: string, title: string, tone: Tone = 'good'): void {
     this.remember({ icon, html: `<b>${label}</b> ${title}`, tone, at: performance.now(), count: 1 });
-    this.banners.push({ icon, label, title, tone });
+    this.banners.push({ icon, label, title, tone, inPanel: this.panelOpen });
     if (this.banners.length > 3) this.banners.splice(0, this.banners.length - 3);
   }
 
@@ -97,8 +100,14 @@ export class Notices {
       setTimeout(() => l.el.remove(), 300);
     }
     this.lines = this.lines.filter((l) => now < l.until + 300);
+    // Closing a panel drops its banners: they were about what you did in it.
+    if (!this.panelOpen) {
+      this.banners = this.banners.filter((b) => !b.inPanel);
+      if (this.showingInPanel) { this.showingInPanel = false; this.bannerUntil = 0; }
+    }
     if (now >= this.bannerUntil) {
       const next = this.banners.shift();
+      this.showingInPanel = !!next?.inPanel;
       if (next) {
         this.bannerEl.className = `banner show ${next.tone}`;
         this.bannerEl.innerHTML = `<img src="${next.icon}" alt=""><div><small>${next.label}</small><b>${next.title}</b></div>`;

@@ -395,14 +395,15 @@ function announceHarbor(): void {
     note.log(`letter:${text}`, pixelIcon('letter'), 'A letter from H.', 'plain');
     dirty = true;
   }
-  if (game.sellerNews) { note.log('seller', pixelIcon('coin'), `Fish Seller sold your bag $${game.sellerNews.toLocaleString()}`, 'plain'); game.sellerNews = 0; }
+  if (game.sellerNews) { note.quiet(pixelIcon('coin'), `Fish Seller sold your bag ${game.sellerNews.toLocaleString()}`); game.sellerNews = 0; }
   for (const n of game.fleetNews.splice(0)) {
     const name = game.boatName(n.boat), b = game.boats[n.boat]!;
-    if (n.event === 'storm') note.banner(pixelIcon('storm'), `${name.toUpperCase()}: STORM`, 'Lost half the catch', 'bad');
-    else if (n.event === 'school') note.banner(pixelIcon('boat'), `${name.toUpperCase()}: LUCKY SCHOOL`, 'Double haul!', 'rare');
-    else if (n.event === 'sighting') note.banner(pixelIcon('star'), `${name.toUpperCase()}: TROPHY`, 'A giant on the line!', 'rare');
-    if (n.paid) note.log(`sold:${n.boat}`, pixelIcon('boat'), `${name} sold $${n.paid.toLocaleString()}`, 'plain');
-    else if (!n.event) note.banner(pixelIcon('boat'), `${name.toUpperCase()} IS BACK`, `$${game.haulValue(b).toLocaleString()}`, 'rare');
+    // Boats coming home stay off the screen: a line in the Log, nothing more.
+    if (n.event === 'storm') note.quiet(pixelIcon('storm'), `<b>${name}</b> storm, lost half the catch`);
+    else if (n.event === 'school') note.quiet(pixelIcon('boat'), `<b>${name}</b> lucky school, double haul`);
+    else if (n.event === 'sighting') note.quiet(pixelIcon('star'), `<b>${name}</b> landed a trophy`);
+    if (n.paid) note.quiet(pixelIcon('boat'), `<b>${name}</b> sold ${n.paid.toLocaleString()}`);
+    else if (!n.event) note.quiet(pixelIcon('boat'), `<b>${name}</b> is back, ${game.haulValue(b).toLocaleString()}`);
   }
   game.hands.forEach((h, i) => {
     const starved = game.handStarved(h);
@@ -439,7 +440,7 @@ function announceAchievements(): void {
     if (done.has(a.id) || !game.achieved(a)) continue;
     done.add(a.id);
     dirty = true;
-    note.banner(pixelIcon(ACH_ICON[a.stat]), 'ACHIEVEMENT', a.name, 'rare');
+    note.quiet(pixelIcon(ACH_ICON[a.stat]), `<b>Achievement</b> ${a.name}`); // the trophy badge counts it
   }
 }
 
@@ -473,7 +474,13 @@ function placeBanner(): void {
   const top = document.getElementById('top');
   const box = top?.getBoundingClientRect();
   const y = !box ? 70 : ui.open ? Math.round(box.top + 2) : Math.round(box.bottom + 8);
+  note.panelOpen = !!ui.open;
   if (y !== bannerTop) { bannerTop = y; document.documentElement.style.setProperty('--banner-top', `${y}px`); }
+}
+
+/** Banner-shaped news that goes into the Log only. */
+function quietBanner(icon: string, label: string, title: string): void {
+  note.quiet(icon, `<b>${label}</b> ${title}`);
 }
 
 /** A voyage brought home a voyage-only set piece. */
@@ -486,12 +493,12 @@ function voyageFind(item: GearItem): void {
 function tackleNews(): void {
   if (game.frenzyNews) { game.frenzyNews = false; note.banner(pixelIcon('bait'), 'FRENZY!', 'Bites come fast', 'rare'); }
   // The First Mate's work: a line each in the pickup log.
-  for (const m of game.mateNews.splice(0)) note.log(`mate-${m.kind}-${m.text}`, pixelIcon(({ sail: 'boat', sell: 'coin', sign: 'crew', upgrade: 'anchor' } as const)[m.kind]), `<b>First Mate</b> ${m.text}`, m.kind === 'sell' ? 'good' : 'plain');
+  for (const m of game.mateNews.splice(0)) note.quiet(pixelIcon(({ sail: 'boat', sell: 'coin', sign: 'crew', upgrade: 'anchor' } as const)[m.kind]), `<b>First Mate</b> ${m.text}`);
   // Shops opening, one at a time.
   for (const id of game.openNews.splice(0)) note.banner(pixelIcon('star'), 'NOW OPEN', SHOP_OPEN[id].name, 'rare');
   for (const r of game.crewNews.splice(0)) {
     const l = LEGENDS.find((x) => x.id === r.legend)!;
-    note.banner(pixelIcon(r.caught ? 'trophy' : 'boat'), r.caught ? `CREW BROUGHT ${l.name.toUpperCase()}` : 'CREW HOME', `Haul ${r.haul.toLocaleString()}${r.caught ? '' : ' · the legend got away'}${r.pearls ? ` · +${r.pearls} Pearl${r.pearls > 1 ? 's' : ''}` : ''}${r.rough ? ' · rough seas' : ''}`, r.caught ? 'rare' : 'plain');
+    (r.caught ? note.banner.bind(note) : quietBanner)(pixelIcon(r.caught ? 'trophy' : 'boat'), r.caught ? `CREW BROUGHT ${l.name.toUpperCase()}` : 'CREW HOME', `Haul ${r.haul.toLocaleString()}${r.caught ? '' : ' · the legend got away'}${r.pearls ? ` · +${r.pearls} Pearl${r.pearls > 1 ? 's' : ''}` : ''}${r.rough ? ' · rough seas' : ''}`, r.caught ? 'rare' : 'plain');
     if (r.gear) voyageFind(r.gear);
   }
   // Gear found fishing: a line in the pickup log (gold for a fine roll; "sold" when the bag was full).
