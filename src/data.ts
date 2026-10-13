@@ -145,8 +145,8 @@ export const AUTO: AutoDef[] = [
 /** Landing Net: chance a catch brings in a second fish of the same kind. */
 export const NETS = [
   { name: 'No Net', price: 0, blurb: 'One fish at a time', chance: 0 },
-  { name: 'Landing Net I', price: 2000, blurb: '5% doubles', chance: 0.05 },
-  { name: 'Landing Net II', price: 8000, blurb: '10% doubles', chance: 0.1 },
+  { name: 'Landing Net I', price: 1000, blurb: '5% doubles', chance: 0.05 },
+  { name: 'Landing Net II', price: 4000, blurb: '10% doubles', chance: 0.1 },
   { name: 'Landing Net III', price: 30000, blurb: '15% doubles', chance: 0.15 },
   { name: 'Landing Net IV', price: 120000, blurb: '20% doubles', chance: 0.2 },
   { name: 'Landing Net V', price: 500000, blurb: '25% doubles', chance: 0.25 },
@@ -166,8 +166,8 @@ export const SHADOW_LINES = 3;
 /** Ice Box: fish you sell at the Market are worth this much more. */
 export const ICEBOXES = [
   { name: 'No Ice Box', price: 0, blurb: 'Fish as they come', bonus: 0 },
-  { name: 'Ice Box I', price: 1500, blurb: '+5% sales', bonus: 0.05 },
-  { name: 'Ice Box II', price: 6000, blurb: '+10% sales', bonus: 0.1 },
+  { name: 'Ice Box I', price: 750, blurb: '+5% sales', bonus: 0.05 },
+  { name: 'Ice Box II', price: 3000, blurb: '+10% sales', bonus: 0.1 },
   { name: 'Ice Box III', price: 25000, blurb: '+15% sales', bonus: 0.15 },
   { name: 'Ice Box IV', price: 100000, blurb: '+20% sales', bonus: 0.2 },
   { name: 'Ice Box V', price: 400000, blurb: '+25% sales', bonus: 0.25 },
@@ -246,8 +246,8 @@ export const GEAR_ITEMS: GearDef[] = [
   { id: 'stormcaller', slot: 'rod', tier: 'platinum', name: "Stormcaller", stats: { reflex: 30, luck: 25 }, price: 70000, style: 'carbon', colors: ['#4a5a7a', '#f0e040'] },
   { id: 'ironwoodrod', slot: 'rod', tier: 'platinum', name: "Ironwood Rod", stats: { strength: 55 }, price: 100000, style: 'carbon', colors: ['#5a3a2a', '#959ab1'] },
   { id: 'mythrilrod', slot: 'rod', tier: 'diamond', name: "Mythril Rod", stats: { luck: 40, reflex: 40 }, price: 250000, style: 'ornate', colors: ['#70d8e8', '#f4b41b'] },
-  { id: 'starfallrod', slot: 'rod', tier: 'diamond', name: "Starfall Rod", stats: { strength: 50, luck: 30 }, price: 400000, style: 'ornate', colors: ['#2a2a5a', '#fee481'] },
-  { id: 'kingfisherrod', slot: 'rod', tier: 'diamond', name: "Kingfisher Rod", stats: { reflex: 30, strength: 25, luck: 25 }, price: 600000, style: 'ornate', colors: ['#2f6fd6', '#fc683b'] },
+  { id: 'starfallrod', slot: 'rod', tier: 'diamond', name: "Starfall Rod", stats: { strength: 60, luck: 40 }, price: 400000, style: 'ornate', colors: ['#2a2a5a', '#fee481'] },
+  { id: 'kingfisherrod', slot: 'rod', tier: 'diamond', name: "Kingfisher Rod", stats: { reflex: 45, strength: 40, luck: 40 }, price: 600000, style: 'ornate', colors: ['#2f6fd6', '#fc683b'] },
   // hat
   { id: 'strawhat', slot: 'hat', tier: 'bronze', name: "Straw Hat", stats: { luck: 10 }, price: 50, style: 'straw', colors: ['#fee481', '#dd442c'] },
   { id: 'bandana', slot: 'hat', tier: 'bronze', name: "Bandana", stats: { reflex: 10 }, price: 80, style: 'bandana', colors: ['#dd442c', '#ffffff'] },
@@ -560,6 +560,14 @@ export const REEL_WINDOW = 0.9;
 export const PERFECT_ZONE = 0.25;
 export const PERFECT_PER_LEVEL = 0.015;
 export const PERFECT_VALUE = 2;
+/**
+ * Crew cheer: once you own the Fishing Co., every fish you reel in by hand
+ * (two for a PERFECT) cheers the crew on. Each point is +2% on boat hauls,
+ * the pier crate and sea trips, up to +20%, and a point wears off every 6 s.
+ * Keeps your own rod worth picking up when the fleet makes most of the money.
+ * The Autofisher steps aside for `hold` seconds after you cast or reel yourself.
+ */
+export const CHEER = { per: 0.02, max: 10, fade: 6, hold: 8 };
 export const AUTO_PERFECT_REF = 2;
 export const AUTO_PERFECT_MAX = 0.8;
 /** Strength in legend fights: each 100% (a Strength level counts 10%) tires the fish this much faster; reeling raises tension half that much slower. */
@@ -1010,9 +1018,9 @@ export const WAREHOUSE: { hours: number; price: number }[] = [
   { hours: 1, price: 0 }, { hours: 2, price: 100000 }, { hours: 4, price: 300000 }, { hours: 8, price: 900000 },
 ];
 
-// ---------- hired fishermen on the wide pier (open once you own a boat) ----------
+// ---------- hired fishermen on the wide pier (open once you own the Fishing Co.) ----------
 
-/** The pier grows in sections of 4 spots (first section free with your first boat), up to 24 fishermen. */
+/** The pier grows in sections of 4 spots (first section free with the Fishing Co.), up to 24 fishermen. */
 export const PIER_SPOTS = 4;
 export const PIER_SECTIONS: number[] = [0, 60000, 150000, 400000, 1000000, 2500000];
 export const HANDS_MAX = PIER_SPOTS * PIER_SECTIONS.length;

@@ -209,6 +209,7 @@ body.fighting .banner, body.fighting #notes { visibility: hidden; }
 #top .rates { display: grid; grid-template-columns: auto auto; gap: 2px 8px; padding: 4px 8px; font: 16px/1 'Kenney Mini'; }
 #top .rates span { color: var(--ink-soft); }
 #top .rates b { font-weight: normal; text-align: right; }
+#top .rates b.cheer { color: var(--gold, #f4b41b); }
 #top .slot { width: 44px; height: 44px; pointer-events: auto; box-shadow: inset 2px 2px 0 var(--parch-light), inset -2px -2px 0 var(--parch-dark), 0 0 0 2px var(--outline); background: var(--parch); }
 
 /* The big context button and the bag plaque above it. */

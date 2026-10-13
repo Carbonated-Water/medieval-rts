@@ -4,6 +4,32 @@ One entry per change: WHAT + WHY.
 
 ---
 
+2026-10-12  Crew cheer, pier with the Fishing Co., catch float, rod prices
+  WHAT: Crew cheer: once you own the Fishing Co., every fish you reel in by
+        hand (two for a PERFECT) adds +2% to boat hauls, the pier crate,
+        voyages, crew trips and legend sales, up to +20%; a point wears
+        off every 6 s. It shows as a "Cheer +N%" row under the purse. The
+        Autofisher steps aside for 8 s after you cast or reel yourself (it
+        reacts faster than a thumb late on). 16h playtest, hand-fishing
+        bot vs Autofisher bot: cheer held at +19.5%, lifetime earnings
+        +34% / +73% (seeds 1, 2; compounding). The wide pier (and
+        hiring fishermen and pier staff) opens with the Fishing Co. instead
+        of the first boat. A catch now floats the fish's name ("+PERCH")
+        instead of "+$8", since the money only comes when you sell.
+        Starfall Rod is 60 str / 40 luck (was 50/30) and Kingfisher 45/40/40
+        (was 30/25/25), so each diamond rod beats the one before it. Ice
+        Box I/II and Landing Net I/II cost half (750/3000, 1000/4000).
+        Playtest: a FIRST 10 MIN snap count, a CREW CHEER average, and
+        --hand (the bot fishes by hand even with an Autofisher).
+  WHY:  The user asked for the board's four open items and the pier change.
+        Late on, your rod made about 8% of income, so fishing yourself
+        stopped mattering; the cheer scales with the fleet. "+$8" read as
+        money in hand while the purse stayed at 0. Starfall and Kingfisher
+        were worse than the cheaper Mythril, and the cheap tackle paid back
+        far slower than rod holders (issue #21). Early snaps on the starter
+        rods are now 0-2% of bites in the first 10 minutes (3 seeds), so
+        no change there.
+
 2026-10-12  Focus pass: shops open one at a time
   WHAT: A new game opens only the Market. The Gear Shop opens with your
         first sale ($20 earned), the Bait Shop at $60 (or when you're down

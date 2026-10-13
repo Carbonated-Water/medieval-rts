@@ -369,7 +369,8 @@ function announceLine(line: Extract<Line, { type: 'result' }>, slot: number): vo
   if (line.outcome === 'caught' && f && line.caught) {
     const c = line.caught, v = c.variant;
     const pic = fishIcon(f, false, 48, 28, v);
-    note.float(`+$${game.priceOf(c).toLocaleString()}`, x, at.y, v ? 'rare' : 'good');
+    // Into the bag, not the purse: the money comes when you sell.
+    note.float(`+${f.name.toUpperCase()}`, x, at.y, v ? 'rare' : 'good');
     if (game.journal[f.id]!.count === 1) note.banner(pic, 'NEW FISH', f.name, 'rare');
     else if (v === 'shiny') note.banner(pic, 'SHINY', f.name, 'rare');
     else if (v) note.quiet(pic, `<b>${VARIANTS[v].name}</b> ${f.name}`, 'rare');

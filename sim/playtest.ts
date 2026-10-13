@@ -24,7 +24,7 @@ import * as V from '../src/voyage';
 const points = (stats: Partial<Record<string, number>>) => Object.values(stats).reduce((n: number, v) => n + (v ?? 0), 0);
 
 /** retire: the most times the bot retires (0 = play one run out, to test the late game). */
-export interface Options { hours: number; seed: number; errand: number; runs: number; retire?: number; quiet?: boolean }
+export interface Options { hours: number; seed: number; errand: number; runs: number; retire?: number; quiet?: boolean; /** hand: the bot fishes by hand even with an Autofisher. */ hand?: boolean }
 
 /** Seeded RNG (mulberry32), so a seed replays the same run. */
 const mulberry = (seed: number) => () => {
@@ -47,6 +47,10 @@ export interface Report {
   milestones: { t: number; run: number; what: string }[];
   snapshots: { t: number; run: number; money: number; earned: number; perMin: number; you: number; hands: number; boats: number; sea: number; taps: number }[];
   /** The late game at the end: crew, Flagship, legends, Pearls. */
+  /** Your bites in the first 10 minutes, by minute bucket: how many ended in a snap. */
+  early?: Record<string, { bites: number; snapped: number }>;
+  /** Crew cheer: average bonus while you owned the Fishing Co. */
+  cheer?: number;
   late?: { seats: number; stars: number; fives: number; ups: number; mate: boolean; legends: number; crewTrips: number; pearls: number; legendaries: number; masterwork: number; reforge: number };
   taps: Record<TapKind, number>;
   fights: { legend: string; won: boolean; secs: number }[];
@@ -108,7 +112,7 @@ class Bot {
     if (this.away > 0) { this.away -= DT; return; }
     // Worms on the bank get dug while you wait (one tap each).
     if (g.groundWorms.length && g.baitCount('worm') < 30) this.digWorms();
-    if (g.auto > 0) { g.autoFish(); return; }
+    if (g.auto > 0 && !this.o.hand) { g.autoFish(); return; }
     // Manual: reel biting lines after a reaction time, recast when out of the water.
     let reel = false;
     g.lines.forEach((l, i) => {
@@ -167,6 +171,11 @@ class Bot {
       if (l.outcome === 'scared') return;
       const who = AUTO[g.auto]!.name;
       c!.bites[who] = (c!.bites[who] ?? 0) + 1;
+      if (this.t < 600) {
+        const k = this.t < 120 ? '0-2 min' : this.t < 300 ? '2-5 min' : '5-10 min', e = ((this.rep.early ??= {})[k] ??= { bites: 0, snapped: 0 });
+        e.bites++;
+        if (l.outcome === 'snapped') e.snapped++;
+      }
       if (l.outcome === 'caught') { c!.caught++; if (l.perfect) c!.perfect++; if (l.strong) { c!.held++; c!.tooStrong++; } }
       else if (l.outcome === 'snapped') { c!.snapped++; c!.tooStrong++; }
       else if (l.outcome === 'escaped') { c!.escaped++; c!.escapedBy[who] = (c!.escapedBy[who] ?? 0) + 1; }
@@ -494,6 +503,9 @@ class Bot {
     this.rep.snapshots.push({ t: this.t, run: this.run, money: g.money, earned: earnedNow, perMin, you: d.you / tot, hands: d.hands / tot, boats: d.boats / tot, sea: d.sea / tot, taps: Object.values(this.taps).reduce((s, n) => s + n, 0) });
   }
 
+  cheerSum = 0;
+  cheerN = 0;
+
   play() {
     const end = this.o.hours * 3600;
     let nextSnap = 600;
@@ -502,6 +514,7 @@ class Bot {
       this.fish();
       this.countLines();
       this.wearDrops();
+      if (this.g.company) { this.cheerSum += this.g.cheerBoost() - 1; this.cheerN++; }
       this.t += DT;
       if (this.t >= this.nextErrand && this.away <= 0) {
         this.nextErrand = this.t + this.o.errand;
@@ -511,6 +524,7 @@ class Bot {
       }
       if (this.t >= nextSnap) { nextSnap += 600; this.snapshot(); }
     }
+    if (this.cheerN) this.rep.cheer = this.cheerSum / this.cheerN;
     if (this.t - this.lastBuy > 600) this.rep.gaps.push({ from: this.lastBuy, to: this.t, what: 'no purchase (to the end)' });
     const g = this.g, seats = CREW_ROLE_ORDER.filter((r) => g.crew[r]);
     if (g.flagship) this.rep.late = {
@@ -538,6 +552,8 @@ export function print(r: Report): string {
     const won = r.fights.filter((f) => f.won).length;
     out.push('', `VOYAGES: ${r.voyages.length} (${r.voyages.filter((v) => v.result === 'caught').length} legends, ${r.voyages.filter((v) => v.result === 'failed').length} failed) · fights won ${won}/${r.fights.length}`);
   }
+  if (r.early) out.push('', `FIRST 10 MIN (your bites that snapped): ${Object.entries(r.early).map(([k, e]) => `${k} ${e.snapped}/${e.bites}`).join(' · ')}`);
+  if (r.cheer !== undefined) out.push(`CREW CHEER: +${(r.cheer * 100).toFixed(1)}% on average once you own the Fishing Co.`);
   if (r.late) {
     const l = r.late;
     out.push('', `LATE GAME: crew ${l.seats}/8 seats, ${l.stars} stars (${l.fives} at 5) · Flagship upgrades ${l.ups}/50 · First Mate ${l.mate ? 'yes' : 'no'} · legends landed ${l.legends} · crew trips ${l.crewTrips} · Pearls ${l.pearls} · legendary gear ${l.legendaries}/10 · spent on masterwork ${kmb(l.masterwork)}, reforge ${kmb(l.reforge)}`);

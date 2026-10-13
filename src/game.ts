@@ -4,7 +4,7 @@ import {
   SIGHTING_CHANCE, SONAR_STEP, STORM_LOSS, TRACKS, TRACK_GROWTH, TRACK_MAX, WAREHOUSE, crewCost,
   type GroundDef, type GroundId, type HarborUpgradeId, type TrackId,
   HANDS_MAX, PIER_STAFF, TRACK_ORDER, MANAGER_BUDGETS, PIER_SECTIONS, PIER_SPOTS, SELLER_BAG, handCost, HAND_REACT, HAND_REACT_PER_LEVEL, HAND_REST, HAND_SKILL_MAX, LETTERS, handSkillCost, type BoatType, BITE_WAIT, BOOTS, CLOTHES, DEV_MULTIPLIER, FISH, GEAR, HAGGLE_PER_LEVEL, HOLDERS, MAX_GROUND_WORMS,
-  MIN_BITE_WAIT, REEL_WINDOW, PERFECT_ZONE, PERFECT_PER_LEVEL, PERFECT_VALUE, AUTO_PERFECT_REF, AUTO_PERFECT_MAX, STRENGTH_FIGHT, REFLEX_PER_LEVEL, RODS, HAND_RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, START_WORMS, STRENGTH_PER_LEVEL, TIERS,
+  MIN_BITE_WAIT, REEL_WINDOW, PERFECT_ZONE, PERFECT_PER_LEVEL, PERFECT_VALUE, CHEER, AUTO_PERFECT_REF, AUTO_PERFECT_MAX, STRENGTH_FIGHT, REFLEX_PER_LEVEL, RODS, HAND_RODS, SKILLS, SKILL_TIER_BONUS, START_MONEY, START_WORMS, STRENGTH_PER_LEVEL, TIERS,
   TOO_STRONG_WEIGHT, VARIANTS, VARIANT_ORDER, WORMS_PER_PICK, WORM_SPAWN_SECONDS, WORM_SPOTS, baitById,
   type AchStat, type AchievementDef, type BaitId, type FishDef, type GearKind, type SkillId, type Tier, type Variant,
   CHUMS, FRENZY_SPEED, ICEBOXES, NETS, GEAR_BAG, GEAR_SELL, DROP_SELL, PUB, CREW_ROLE_ORDER, SAILOR_NAMES, type CrewRole, QUIRKS, QUIRK_ORDER, type QuirkId, MATE, MATE_JOB_ORDER, type MateJob, FLAGSHIP_UP_ORDER, FLAGSHIP_UPS, FLAGSHIP_UP_MAX, SAILS_REST, SAILS_TRIP, flagshipUpCost, type FlagshipUpId, GEAR_SLOTS, GEAR_TIERS, LEGACY_GEAR, STARTER_GEAR, gearById, rodReach, type GearDef, type GearSlot, type StatId, type GearTier,
@@ -260,6 +260,10 @@ export class Game {
   frenzyLeft = 0;
   frenzyNews = false;
   doubleNews = 0;
+  /** Crew cheer from fish you reel by hand (not saved; see CHEER). */
+  cheer = 0;
+  /** Seconds the Autofisher stays out of it after you cast or reel yourself. */
+  handHold = 0;
   equipped: Record<GearSlot, GearItem | null> = { rod: null, hat: null, shirt: null, pants: null, boots: null, charm: null };
   keenEye = 0;
   tenth = 0;
@@ -864,15 +868,15 @@ export class Game {
   endVoyage(): { haul: number; exotic: Exotic | null; sold: number; pearls: number; result: V.VoyageState['result']; gear: GearItem | null } | null {
     const v = this.voyage;
     if (!v || v.stage !== 'over') return null;
-    const out = { haul: v.haul, exotic: null as Exotic | null, sold: 0, pearls: 0, result: v.result, gear: null as GearItem | null };
-    this.money += v.haul;
-    this.earned += v.haul;
-    this.made.sea += v.haul;
+    const out = { haul: Math.round(v.haul * this.cheerBoost()), exotic: null as Exotic | null, sold: 0, pearls: 0, result: v.result, gear: null as GearItem | null };
+    this.money += out.haul;
+    this.earned += out.haul;
+    this.made.sea += out.haul;
     if (v.result === 'caught') {
       const l = V.legendOf(v);
       this.landed[l.id] = (this.landed[l.id] ?? 0) + 1;
       out.exotic = this.addExotic(l.id, v.kg);
-      if (!out.exotic) { out.sold = this.exoticValue(l.id, v.kg ?? l.kg); this.money += out.sold; this.earned += out.sold; this.made.sea += out.sold; }
+      if (!out.exotic) { out.sold = Math.round(this.exoticValue(l.id, v.kg ?? l.kg) * this.cheerBoost()); this.money += out.sold; this.earned += out.sold; this.made.sea += out.sold; }
       out.pearls = this.legendPearls(l);
       this.pearls += out.pearls;
     }
@@ -1005,7 +1009,7 @@ export class Game {
     const rough = this.rng() < odds.rough;
     const haul = Math.round(VOYAGE.haul[l.region] * odds.haul * (0.8 + this.rng() * 0.4) * (rough ? 0.5 : 1) / 1000) * 1000;
     const cut = Math.round(haul * odds.cut / 1000) * 1000;
-    const out: CrewResult = { legend: l.id, haul: haul - cut, cut, rough, caught: false, pearls: 0, sold: 0 };
+    const out: CrewResult = { legend: l.id, haul: Math.round((haul - cut) * this.cheerBoost()), cut, rough, caught: false, pearls: 0, sold: 0 };
     this.money += out.haul;
     this.earned += out.haul;
     this.made.sea += out.haul;
@@ -1013,7 +1017,7 @@ export class Game {
       out.caught = true;
       this.landed[l.id] = (this.landed[l.id] ?? 0) + 1;
       const kg = Math.round(l.kg * (0.7 + this.rng() * 0.7));
-      if (!this.addExotic(l.id, kg)) { out.sold = this.exoticValue(l.id, kg); this.money += out.sold; this.earned += out.sold; this.made.sea += out.sold; }
+      if (!this.addExotic(l.id, kg)) { out.sold = Math.round(this.exoticValue(l.id, kg) * this.cheerBoost()); this.money += out.sold; this.earned += out.sold; this.made.sea += out.sold; }
       out.pearls = this.legendPearls(l);
       this.pearls += out.pearls;
     }
@@ -1127,10 +1131,11 @@ export class Game {
     const i = this.listings.findIndex((l) => l.exotic.id === id), o = this.listings[i]?.offers[offer];
     if (!o) return 0;
     this.listings.splice(i, 1);
-    this.money += o.amount;
-    this.earned += o.amount;
-    this.made.sea += o.amount;
-    return o.amount;
+    const paid = Math.round(o.amount * this.cheerBoost());
+    this.money += paid;
+    this.earned += paid;
+    this.made.sea += paid;
+    return paid;
   }
 
   /** Does this fish meet that notice? */
@@ -1146,10 +1151,11 @@ export class Game {
     if (!w || !e || !this.meetsWanted(w, e)) return 0;
     if (inHold) this.exoticHold = this.exoticHold.filter((x) => x !== inHold); else this.listings = this.listings.filter((x) => x !== listed);
     this.wanted = this.wanted.filter((x) => x !== w);
-    this.money += w.reward;
-    this.earned += w.reward;
-    this.made.sea += w.reward;
-    return w.reward;
+    const paid = Math.round(w.reward * this.cheerBoost());
+    this.money += paid;
+    this.earned += paid;
+    this.made.sea += paid;
+    return paid;
   }
 
   /** Offers come and go on listed fish; WANTED notices are posted and expire. */
@@ -1409,6 +1415,7 @@ export class Game {
 
   /** Throw every line that's out of the water (idle or showing a result), one bait each. Staggered a little. */
   cast(): boolean {
+    this.handHold = CHEER.hold;
     return this.castWhere((line) => line.type === 'idle' || line.type === 'result');
   }
 
@@ -1429,6 +1436,7 @@ export class Game {
    * that was about to bite gets scared off (only that one).
    */
   reel(slot?: number): void {
+    this.handHold = CHEER.hold;
     if (slot !== undefined) return this.reelLine(slot);
     const biting = this.lines.map((l, i) => (l.type === 'bite' ? i : -1)).filter((i) => i >= 0);
     if (biting.length) { for (const i of biting) this.reelLine(i); return; }
@@ -1451,10 +1459,16 @@ export class Game {
       else {
         const perfect = auto ? this.rng() < this.autoPerfectChance() : line.t <= (line.perfect ?? 0);
         this.lines[i] = { type: 'result', t: 0, outcome: 'caught', fish: line.fish, caught: this.land(line.fish, false, line.bait, perfect), strong, ...(perfect ? { perfect } : {}) };
+        if (!auto && this.company) this.cheer = Math.min(CHEER.max, this.cheer + (perfect ? 2 : 1));
         // The Landing Net sometimes brings in a second one.
         if (this.rng() < Math.min(0.9, NETS[this.net]!.chance + this.gearStat('twin') / 100)) { this.land(line.fish, false, line.bait); this.doubleNews++; }
       }
     }
+  }
+
+  /** Crew cheer as a multiplier on fleet, pier and sea money (1 with none). */
+  cheerBoost(): number {
+    return this.company ? 1 + CHEER.per * Math.ceil(this.cheer) : 1;
   }
 
   /** Put all lines away (walking off, opening the market). */
@@ -1479,6 +1493,8 @@ export class Game {
     this.tickCrew(dt);
     this.tickMate(dt);
     this.openShops();
+    this.cheer = Math.max(0, this.cheer - dt / CHEER.fade);
+    this.handHold = Math.max(0, this.handHold - dt);
     this.lines.forEach((line, i) => {
       if (line.type === 'idle') return;
       line.t += dt;
@@ -1501,7 +1517,8 @@ export class Game {
    * recast empty lines and reel bites after a human-ish reaction time.
    */
   autoFish(): void {
-    if (this.auto === 0) return;
+    // You have the rod: the Autofisher waits until you leave it a while.
+    if (this.auto === 0 || this.handHold > 0) return;
     const a = AUTO[this.auto]!;
     // The top Autofishers cast your best bait by themselves.
     if (a.smart) { const best = [...BAITS].reverse().find((b) => this.baitCount(b.id) > 0); if (best) this.baitSel = best.id; }
@@ -1904,7 +1921,7 @@ export class Game {
   haulValue(b: Boat, fee = 0): number {
     const raw = (b.haul ?? []).reduce((s, h) => s + h.value, 0);
     const wage = b.tracks.captain > 0 ? CAPTAIN_WAGE : 0;
-    return Math.round(raw * (1 + HAGGLE_PER_LEVEL * this.haggling) * (this.dev ? DEV_MULTIPLIER : 1) * (1 - wage) * (1 - fee) * (this.setEffect('plunder') ? 1.25 : 1));
+    return Math.round(raw * (1 + HAGGLE_PER_LEVEL * this.haggling) * (this.dev ? DEV_MULTIPLIER : 1) * (1 - wage) * (1 - fee) * (this.setEffect('plunder') ? 1.25 : 1) * this.cheerBoost());
   }
 
   /** Sell a boat's haul straight from the harbor. Returns the money. */
@@ -2086,9 +2103,9 @@ export class Game {
 
   // ---------- hired fishermen on the wide pier ----------
 
-  /** The wide pier (and hiring) opens with your first boat. */
+  /** The wide pier (and hiring) opens with the Fishing Co. */
   get pierOpen(): boolean {
-    return this.boats.length > 0;
+    return this.company;
   }
 
   /** Fishing spots on the pier right now. */
@@ -2221,7 +2238,7 @@ export class Game {
   /** Sell everything the fishermen caught. */
   sellCrate(fee = 0): number {
     const wage = this.harbor.manager ? HARBOR_UPGRADES.manager.fee : 0;
-    const total = Math.round(this.crateValue() * (1 - fee) * (1 - wage));
+    const total = Math.round(this.crateValue() * (1 - fee) * (1 - wage) * this.cheerBoost());
     this.money += total;
     this.earned += total;
     this.crate = [];

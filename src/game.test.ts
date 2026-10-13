@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ACHIEVEMENTS, AUTO, BAITS, BERTHS, BOATS, BOAT_REPEAT, BOOTS, CAPTAIN_WAGE, COMPANY_PRICE, CREW_BASE, GROUNDS, HANDS_MAX, handCost, PIER_SPOTS, PIER_SECTIONS, SELLER_BAG, SHELLFISH,
+  ACHIEVEMENTS, AUTO, CHEER, BAITS, BERTHS, BOATS, BOAT_REPEAT, BOOTS, CAPTAIN_WAGE, COMPANY_PRICE, CREW_BASE, GROUNDS, HANDS_MAX, handCost, PIER_SPOTS, PIER_SECTIONS, SELLER_BAG, SHELLFISH,
   COMPANY_UNLOCK_EARNED, LETTERS, TRACK_GROWTH, TRACK_MAX, TRACK_ORDER, CLOTHES, DEV_MULTIPLIER, FISH, HAGGLE_PER_LEVEL, HOLDERS, REFLEX_PER_LEVEL, RODS, SKILLS, SKILL_MAX, VARIANTS,
   MAX_GROUND_WORMS, START_WORMS, STRENGTH_PER_LEVEL, WORM_SPAWN_SECONDS, skillCost, TREE_FISH, pearlsFor, gearById, LEGENDS, rodReach, HAND_RODS, HEAD_START_CASH,
   SETS, SET_ORDER, SET_SLOTS, SET_TIERS, setPieceId, STAT_CAP, DROP_SELL, DROP_ROLL, KEEN_EYE, PERFECT_ZONE, PERFECT_PER_LEVEL, AUTO_PERFECT_MAX, STRENGTH_FIGHT,
@@ -772,6 +772,33 @@ describe('the fleet', () => {
   });
 });
 
+describe('crew cheer', () => {
+  it('fish you reel by hand lift fleet money once you own the Fishing Co., then wear off', () => {
+    const g = new Game({ money: 1e7, earned: 30000 }, rng(7));
+    g.cheer = 5;
+    expect(g.cheerBoost()).toBe(1); // no company, no crew to cheer
+    g.buyCompany();
+    expect(g.cheerBoost()).toBeCloseTo(1.1);
+    g.cheer = CHEER.max;
+    expect(g.cheerBoost()).toBeCloseTo(1 + CHEER.per * CHEER.max);
+    tick(g, CHEER.fade * CHEER.max + 1);
+    expect(g.cheer).toBe(0);
+    expect(g.cheerBoost()).toBe(1);
+  });
+
+  it('the Autofisher steps aside a while after you cast or reel yourself', () => {
+    const g = new Game({ money: 100, auto: 3 }, rng(8));
+    g.cast();
+    g.lines[0] = { type: 'bite', t: 5, window: 9, fish: fishById('perch'), tooStrong: false };
+    g.autoFish();
+    expect(g.lines[0]!.type).toBe('bite'); // yours to reel
+    tick(g, CHEER.hold + 0.1);
+    g.lines[0] = { type: 'bite', t: 5, window: 9, fish: fishById('perch'), tooStrong: false };
+    g.autoFish();
+    expect(g.lines[0]!.type).toBe('result');
+  });
+});
+
 describe('hired fishermen', () => {
   const owner = (extra = {}) => {
     const g = new Game({ money: 1e7, earned: 30000, ...extra }, rng(31));
@@ -779,11 +806,11 @@ describe('hired fishermen', () => {
     return g;
   };
 
-  it('can only be hired once you own a boat; up to 24, a pier section at a time', () => {
-    const g = owner();
+  it('can only be hired once you own the Fishing Co.; up to 24, a pier section at a time', () => {
+    const g = new Game({ money: 1e7, earned: 30000 }, rng(31));
     expect(g.pierOpen).toBe(false);
     expect(g.hireHand()).toBe(false);
-    g.buyBoat();
+    g.buyCompany();
     expect(g.pierOpen).toBe(true);
     const money = g.money;
     expect(g.hireHand()).toBe(true);
@@ -883,9 +910,8 @@ describe('pier staff', () => {
 
   it('pier staff need the pier; the Fish Seller sells your bag when it fills', () => {
     const g = new Game({ money: 1e9, earned: 30000 }, rng(52));
-    g.buyCompany();
     expect(g.buyHarbor('seller')).toBe(false); // no pier yet
-    g.buyBoat();
+    g.buyCompany();
     expect(g.buyHarbor('seller')).toBe(true);
     g.bag = Array.from({ length: SELLER_BAG }, (_, i) => ({ id: 9000 + i, fish: 'perch', kg: 0.4, value: 10 }));
     const money = g.money;
